@@ -76,6 +76,24 @@ agenthub/agents/youtube/db
 # Build caches
 .cache/
 
+# Graphify outputs
+.graphify*
+graphify-out/
+
+# Local / backup files
+*.bak
+*.backup
+*.backup*
+*.orig
+*.new
+
+# Tool outputs
+*graphify*.log
+update_docker_compose.py
+
+# Test reports
+/test_reports/
+
 memory/test_credentials.md
 
 # Mobile development
@@ -86,3 +104,6 @@ android-sdk/
 credentials.json
 *.key
 .credentials
+
+# Hermes agent runtime (planning/dispatch files, private)
+.hermes/

@@ -127,3 +127,117 @@ class FlashcardReviewORM(Base):
     last_reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     due_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
     total_reviews: Mapped[int] = mapped_column(Integer, default=0)
+
+
+# Academic hierarchy entities
+from sqlalchemy import UniqueConstraint
+
+
+class InstitutionORM(Base):
+    __tablename__ = "institutions"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    code: Mapped[str] = mapped_column(String(32), nullable=False, unique=True, index=True)
+    address: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
+class YearORM(Base):
+    __tablename__ = "years"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    institution_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("institutions.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    number: Mapped[int] = mapped_column(Integer, nullable=False)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    __table_args__ = (UniqueConstraint("institution_id", "number", name="uq_year_institution_number"),)
+
+
+class BranchORM(Base):
+    __tablename__ = "branches"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    institution_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("institutions.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    code: Mapped[str] = mapped_column(String(32), nullable=False)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    __table_args__ = (UniqueConstraint("institution_id", "code", name="uq_branch_institution_code"),)
+
+
+class SemesterORM(Base):
+    __tablename__ = "semesters"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    year_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("years.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    number: Mapped[int] = mapped_column(Integer, nullable=False)
+    label: Mapped[str] = mapped_column(String(120), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    __table_args__ = (UniqueConstraint("year_id", "number", name="uq_semester_year_number"),)
+
+
+class SubjectORM(Base):
+    __tablename__ = "subjects"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    semester_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("semesters.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    code: Mapped[str] = mapped_column(String(32), nullable=False)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    credits: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    __table_args__ = (UniqueConstraint("semester_id", "code", name="uq_subject_semester_code"),)
+
+
+class DivisionORM(Base):
+    __tablename__ = "divisions"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    semester_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("semesters.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    capacity: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    __table_args__ = (UniqueConstraint("semester_id", "name", name="uq_division_semester_name"),)
+
+
+class ClassORM(Base):
+    __tablename__ = "classes"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    division_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("divisions.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    subject_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("subjects.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    __table_args__ = (UniqueConstraint("division_id", "subject_id", name="uq_class_division_subject"),)
+
+
+class TeacherAssignmentORM(Base):
+    __tablename__ = "teacher_assignments"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    class_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("classes.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    teacher_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    assigned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    __table_args__ = (UniqueConstraint("class_id", "teacher_id", name="uq_teacher_assignment_class_teacher"),)
+
+
+class StudentEnrollmentORM(Base):
+    __tablename__ = "student_enrollments"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    class_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("classes.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    student_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    enrolled_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    __table_args__ = (UniqueConstraint("class_id", "student_id", name="uq_student_enrollment_class_student"),)

@@ -11,16 +11,15 @@ from services.audio_chunker import (
     get_duration_seconds,
     split_into_chunks,
 )
+from services.neo4j_service import get_neo4j_service
 from services.storage_service import get_storage
 
 logger = logging.getLogger(__name__)
-
 
 # Tunables — kept here, not scattered.
 CHUNK_THRESHOLD_SECONDS = 30 * 60       # >30 min → use chunked pipeline
 CHUNK_LENGTH_SECONDS = 10 * 60          # 10-minute chunks
 CHUNK_MIME = "audio/mpeg"               # ffmpeg re-encodes chunks to MP3
-
 
 ALLOWED_AUDIO_MIME = {
     "audio/mpeg",
@@ -33,10 +32,8 @@ ALLOWED_AUDIO_MIME = {
     "audio/mp4",
     "audio/aac",
     "audio/ogg",
-    "audio/webm",
     "audio/flac",
 }
-
 
 def normalize_mime(mime: str, filename: str) -> str | None:
     """Return a canonical audio MIME type or None if the input is not audio."""
@@ -54,6 +51,49 @@ def normalize_mime(mime: str, filename: str) -> str | None:
         ".webm": "audio/webm",
     }
     return mapping.get(ext)
+
+
+async def _extract_and_store_knowledge_graph(lecture_id: str, lecture: LectureDB, materials: StudyMaterials, repo: LectureRepository) -> None:
+    """Extract concepts and relationships from study materials and store in Neo4j."""
+    try:
+        neo4j = get_neo4j_service()
+        
+        # Add lecture node
+        neo4j.add_lecture_node(
+            lecture_id=lecture.id,
+            title=lecture.title,
+            subject=lecture.subject,
+            semester=lecture.semester
+        )
+        
+        # Add concept nodes and connect to lecture
+        for concept in materials.key_concepts:
+            if concept and concept.strip():
+                neo4j.add_concept_node(
+                    lecture_id=lecture.id,
+                    concept=concept.strip()
+                )
+        
+        # TODO: Extract relationships between concepts
+        # For now, we'll add some basic relationships based on co-occurrence
+        # In a more advanced implementation, we could use the AI to extract relationships
+        concepts = [c.strip() for c in materials.key_concepts if c and c.strip()]
+        for i, concept1 in enumerate(concepts):
+            for concept2 in concepts[i+1:]:
+                # Add a generic RELATED_TO relationship for now
+                # In future, we could use AI to determine relationship type
+                neo4j.add_relationship_between_concepts(
+                    lecture_id=lecture.id,
+                    concept1=concept1,
+                    concept2=concept2,
+                    relationship_type="RELATED_TO"
+                )
+        
+        logger.info("Stored knowledge graph for lecture %s in Neo4j", lecture_id)
+        
+    except Exception as e:
+        logger.exception("Failed to store knowledge graph for lecture %s: %s", lecture_id, e)
+        # Don't fail the entire pipeline if knowledge graph storage fails
 
 
 async def process_lecture_background(lecture_id: str) -> None:
@@ -139,6 +179,11 @@ async def _process_single_shot(*, lecture_id, audio_path, mime, ai, repo):
     materials = await ai.generate_study_materials(transcript)
     embedding = await _safe_embedding(ai, materials)
 
+    # Store knowledge graph in Neo4j
+    lecture = await repo.get_by_id(lecture_id)
+    if lecture:
+        await _extract_and_store_knowledge_graph(lecture_id, lecture, materials, repo)
+
     await repo.update_fields(lecture_id, {
         "transcript": transcript,
         "materials": materials,
@@ -192,8 +237,8 @@ async def _process_chunked(*, lecture_id, audio_path, duration, ai, repo, chunks
         chunk_digests.append(digest)
 
     # Stitch full transcript with timestamps so chat/transcript view stays useful.
-    transcript = "\n\n".join(
-        f"[Chunk {i + 1} · {format_timestamp(i * CHUNK_LENGTH_SECONDS)}]\n{t.strip()}"
+    transcript = "\\n\\n".join(
+        f"[Chunk {i + 1} · {format_timestamp(i * CHUNK_LENGTH_SECONDS)}]\\n{t.strip()}"
         for i, t in enumerate(chunk_transcripts)
     )
 
@@ -204,6 +249,11 @@ async def _process_chunked(*, lecture_id, audio_path, duration, ai, repo, chunks
     })
     materials = await ai.merge_chunk_digests(chunk_digests)
     embedding = await _safe_embedding(ai, materials)
+
+    # Store knowledge graph in Neo4j
+    lecture = await repo.get_by_id(lecture_id)
+    if lecture:
+        await _extract_and_store_knowledge_graph(lecture_id, lecture, materials, repo)
 
     # --- Save ---
     await repo.update_fields(lecture_id, {
