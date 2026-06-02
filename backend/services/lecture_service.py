@@ -28,7 +28,11 @@ ALLOWED_AUDIO_MIME = {
 }
 
 
-def normalize_mime(mime: str, filename: str) -> str:
+def normalize_mime(mime: str, filename: str) -> str | None:
+    """Return a canonical audio MIME type or None if the input is not audio.
+
+    Caller MUST treat None as 'reject this upload'.
+    """
     mime = (mime or "").lower()
     if mime in ALLOWED_AUDIO_MIME:
         return mime
@@ -42,7 +46,7 @@ def normalize_mime(mime: str, filename: str) -> str:
         ".flac": "audio/flac",
         ".webm": "audio/webm",
     }
-    return mapping.get(ext, "audio/mpeg")
+    return mapping.get(ext)
 
 
 async def process_lecture_background(lecture_id: str) -> None:

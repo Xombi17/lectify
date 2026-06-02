@@ -47,7 +47,7 @@ async def upload_lecture(
         raise HTTPException(status_code=413, detail="File too large (max 200 MB)")
 
     mime = normalize_mime(file.content_type or "", file.filename or "")
-    if mime not in ALLOWED_AUDIO_MIME:
+    if not mime or mime not in ALLOWED_AUDIO_MIME:
         raise HTTPException(status_code=400, detail=f"Unsupported audio type: {file.content_type}")
 
     repo = LectureRepository()
