@@ -1,0 +1,150 @@
+"""Lecture repository — SQLAlchemy (async) implementation."""
+import uuid
+from datetime import datetime, timezone
+from typing import List, Optional
+
+from sqlalchemy import select
+
+from core.sql_db import session_maker
+from models.lecture import LectureDB, LectureSummary, StudyMaterials
+from models.orm import LectureORM
+
+
+def _to_lecture(row: LectureORM) -> LectureDB:
+    materials_dict = row.materials or {}
+    return LectureDB(
+        id=row.id,
+        teacher_id=row.teacher_id,
+        title=row.title,
+        subject=row.subject,
+        semester=row.semester,
+        audio_object_key=row.audio_object_key,
+        audio_filename=row.audio_filename,
+        audio_mime=row.audio_mime,
+        duration_seconds=row.duration_seconds,
+        chunk_count=row.chunk_count,
+        progress_step=row.progress_step or 0,
+        progress_total=row.progress_total or 0,
+        progress_label=row.progress_label,
+        status=row.status,
+        transcript=row.transcript,
+        materials=StudyMaterials(**materials_dict) if materials_dict else StudyMaterials(),
+        embedding=row.embedding,
+        translations=row.translations or {},
+        error_message=row.error_message,
+        published=bool(row.published),
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+    )
+
+
+def _to_summary(row: LectureORM) -> LectureSummary:
+    return LectureSummary(
+        id=row.id,
+        teacher_id=row.teacher_id,
+        title=row.title,
+        subject=row.subject,
+        semester=row.semester,
+        status=row.status,
+        published=bool(row.published),
+        created_at=row.created_at,
+    )
+
+
+class LectureRepository:
+    async def ensure_indexes(self) -> None:
+        return None  # ORM column indexes do the job
+
+    async def create(self, lecture: LectureDB) -> LectureDB:
+        async with session_maker()() as s, s.begin():
+            s.add(LectureORM(
+                id=lecture.id,
+                teacher_id=lecture.teacher_id,
+                title=lecture.title,
+                subject=lecture.subject,
+                semester=lecture.semester,
+                audio_object_key=lecture.audio_object_key,
+                audio_filename=lecture.audio_filename,
+                audio_mime=lecture.audio_mime,
+                duration_seconds=lecture.duration_seconds,
+                chunk_count=lecture.chunk_count,
+                progress_step=lecture.progress_step,
+                progress_total=lecture.progress_total,
+                progress_label=lecture.progress_label,
+                status=lecture.status,
+                transcript=lecture.transcript,
+                materials=lecture.materials.model_dump(),
+                embedding=lecture.embedding,
+                translations=lecture.translations or {},
+                error_message=lecture.error_message,
+                published=lecture.published,
+                created_at=lecture.created_at,
+                updated_at=lecture.updated_at,
+            ))
+        return lecture
+
+    async def get_by_id(self, lecture_id: str) -> Optional[LectureDB]:
+        async with session_maker()() as s:
+            row = await s.get(LectureORM, lecture_id)
+            return _to_lecture(row) if row else None
+
+    async def list_by_teacher(self, teacher_id: str) -> List[LectureSummary]:
+        async with session_maker()() as s:
+            stmt = (
+                select(LectureORM)
+                .where(LectureORM.teacher_id == teacher_id)
+                .order_by(LectureORM.created_at.desc())
+            )
+            rows = (await s.execute(stmt)).scalars().all()
+            return [_to_summary(r) for r in rows]
+
+    async def list_published(self) -> List[LectureSummary]:
+        async with session_maker()() as s:
+            stmt = (
+                select(LectureORM)
+                .where(LectureORM.published.is_(True))
+                .order_by(LectureORM.created_at.desc())
+            )
+            rows = (await s.execute(stmt)).scalars().all()
+            return [_to_summary(r) for r in rows]
+
+    async def list_published_embeddings(self) -> list[dict]:
+        async with session_maker()() as s:
+            stmt = select(LectureORM).where(LectureORM.published.is_(True))
+            rows = (await s.execute(stmt)).scalars().all()
+            return [
+                {
+                    "id": r.id,
+                    "title": r.title,
+                    "subject": r.subject,
+                    "semester": r.semester,
+                    "embedding": r.embedding or [],
+                    "materials": {
+                        "summary": (r.materials or {}).get("summary"),
+                        "key_concepts": (r.materials or {}).get("key_concepts", []),
+                    },
+                }
+                for r in rows
+            ]
+
+    async def update_fields(self, lecture_id: str, fields: dict) -> None:
+        if "materials" in fields and hasattr(fields["materials"], "model_dump"):
+            fields["materials"] = fields["materials"].model_dump()
+        fields["updated_at"] = datetime.now(timezone.utc)
+        async with session_maker()() as s, s.begin():
+            row = await s.get(LectureORM, lecture_id)
+            if row is None:
+                return
+            for k, v in fields.items():
+                if hasattr(row, k):
+                    setattr(row, k, v)
+
+    async def delete(self, lecture_id: str) -> None:
+        async with session_maker()() as s, s.begin():
+            row = await s.get(LectureORM, lecture_id)
+            if row is not None:
+                await s.delete(row)
+
+    @staticmethod
+    def new_id() -> str:
+        return str(uuid.uuid4())

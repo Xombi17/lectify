@@ -75,7 +75,6 @@ async def process_lecture_background(lecture_id: str) -> None:
 
     try:
         ai = get_ai_service()
-        audio_path = storage.local_path(lecture.audio_object_key)
 
         # --- Step 1: probe duration ---
         await repo.update_fields(lecture_id, {
@@ -84,30 +83,32 @@ async def process_lecture_background(lecture_id: str) -> None:
             "progress_total": 3,
             "progress_label": "Analyzing audio",
         })
-        try:
-            duration = await get_duration_seconds(audio_path)
-        except Exception:
-            logger.exception("Could not probe duration; falling back to single-shot path")
-            duration = 0.0
-        await repo.update_fields(lecture_id, {"duration_seconds": duration})
 
-        if duration and duration > CHUNK_THRESHOLD_SECONDS:
-            await _process_chunked(
-                lecture_id=lecture_id,
-                audio_path=audio_path,
-                duration=duration,
-                ai=ai,
-                repo=repo,
-                chunks_sink=chunks_made,
-            )
-        else:
-            await _process_single_shot(
-                lecture_id=lecture_id,
-                audio_path=audio_path,
-                mime=lecture.audio_mime,
-                ai=ai,
-                repo=repo,
-            )
+        async with storage.open_local(lecture.audio_object_key) as audio_path:
+            try:
+                duration = await get_duration_seconds(audio_path)
+            except Exception:
+                logger.exception("Could not probe duration; falling back to single-shot path")
+                duration = 0.0
+            await repo.update_fields(lecture_id, {"duration_seconds": duration})
+
+            if duration and duration > CHUNK_THRESHOLD_SECONDS:
+                await _process_chunked(
+                    lecture_id=lecture_id,
+                    audio_path=audio_path,
+                    duration=duration,
+                    ai=ai,
+                    repo=repo,
+                    chunks_sink=chunks_made,
+                )
+            else:
+                await _process_single_shot(
+                    lecture_id=lecture_id,
+                    audio_path=audio_path,
+                    mime=lecture.audio_mime,
+                    ai=ai,
+                    repo=repo,
+                )
 
         logger.info("Lecture %s processed", lecture_id)
     except Exception as exc:  # noqa: BLE001

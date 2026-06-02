@@ -1,0 +1,63 @@
+{
+  "summary": "LectureMind AI P0 backend tests (iteration 4): added 17 new tests across storage abstraction (LocalStorage, S3Storage via in-process moto_server + aioboto3, get_storage factory) and SQL repositories (User/Lecture/Chat/Attempt against sqlite+aiosqlite in-memory) — 89/90 pass, 1 xfail documenting a REAL PRODUCTION BUG in S3Storage.stream() that will break /api/lectures/{id}/audio on S3 backend. All 72 previous tests still pass with DATABASE_BACKEND=mongo + STORAGE_BACKEND=local (regression intact).",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "services.storage_service.S3Storage.stream() → routes/lectures.py /api/lectures/{id}/audio",
+        "issue": "S3Storage.stream() returns an async iterator AFTER exiting the `async with self._client() as s3:` block. aioboto3's client context closes the underlying aiohttp connection on exit, so the first `await body.iter_chunks(...)` from the returned iterator raises RuntimeError: Connection closed. This will break the audio streaming endpoint in production when STORAGE_BACKEND=s3. LocalStorage is unaffected. Reproduction: see tests/test_storage.py::TestS3Storage::test_stream_against_seeded_object (marked xfail). Fix: restructure so the client+response stay open for the duration of iteration (e.g., yield chunks from inside the `async with` in a nested generator, or buffer the body before returning, or pass the open client into the iterator and close it in a finally).",
+        "priority": "CRITICAL"
+      }
+    ],
+    "minor": [
+      {
+        "endpoint": "services/storage_service.py get_storage()",
+        "issue": "Module-level `settings = get_settings()` means env-var changes after import are invisible. Forced reload(config)+reload(storage_service) in tests. Consider reading os.environ inside get_storage() (cheap, runs once at app start anyway)."
+      },
+      {
+        "endpoint": "services/storage_service.py S3Storage",
+        "issue": "Read codepath uses `download_file` which performs HEAD + GET. For very large files this is OK, but `open_local` will materialize entire object on disk — fine for current pipeline (audio chunks are needed locally for ffmpeg) but worth noting."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_storage.py",
+    "/app/backend/tests/test_sql_repositories.py",
+    "/app/test_reports/pytest/iteration4_full.xml"
+  ],
+  "action_items": [
+    "FIX S3Storage.stream() so the aioboto3 client + response stay open until the iterator is fully consumed. Suggested pattern: `async def _iter(): async with self._client() as s3: obj = await s3.get_object(...); async for chunk in obj['Body'].iter_chunks(...): yield chunk` — then call `await _peek_metadata()` separately (e.g. via head_object) to populate size/ctype before returning the generator. Without this, /api/lectures/{id}/audio will 500 on every request once docker-compose flips to STORAGE_BACKEND=s3.",
+    "Carry over from iter1/2/3 (still open): RBAC on quiz attempts, 503 vs 500 on AI cold paths, timezone-aware streaks, optional per-loop Motor client keying in core/db.py."
+  ],
+  "critical_code_review_comments": [
+    "services/storage_service.py LocalStorage: save() rejects path-traversal via Path resolution check; verified by test_path_traversal_rejected. stream() correctly yields a chunked async iterator with size from os.path.getsize and content-type fallback; verified. delete() is best-effort (swallows FileNotFoundError); verified.",
+    "services/storage_service.py S3Storage.save() + open_local() + delete() round-trip cleanly against moto_server with the in-process aioboto3 session. save() uses upload_fileobj with ContentType ExtraArgs; open_local() downloads to tempfile and cleans up on exit; delete() swallows exceptions per best-effort contract.",
+    "services/storage_service.py S3Storage.stream() — BROKEN. See critical issue above.",
+    "services/storage_service.py get_storage(): factory correctly raises RuntimeError when STORAGE_BACKEND=s3 but OBJECT_STORAGE_BUCKET missing, and for unknown backends.",
+    "core/sql_db.py: per-loop engine/maker caching works (engine recreated when running on a new asyncio loop). init_models() is idempotent; verified by repeated calls in same test loop.",
+    "repositories/_sql/lecture_repository.py update_fields(): correctly handles `materials: StudyMaterials` by detecting Pydantic models and converting via model_dump() before persisting — verified by test_update_fields_serializes_studymaterials. Mirrors Mongo's `dict(materials)` pattern.",
+    "repositories/_sql/lecture_repository.py list_published() and list_published_embeddings() return only rows where published=True with all required fields (embedding + materials.summary + materials.key_concepts) — verified.",
+    "repositories/_sql/*: all four repos (User, Lecture, Chat, Attempt) round-trip the same Pydantic shapes that the Mongo impls produce. Dispatcher (`repositories/user_repository.py` re-export) correctly selects _sql when DATABASE_BACKEND=postgres at import time.",
+    "routes/lectures.py /api/lectures/{id}/audio: correctly sets Content-Disposition with filename and Content-Length when size is not None — verified at the route level (LocalStorage path returns size). The S3 path WILL set Content-Length, but the response body will fail mid-stream due to the closed-connection bug above.",
+    "Regression: 72/72 previous tests still pass with DATABASE_BACKEND=mongo + STORAGE_BACKEND=local. New tests are isolated and use module reload to flip backends without polluting state for downstream tests."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_storage.py (new, 10 tests: 4 LocalStorage + 3 factory + 3 S3Storage including 1 xfail)",
+    "/app/backend/tests/test_sql_repositories.py (new, 7 tests: User + Lecture x4 + Chat + Attempt + Dispatcher)",
+    "Installed: moto[s3], moto[server] (test-only dependency for in-process S3 mocking via ThreadedMotoServer)"
+  ],
+  "success_rate": {
+    "backend": "98.9% (89 passed, 1 xfailed documenting the S3Storage.stream() production bug; 72 previous + 17 new)",
+    "frontend": "not tested (backend-only request)"
+  },
+  "test_credentials": "Teacher: teacher@lecturemind.example.com / Password123! (carry-over from previous iterations; live preview backend remains Mongo+Local). SQL tests do NOT use credentials — they instantiate _sql repos directly against in-memory sqlite+aiosqlite. moto S3 uses synthetic creds (testing/testing).",
+  "seed_data_creation": "test_sql_repositories.py: creates synthetic users (id=t1..ta), Lectures with StudyMaterials, ChatMessages, QuizAttempts directly via the _sql repos — each test runs in its own asyncio.run() with a fresh in-memory sqlite engine, so no cross-test bleed. test_storage.py: LocalStorage tests use tempfile.mkdtemp dirs (auto-cleaned by OS); S3 tests spin up ThreadedMotoServer per test class on a random port and tear it down in fixture teardown.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Run `cd /app/backend && python -m pytest tests/ -v` for the full 89-test suite (~37s — includes ffmpeg synthesis from test_chunking.py). After main agent fixes S3Storage.stream(), un-xfail tests/test_storage.py::TestS3Storage::test_stream_against_seeded_object by removing the @pytest.mark.xfail decorator (strict=True so a passing test will be flagged as XPASS until the marker is removed). Dependencies installed during this iteration: moto[s3], moto[server] (pulls in flask/werkzeug; only used for tests, not production). aioboto3 2.25 + moto 5.x cannot decode chunked-encoded uploads via mock_aws — that's why this iteration uses ThreadedMotoServer over real HTTP instead of the @mock_aws decorator.",
+  "rca of the issue": "S3Storage.stream() bug RCA: In aioboto3, the `async with session.client('s3') as s3:` context manager owns the underlying aiohttp ClientSession. When the context exits, the session is closed, which closes all in-flight HTTP responses. The current implementation acquires the response inside the context, then RETURNS an async-iterator that lazily reads from that response — but by the time the caller iterates, the context has exited and the connection is gone. Reproduction: PUT/seed an object, call `it, _, _ = await storage.stream(key)`, then `async for chunk in it: ...` — first chunk raises `RuntimeError: Connection closed.` from aiohttp.streams._wait. Mitigation: move the `async with self._client() as s3:` INSIDE the `_iter()` generator so the client lifetime equals the iteration lifetime, and use a separate head_object() call (or capture metadata into the generator's closure before yielding the first chunk) to populate size/ctype. Alternative quick fix: buffer the entire body in stream() (BytesIO) and return a generator over it — works for small files but defeats the point of streaming for large lecture audios."
+}

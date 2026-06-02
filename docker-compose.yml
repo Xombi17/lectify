@@ -75,10 +75,11 @@ services:
       minio:
         condition: service_healthy
     environment:
-      # See MIGRATION.md — when you swap to Postgres, drop the MONGO_URL and
-      # set DATABASE_URL instead; the example below shows the target shape.
+      # Use Postgres via SQLAlchemy. Set DATABASE_BACKEND=mongo + MONGO_URL to
+      # fall back to the MongoDB driver implementations.
+      DATABASE_BACKEND: postgres
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-lecturemind}:${POSTGRES_PASSWORD:-lecturemind}@postgres:5432/${POSTGRES_DB:-lecturemind}
-      MONGO_URL: "mongodb://placeholder"   # unused once you switch to Postgres
+      MONGO_URL: ""
       DB_NAME: ${POSTGRES_DB:-lecturemind}
 
       JWT_SECRET: ${JWT_SECRET:?set a strong JWT_SECRET}

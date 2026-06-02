@@ -13,7 +13,7 @@ from fastapi import (
     UploadFile,
     status,
 )
-from fastapi.responses import FileResponse
+from fastapi.responses import StreamingResponse
 
 from core.deps import get_current_user, require_teacher
 from models.lecture import (
@@ -129,12 +129,10 @@ async def delete_lecture(lecture_id: str, user: UserPublic = Depends(require_tea
     if not lecture or lecture.teacher_id != user.id:
         raise HTTPException(status_code=404, detail="Lecture not found")
     await repo.delete(lecture_id)
-    # also remove the stored file (best-effort, local backend only)
+    # also remove the stored file (best-effort)
     storage = get_storage()
     try:
-        p = storage.local_path(lecture.audio_object_key)
-        if p.exists():
-            p.unlink()
+        await storage.delete(lecture.audio_object_key)
     except Exception:
         pass
 
@@ -187,7 +185,7 @@ async def submit_quiz(
     )
 
 
-# --- Audio streaming (local storage backend only) ---
+# --- Audio streaming (works for any storage backend) ---
 @router.get("/{lecture_id}/audio")
 async def stream_audio(lecture_id: str, user: UserPublic = Depends(get_current_user)):
     repo = LectureRepository()
@@ -198,7 +196,14 @@ async def stream_audio(lecture_id: str, user: UserPublic = Depends(get_current_u
         raise HTTPException(status_code=403, detail="Forbidden")
 
     storage = get_storage()
-    path = storage.local_path(lecture.audio_object_key)
-    if not path.exists():
+    try:
+        body_iter, size, _ = await storage.stream(lecture.audio_object_key)
+    except FileNotFoundError:
         raise HTTPException(status_code=404, detail="Audio file missing")
-    return FileResponse(str(path), media_type=lecture.audio_mime, filename=lecture.audio_filename)
+
+    headers = {
+        "Content-Disposition": f'inline; filename="{lecture.audio_filename}"',
+    }
+    if size is not None:
+        headers["Content-Length"] = str(size)
+    return StreamingResponse(body_iter, media_type=lecture.audio_mime, headers=headers)

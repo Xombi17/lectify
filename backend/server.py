@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from core.config import get_settings
 from core.db import close_db
+from core.sql_db import close_sql, init_models as init_sql_models
 from repositories.attempt_repository import AttemptRepository
 from repositories.chat_repository import ChatRepository
 from repositories.lecture_repository import LectureRepository
@@ -28,17 +29,23 @@ settings = get_settings()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # ensure indexes on startup
+    # ensure indexes/tables on startup
     try:
+        if settings.DATABASE_BACKEND.lower() != "mongo":
+            await init_sql_models()
+            logger.info("SQL tables ready (%s)", settings.DATABASE_BACKEND)
         await UserRepository().ensure_indexes()
         await LectureRepository().ensure_indexes()
         await ChatRepository().ensure_indexes()
         await AttemptRepository().ensure_indexes()
-        logger.info("Mongo indexes ready")
+        logger.info("Database indexes ready (backend=%s)", settings.DATABASE_BACKEND)
     except Exception:
-        logger.exception("Failed to ensure indexes")
+        logger.exception("Failed to ensure indexes/tables")
     yield
-    await close_db()
+    if settings.DATABASE_BACKEND.lower() == "mongo":
+        await close_db()
+    else:
+        await close_sql()
 
 
 app = FastAPI(title="LectureMind AI", lifespan=lifespan)
