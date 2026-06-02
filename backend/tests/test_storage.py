@@ -185,19 +185,8 @@ class TestS3Storage:
             await s3.delete(key)  # idempotent
         _arun(go())
 
-    @pytest.mark.xfail(reason="S3Storage.stream() has a known bug: client context "
-                              "exits before the returned async iterator is consumed, "
-                              "closing the connection. Breaks /api/lectures/{id}/audio "
-                              "on S3 backend. Reported to main agent.",
-                       strict=True)
     def test_stream_against_seeded_object(self):
-        """Read path against an object seeded by sync boto3 (matches MinIO real-world).
-
-        Currently EXPECTED TO FAIL: S3Storage.stream() returns an async iterator
-        after exiting the `async with self._client()` context manager, closing
-        the underlying HTTP connection before consumption. This breaks
-        /api/lectures/{id}/audio in production when STORAGE_BACKEND=s3.
-        """
+        """Read path against an object seeded by sync boto3 (matches MinIO real-world)."""
         s3 = self._make_s3()
         payload = b"seeded-bytes"
         key = "lectures/xyz/audio.mp3"

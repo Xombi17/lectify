@@ -10,10 +10,11 @@ notes, quizzes, flashcards, search, analytics — for institutions.
 - Student: browses published lectures, studies notes, takes quizzes, practices
   flashcards.
 
-## Architecture (preview env)
-- Backend: FastAPI + Motor (Mongo, repo-pattern abstracted)
-- AI: Google Gemini 2.5 Flash via `google-genai` SDK (single AI service layer)
-- Storage: pluggable `StorageService` (LocalStorage now, S3/MinIO in self-host)
+## Architecture (preview env vs self-host)
+- **Preview**: MongoDB (Motor) + Local filesystem storage. `DATABASE_BACKEND=mongo`, `STORAGE_BACKEND=local`.
+- **Self-host (docker compose)**: PostgreSQL (SQLAlchemy 2.0 async) + MinIO/S3 (aioboto3). `DATABASE_BACKEND=postgres`, `STORAGE_BACKEND=s3`. Same code, env-var flip only.
+- Backend: FastAPI + repository pattern + AI service abstraction + storage abstraction
+- AI: Google Gemini 2.5 Flash via `google-genai` SDK (text + audio + embeddings)
 - Auth: JWT (HS256) with teacher/student roles
 - Frontend: React + Tailwind + shadcn/ui + Phosphor icons + framer-motion
 
@@ -42,12 +43,12 @@ notes, quizzes, flashcards, search, analytics — for institutions.
 - ✅ Per-loop Mongo client (safe across multiple asyncio loops; production hardening)
 
 ## P0 backlog
-- Real S3/MinIO storage implementation (currently local only)
-- Postgres repository implementations (scaffold already in MIGRATION.md)
+- *(all complete)*
 
 ## P1 backlog
 - Translation of quiz questions (currently kept in original language for grading integrity)
 - Teacher analytics: most-confusing topics, engagement
+- Alembic migrations on top of the SQLAlchemy schema (currently `Base.metadata.create_all` idempotent bootstrap)
 
 ## P2 backlog
 - Podcast / TTS revision audio

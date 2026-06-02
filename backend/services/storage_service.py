@@ -182,17 +182,24 @@ class S3Storage(StorageService):
                 pass
 
     async def stream(self, key: str) -> tuple[AsyncIterator[bytes], int | None, str]:
+        # Probe metadata first (head_object on its own short-lived client)
         async with self._client() as s3:
-            obj = await s3.get_object(Bucket=self.bucket, Key=key)
-            body = obj["Body"]
-            size = obj.get("ContentLength")
-            ctype = obj.get("ContentType") or "application/octet-stream"
+            head = await s3.head_object(Bucket=self.bucket, Key=key)
+        size = head.get("ContentLength")
+        ctype = head.get("ContentType") or "application/octet-stream"
 
-            async def _iter() -> AsyncIterator[bytes]:
-                async for chunk in body.iter_chunks(self.CHUNK_BYTES):
+        bucket = self.bucket
+        chunk_size = self.CHUNK_BYTES
+        client_factory = self._client
+
+        async def _iter() -> AsyncIterator[bytes]:
+            # CRITICAL: keep the client + response open until iteration completes.
+            async with client_factory() as s3:
+                obj = await s3.get_object(Bucket=bucket, Key=key)
+                async for chunk in obj["Body"].iter_chunks(chunk_size):
                     yield chunk
 
-            return _iter(), size, ctype
+        return _iter(), size, ctype
 
     async def delete(self, key: str) -> None:
         try:
