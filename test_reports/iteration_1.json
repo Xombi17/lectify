@@ -1,0 +1,61 @@
+{
+  "summary": "First-iteration backend test run for LectureMind AI. 37 pytest tests written and executed; 36 passed (97.3%). Covered health, auth (signup/login/me, role enforcement, EmailStr+password validation, duplicate=409), lecture upload RBAC, listing, RBAC on detail, background AI error path (GEMINI_API_KEY missing -> status=error), publish error path (400 not-ready, 403 student, 404 non-owner), happy-path publish on seeded ready lecture, /published listing, audio streaming with role checks, quiz scoring math (perfect/partial/mismatch), and delete. One real bug uncovered in MIME validation.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "POST /api/lectures",
+        "issue": "normalize_mime() in services/lecture_service.py falls back to 'audio/mpeg' for ANY unknown file extension (line 45: `return mapping.get(ext, 'audio/mpeg')`). Uploading a .txt file with content-type text/plain is accepted with HTTP 202 instead of being rejected with 400 'Unsupported audio type'. This is a validation/security weakness — arbitrary non-audio files (PDF/EXE/image/HTML) get stored under lectures/<id>/ as if they were MP3s. Fix: change the default to None and reject in upload_lecture when normalize_mime returns None/falsy or not in ALLOWED_AUDIO_MIME.",
+        "priority": "HIGH"
+      }
+    ],
+    "minor": [
+      {
+        "endpoint": "GET /api/lectures/published",
+        "issue": "Endpoint requires authentication (returns 401 without token). The spec says 'any role' which is fine, but consider whether truly public listing is intended. Current behavior: works for both teacher and student; rejects anonymous users. Behaviour is consistent with code (Depends(get_current_user)); flagging for product-decision review only."
+      },
+      {
+        "endpoint": "All /api/* error responses",
+        "issue": "FastAPI default error envelope uses {'detail': '...'} — no machine-readable error code/field. Frontend has to string-match on detail. Consider standardising an error shape."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_lecturemind_api.py",
+    "/app/backend/tests/pytest.ini",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Fix normalize_mime() default fallback in /app/backend/services/lecture_service.py — do not coerce unknown extensions into 'audio/mpeg'. Return None (or original mime) and let upload_lecture reject with 400.",
+    "(Optional) Decide whether GET /api/lectures/published should be public (no auth) — currently it requires a Bearer token."
+  ],
+  "critical_code_review_comments": [
+    "services/lecture_service.py normalize_mime defaults unknown extensions to audio/mpeg, allowing arbitrary file uploads to bypass the audio MIME check (real bug, see test_upload_unsupported_mime).",
+    "routes/lectures.py: upload_lecture does not verify file.size when the client omits Content-Length (UploadFile.size can be None). A streaming attacker could exceed the 200MB cap. Consider tracking bytes during shutil.copyfileobj or using a chunked size guard.",
+    "services/ai_service.py uses synchronous google-genai SDK calls (self._client.models.generate_content) inside `async def` — blocks the event loop. Wrap with asyncio.to_thread or use the async client.",
+    "routes/lectures.py delete_lecture returns None with status 204 but storage cleanup is best-effort silent (bare except). At minimum log the exception.",
+    "core/security.py / JWT: no expiry assertion in tests; recommend confirming JWT exp is set on create_access_token.",
+    "routes/lectures.py get_lecture: students see 403 for unpublished but teachers who are NOT owners also see 403 — consistent, but consider 404 to avoid existence leak.",
+    "repositories/lecture_repository.py duplicates created_at/updated_at deserialization logic in list_by_teacher and list_published — DRY violation, extract helper.",
+    "services/lecture_service.py process_lecture_background lacks any retry/backoff for transient AI failures."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_lecturemind_api.py (new)",
+    "/app/backend/tests/pytest.ini (new)"
+  ],
+  "success_rate": {
+    "backend": "97.3% (36/37)",
+    "frontend": "not tested (skipped per request)"
+  },
+  "test_credentials": "teacher@lecturemind.example.com / Password123! (teacher), student@lecturemind.example.com / Password123! (student). Both verified working via signup-or-login pattern. Also auto-created TEST_teacher2@lecturemind.example.com / Password123! for non-owner publish test.",
+  "seed_data_creation": "TestQuizScoring class directly seeds StudyMaterials + status='ready' into Mongo (via LectureRepository) for one lecture to validate quiz scoring without the AI provider. All TEST_ prefixed lectures are deleted in fixture teardown. The seeded lecture and 'TEST_ Lecture Intro' are cleaned up.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend test suite lives at /app/backend/tests/test_lecturemind_api.py. Run with: cd /app/backend && python -m pytest tests/test_lecturemind_api.py -v --junitxml=/app/test_reports/pytest/pytest_results.xml. The suite is self-contained: it reads REACT_APP_BACKEND_URL from /app/frontend/.env (fallback) and signs up the teacher/student credentials if missing. The only failure is the MIME validation bug — once main agent fixes normalize_mime, all 37 should pass. GEMINI_API_KEY is intentionally empty so the background task lands lectures in status=error; the seeded-materials test path validates publish+quiz happy path.",
+  "rca of the issue": "test_upload_unsupported_mime sends a .txt file with content-type text/plain. Expected: 400 'Unsupported audio type'. Actual: 202 Accepted with audio_mime='audio/mpeg'. Root cause: services/lecture_service.py::normalize_mime returns mapping.get(ext, 'audio/mpeg') — the default 'audio/mpeg' for unknown extensions means the subsequent `if mime not in ALLOWED_AUDIO_MIME` check (line 50 of routes/lectures.py) always passes. Mitigation: change default to None, then in upload_lecture reject if mime is None OR not in ALLOWED_AUDIO_MIME. Repro: `curl -F file=@anything.txt -F title=t -H 'Authorization: Bearer <teacher>' /api/lectures` -> 202."
+}

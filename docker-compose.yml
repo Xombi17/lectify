@@ -1,0 +1,115 @@
+# LectureMind AI — Docker Compose for self-hosting.
+#
+# What this brings up:
+#   - postgres  : primary database (replaces MongoDB in the Emergent preview)
+#   - minio     : S3-compatible object storage for lecture audio files
+#   - backend   : FastAPI app (with the swap-in PostgreSQL repositories)
+#   - frontend  : React app (production build served by nginx)
+#
+# Usage:
+#   1. Copy `.env.docker.example` to `.env` next to this file and fill it in.
+#   2. Run: `docker compose up --build`
+#   3. Visit http://localhost:3000  (frontend)
+#                http://localhost:8001/docs (FastAPI docs)
+#                http://localhost:9001 (MinIO console — user: minioadmin / pass: minioadmin)
+#
+# See MIGRATION.md for what to change in the code to actually use Postgres
+# instead of MongoDB.
+
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-lecturemind}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-lecturemind}
+      POSTGRES_DB: ${POSTGRES_DB:-lecturemind}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    volumes:
+      - miniodata:/data
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # One-shot bucket bootstrap for MinIO
+  minio-setup:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 ${MINIO_ROOT_USER:-minioadmin} ${MINIO_ROOT_PASSWORD:-minioadmin} &&
+      mc mb --ignore-existing local/${OBJECT_STORAGE_BUCKET:-lecture-audio} &&
+      echo 'Bucket ready';
+      "
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    environment:
+      # See MIGRATION.md — when you swap to Postgres, drop the MONGO_URL and
+      # set DATABASE_URL instead; the example below shows the target shape.
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-lecturemind}:${POSTGRES_PASSWORD:-lecturemind}@postgres:5432/${POSTGRES_DB:-lecturemind}
+      MONGO_URL: "mongodb://placeholder"   # unused once you switch to Postgres
+      DB_NAME: ${POSTGRES_DB:-lecturemind}
+
+      JWT_SECRET: ${JWT_SECRET:?set a strong JWT_SECRET}
+      JWT_ALGORITHM: HS256
+      JWT_EXPIRE_MINUTES: 10080
+
+      GEMINI_API_KEY: ${GEMINI_API_KEY:?set GEMINI_API_KEY}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
+
+      STORAGE_BACKEND: s3
+      OBJECT_STORAGE_ENDPOINT: http://minio:9000
+      OBJECT_STORAGE_REGION: us-east-1
+      OBJECT_STORAGE_BUCKET: ${OBJECT_STORAGE_BUCKET:-lecture-audio}
+      OBJECT_STORAGE_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      OBJECT_STORAGE_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+
+      CORS_ORIGINS: "http://localhost:3000"
+    ports:
+      - "8001:8001"
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        REACT_APP_BACKEND_URL: ${REACT_APP_BACKEND_URL:-http://localhost:8001}
+    depends_on:
+      - backend
+    ports:
+      - "3000:80"
+
+volumes:
+  pgdata:
+  miniodata:
