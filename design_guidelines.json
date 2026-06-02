@@ -1,0 +1,126 @@
+{
+  "theme": "Light",
+  "archetype": "Archetype 4 (Swiss & High-Contrast) + Academic Precision",
+  "color_palette": {
+    "css_variables": {
+      "--background": "60 14% 97%",
+      "--foreground": "0 0% 4%",
+      "--card": "0 0% 100%",
+      "--card-foreground": "0 0% 4%",
+      "--popover": "0 0% 100%",
+      "--popover-foreground": "0 0% 4%",
+      "--primary": "212 100% 14%",
+      "--primary-foreground": "0 0% 100%",
+      "--secondary": "0 0% 92%",
+      "--secondary-foreground": "0 0% 4%",
+      "--muted": "0 0% 95%",
+      "--muted-foreground": "0 0% 40%",
+      "--accent": "70 100% 50%",
+      "--accent-foreground": "0 0% 4%",
+      "--destructive": "0 100% 50%",
+      "--destructive-foreground": "0 0% 100%",
+      "--border": "0 0% 89%",
+      "--input": "0 0% 89%",
+      "--ring": "212 100% 14%",
+      "--radius": "0.25rem"
+    },
+    "dark_mode_variables": {
+      "--background": "210 10% 8%",
+      "--foreground": "60 10% 96%",
+      "--card": "210 10% 10%",
+      "--card-foreground": "60 10% 96%",
+      "--primary": "70 100% 50%",
+      "--primary-foreground": "0 0% 4%",
+      "--secondary": "210 10% 15%",
+      "--secondary-foreground": "60 10% 96%",
+      "--accent": "210 10% 18%",
+      "--accent-foreground": "60 10% 96%",
+      "--muted": "210 10% 15%",
+      "--muted-foreground": "0 0% 65%",
+      "--border": "210 10% 18%"
+    },
+    "instructions": "Update index.css with these exact HSL variables in the :root and .dark scopes. Oxford Blue (#002147) and Highlighter Yellow (#D4FF00) form the academic/AI contrast. Never use purple or violet."
+  },
+  "typography": {
+    "fonts": {
+      "headings": "Cabinet Grotesk",
+      "body": "IBM Plex Sans",
+      "mono": "JetBrains Mono"
+    },
+    "hierarchy": {
+      "h1": "text-4xl sm:text-5xl lg:text-6xl tracking-tighter font-black",
+      "h2": "text-2xl sm:text-3xl lg:text-4xl tracking-tight font-bold",
+      "h3": "text-xl sm:text-2xl tracking-tight font-semibold",
+      "body": "text-base leading-relaxed text-foreground/80",
+      "overline": "text-xs tracking-[0.2em] uppercase font-bold text-primary"
+    },
+    "instructions": "Import Cabinet Grotesk from fontshare or standard CDN, IBM Plex Sans & JetBrains Mono from Google Fonts. Headings MUST be tightly tracked. Never use Inter for Headings."
+  },
+  "spacing_and_layout": {
+    "strategy": "The 'Control Room' Grid & Bento Protocol",
+    "containers": "Use p-6 to p-8 inside bordered containers to provide academic breathing room.",
+    "dashboard_grid": "grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6",
+    "alignment": "Left-align dense text and forms. Maintain strict optical alignment.",
+    "mobile_first": true
+  },
+  "surface_strategies": {
+    "dashboard_cards": "Flat solid background, 1px border (border-border), no shadow by default. Hover: shadow-sm border-primary/20 transition-all.",
+    "headers": "Solid background with a 1px bottom border. No transparent navs. Sticky z-50.",
+    "interactive_elements": "Neumorphism avoided. Use high-contrast solid colors and sharp 4px (0.25rem) radius."
+  },
+  "components": {
+    "shadcn_overrides": {
+      "Button": "Add hover:scale-[1.02] active:scale-[0.98] transition-transform.",
+      "Card": "Use minimal styling: bg-white border border-border rounded-md shadow-none.",
+      "Tabs": "Override default rounded pills with minimalist bottom-border active states (Notion-style). text-muted-foreground for inactive, border-b-2 border-primary text-primary for active.",
+      "Input": "bg-transparent border border-border focus:border-primary rounded-md transition-colors."
+    },
+    "custom_elements": {
+      "flashcards": "Requires framer-motion 3D flip. Front is pure card bg, back is muted yellow/gray bg with answer.",
+      "quiz_options": "Radio buttons customized as full-width clickable blocks. Active state: bg-accent/20 border-accent text-foreground."
+    },
+    "instructions": "Avoid overusing standard Shadcn 'Vercel' look. Strip heavy shadows. Use flat, bold styles."
+  },
+  "motion_and_interactions": {
+    "hover_states": "Hover states must be explicitly styled (e.g. hover:bg-muted hover:text-foreground).",
+    "flashcard_flip": "Use framer-motion for a realistic 3D rotateY flip animation on flashcards.",
+    "page_transitions": "Subtle fade and slide up (y: 10 -> 0) using framer-motion for dashboard components.",
+    "accessibility": "Respect prefers-reduced-motion."
+  },
+  "icons_and_assets": {
+    "library": "@phosphor-icons/react",
+    "instructions": "Use Phosphor Icons for a more academic/editorial look than default Lucide. Install: yarn add @phosphor-icons/react"
+  },
+  "image_urls": {
+    "auth_background": {
+      "url": "https://static.prod-images.emergentagent.com/jobs/91b3ea2c-96c1-44fe-a015-83c5d67da69d/images/28d6e12ec0e157364b3ca6d509833ee7ffafc8c70673bd84642cbe4fe0b11b76.png",
+      "description": "Abstract minimalist Swiss poster design, overlapping geometric shapes in Oxford Blue and bright yellow on bone white background. Use for Login/Signup split screen right side."
+    },
+    "empty_state_learning": {
+      "url": "https://static.prod-images.emergentagent.com/jobs/91b3ea2c-96c1-44fe-a015-83c5d67da69d/images/5c7c236ce203cb9ff8cfa0e9c9f793e07ff59096977e2bd795d4e28997823c76.png",
+      "description": "Clean minimalist illustration of an open book with floating glowing geometric shapes. Use for 'No lectures uploaded yet' or 'No active topics'."
+    },
+    "teacher_dashboard_hero": {
+      "url": "https://images.unsplash.com/photo-1524178232363-1fb2b075b655?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjY2NzN8MHwxfHNlYXJjaHwxfHx1bml2ZXJzaXR5JTIwdGVhY2hlciUyMGxlY3R1cmV8ZW58MHx8fHwxNzgwMzc3NzY4fDA&ixlib=rb-4.1.0&q=85",
+      "description": "Teacher giving lecture. Use as an avatar or a subtle header image in teacher profile."
+    },
+    "student_studying": {
+      "url": "https://images.pexels.com/photos/5553631/pexels-photo-5553631.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "description": "Focused student with headphones studying. Use for student dashboard welcome banner or empty state for quizzes."
+    }
+  },
+  "accessibility_and_testing": {
+    "data_testid_rule": "All interactive elements (buttons, inputs, tabs, quiz options, flashcards) MUST include a kebab-case data-testid attribute based on role.",
+    "contrast": "Text over the highlighter yellow accent must be dark (foreground) for APCA/WCAG contrast."
+  },
+  "instructions_to_main_agent": [
+    "1. Install dependencies: yarn add @phosphor-icons/react framer-motion",
+    "2. Update index.css with the exact HSL color palette provided in this JSON.",
+    "3. Add Cabinet Grotesk and IBM Plex Sans fonts via HTML <link> or @import.",
+    "4. Build the Auth split screen using the `auth_background` image.",
+    "5. Build Teacher Dashboard using Bento Grid layout and strict data tables.",
+    "6. Build Student Viewer using Notion-style tabs for Transcript/Notes/Quiz/Flashcards.",
+    "7. Implement 3D flip card component for flashcards using framer-motion.",
+    "8. NEVER use generic placeholder images. Use ONLY the URLs provided."
+  ]
+}
