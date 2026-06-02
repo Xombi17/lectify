@@ -149,6 +149,11 @@ async def submit_quiz(
     lecture = await repo.get_by_id(lecture_id)
     if not lecture:
         raise HTTPException(status_code=404, detail="Lecture not found")
+    # RBAC: students may only attempt published lectures; teachers may attempt their own
+    if user.role == "student" and not lecture.published:
+        raise HTTPException(status_code=403, detail="Lecture not available")
+    if user.role == "teacher" and lecture.teacher_id != user.id and not lecture.published:
+        raise HTTPException(status_code=403, detail="Forbidden")
     quiz = lecture.materials.quiz
     if not quiz:
         raise HTTPException(status_code=400, detail="No quiz available")
