@@ -45,12 +45,62 @@ TRANSCRIPT:
 """
 
 
+CHUNK_DIGEST_PROMPT = """You are summarising ONE chunk of a longer lecture for later hierarchical merging.
+
+Return ONLY valid JSON:
+{
+  "chunk_summary": "3-6 sentence summary of THIS chunk",
+  "chunk_notes": ["bullet note", "..."],
+  "key_concepts": ["concept", "..."]
+}
+
+Rules:
+- 6-10 chunk_notes covering definitions, examples, and explanations IN THIS CHUNK ONLY.
+- 3-7 key_concepts.
+- Skip filler/jokes/off-topic side conversations.
+
+CHUNK TRANSCRIPT:
+"""
+
+
+HIERARCHICAL_MERGE_PROMPT = """You are merging per-chunk digests of a long lecture into ONE final study pack.
+
+Treat the inputs as your source of truth. Deduplicate concepts, prefer breadth + depth, organise notes by topic flow (not by chunk order).
+
+Return ONLY valid JSON matching this schema:
+{
+  "summary": "4-6 sentence overview of the WHOLE lecture",
+  "smart_notes": ["bullet note", "..."],
+  "key_concepts": ["concept", "..."],
+  "quiz": [
+    {"question": "...", "options": ["A","B","C","D"], "answer_index": 0, "explanation": "..."}
+  ],
+  "flashcards": [{"front": "...", "back": "..."}]
+}
+
+Rules:
+- 15-25 smart_notes (since the lecture is long).
+- 8-15 unique key_concepts.
+- Exactly 8 quiz questions (mix easy/medium/hard) with 4 options each.
+- 12-18 flashcards.
+- Use clear, student-friendly language.
+
+CHUNK DIGESTS (JSON array, in chronological order):
+"""
+
+
 class AIProvider(ABC):
     @abstractmethod
     async def transcribe_audio(self, audio_path: Path, mime_type: str) -> str: ...
 
     @abstractmethod
     async def generate_study_materials(self, transcript: str) -> StudyMaterials: ...
+
+    @abstractmethod
+    async def digest_chunk(self, chunk_transcript: str) -> dict: ...
+
+    @abstractmethod
+    async def merge_chunk_digests(self, digests: list[dict]) -> StudyMaterials: ...
 
     @abstractmethod
     async def chat(self, transcript: str, history: list[dict], question: str) -> str: ...

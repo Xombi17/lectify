@@ -1,0 +1,51 @@
+{
+  "summary": "LectureMind AI chunking pipeline backend tests: added 13 new tests in test_chunking.py covering audio_chunker (format_timestamp, get_duration_seconds, split_into_chunks+cleanup), LectureDB defaults, normalize_mime, single-shot pipeline (short audio), chunked pipeline (1900s ffmpeg-synthesized mp3 → 4 chunks), error-path cleanup, and POST /api/lectures response-shape regression. All 72/72 tests pass (13 new + 37 MVP + 22 P1). Gemini fully mocked via FakeAI; real ffmpeg used to generate test audio.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "tests/test_lecturemind_api.py::TestQuizScoring (and others using bare asyncio.run)",
+        "issue": "Pre-existing latent bug: Motor client singleton (core.db._client) is cached across asyncio.run() calls, so once any test exits its loop, subsequent tests in OTHER files relying on the cached client crash with RuntimeError: Event loop is closed. Was masked by test ordering until test_chunking.py landed alphabetically first. Worked around by adding a conftest.py autouse fixture that resets core_db._client around every test. Recommend moving the reset into core.db.get_db() itself (lazy + per-loop) so production code is also safer in async contexts that span multiple loops."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_chunking.py",
+    "/app/backend/tests/conftest.py",
+    "/app/test_reports/pytest/chunking_results.xml",
+    "/app/test_reports/pytest/iteration3_full.xml"
+  ],
+  "action_items": [
+    "Optional: harden core/db.py get_db() to detect a closed event loop and rebuild the Motor client transparently, eliminating the need for the test-level reset fixture.",
+    "Optional (already raised in iter1/2): RBAC on quiz attempts, 503 vs 500 on AI cold paths, timezone-aware streaks — still pending."
+  ],
+  "critical_code_review_comments": [
+    "services/audio_chunker.py: split_into_chunks writes chunks under <source>.parent / '.chunks' — verified cleaned up on both success and error paths via cleanup_chunks(); good.",
+    "services/lecture_service.py: _process_chunked() persists per-step progress (progress_step/progress_total/progress_label) and stamps chunk_count on the lecture doc. Verified end-state progress_step == progress_total and progress_label == 'Done'.",
+    "services/lecture_service.py: error path correctly sets status='error' with error_message and still runs cleanup_chunks in finally — verified by injecting a FakeAI that raises on the 2nd chunk transcribe.",
+    "services/lecture_service.py: single-shot path calls generate_study_materials exactly once and does NOT touch digest_chunk/merge_chunk_digests for sub-30-min audio (verified call counts on FakeAI).",
+    "services/lecture_service.py: chunked path calls transcribe_audio N times, digest_chunk N times, merge_chunk_digests exactly once, and does NOT call generate_study_materials (verified).",
+    "services/lecture_service.py normalize_mime: passthrough for audio/mpeg, extension-only resolution for .mp3, and rejection (None) for application/pdf and text/plain — all verified.",
+    "models/lecture.py: LectureDB defaults (progress_step=0, progress_total=0, progress_label=None, chunk_count=None) propagate through POST /api/lectures response — verified live against REACT_APP_BACKEND_URL.",
+    "core/db.py (latent): Motor client singleton outlives the loop it was created on. Recommend per-loop client caching (id(asyncio.get_running_loop()) keyed) so tests/CI don't need the conftest workaround."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_chunking.py (new, 13 tests)",
+    "/app/backend/tests/conftest.py (new, autouse Motor-client reset fixture so cross-file asyncio.run() doesn't poison the singleton)"
+  ],
+  "success_rate": {
+    "backend": "100% (72/72 tests: 13 chunking + 37 MVP + 22 P1)",
+    "frontend": "not tested (backend-only request)"
+  },
+  "test_credentials": "Teacher: teacher@lecturemind.example.com / Password123! (used in smoke shape test); TEST_teacher (synthetic) used for chunking pipeline lecture seeding",
+  "seed_data_creation": "test_chunking.py generates two ffmpeg sine-wave mp3s per session (70s and 1900s) in a tmp dir, copies them into the local storage backend keyed under lectures/TEST_chunk/, inserts TEST_-prefixed lecture docs directly via LectureRepository, and deletes both the Mongo row and the on-disk file after each pipeline test. Smoke test also deletes its uploaded TEST_chunk row.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Run `cd /app/backend && python -m pytest tests/ -v` for the full 72-test suite. test_chunking.py uses real ffmpeg (~10s session-scoped to synthesize the 1900s mp3 at 24k bitrate) and FakeAI monkeypatch of services.lecture_service.get_ai_service. conftest.py resets core.db._client between tests; do not remove it unless core/db.py is hardened. Mocked: FakeAIProvider (services.ai_service.get_ai_service) — Gemini is NEVER called. Pre-existing minor issues from iter1/2 (quiz-attempt RBAC, 500 vs 503, UTC streak) remain open.",
+  "rca of the issue": "The 4 RuntimeError: Event loop is closed failures observed during the first combined run were caused by core/db.py caching the Motor AsyncIOMotorClient in a module-level singleton (_client). When test_chunking.py runs first and exits its asyncio.run() loop, the cached client retains a reference to that now-closed loop; the next file (test_lecturemind_api.py) then calls asyncio.run(seed()) which tries to schedule work on the dead loop via Motor's executor and blows up. Reproduction: pytest tests/test_chunking.py tests/test_lecturemind_api.py::TestQuizScoring. Mitigation applied: tests/conftest.py autouse fixture nullifies core_db._client before and after every test, forcing get_db() to lazily rebuild on the current loop. Longer-term fix belongs in core/db.py (per-loop client keying)."
+}

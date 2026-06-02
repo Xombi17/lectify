@@ -43,6 +43,10 @@ class LectureDB(BaseModel):
     audio_filename: str
     audio_mime: str
     duration_seconds: Optional[float] = None
+    chunk_count: Optional[int] = None
+    progress_step: int = 0
+    progress_total: int = 0
+    progress_label: Optional[str] = None
     status: LectureStatus = "uploaded"
     transcript: Optional[str] = None
     materials: StudyMaterials = Field(default_factory=StudyMaterials)

@@ -186,7 +186,7 @@ export default function LectureDetailPage() {
             )}
 
             {lecture.status === "processing" || lecture.status === "uploaded" ? (
-                <ProcessingState />
+                <ProcessingState lecture={lecture} />
             ) : lecture.status === "error" ? (
                 <ErrorState message={lecture.error_message} />
             ) : (
@@ -196,19 +196,57 @@ export default function LectureDetailPage() {
     );
 }
 
-function ProcessingState() {
+function ProcessingState({ lecture }) {
+    const total = lecture.progress_total || 0;
+    const step = lecture.progress_step || 0;
+    const pct = total > 0 ? Math.min(100, Math.round((step / total) * 100)) : null;
+    const label = lecture.progress_label || "Working on it…";
+    const isLong = (lecture.duration_seconds || 0) > 30 * 60;
+
     return (
-        <div className="grid place-items-center border-2 border-dashed border-border bg-card p-16 text-center">
-            <div className="flex h-16 w-16 animate-pulse items-center justify-center bg-accent">
+        <div className="border-2 border-dashed border-border bg-card p-12 text-center">
+            <div className="mx-auto mb-5 flex h-16 w-16 animate-pulse items-center justify-center bg-accent">
                 <Lightning size={32} weight="duotone" className="text-accent-foreground" />
             </div>
-            <h3 className="font-display mt-5 text-2xl font-black tracking-tighter">
+            <h3 className="font-display text-2xl font-black tracking-tighter">
                 AI is digesting your lecture
             </h3>
-            <p className="mt-2 max-w-md text-muted-foreground">
-                Transcribing audio, extracting concepts, and generating notes, quizzes, and
-                flashcards. This usually takes a minute or two.
+            <p
+                className="mt-2 text-sm text-muted-foreground"
+                data-testid="processing-label"
+            >
+                {label}
             </p>
+
+            {pct !== null && (
+                <div className="mx-auto mt-6 max-w-md">
+                    <div className="mb-2 flex items-center justify-between text-xs">
+                        <span className="text-overline text-muted-foreground">Progress</span>
+                        <span className="font-mono text-primary" data-testid="processing-percent">
+                            {pct}%
+                        </span>
+                    </div>
+                    <div className="h-2 w-full bg-muted">
+                        <div
+                            className="h-full bg-primary transition-all duration-500"
+                            style={{ width: `${pct}%` }}
+                            data-testid="processing-bar"
+                        />
+                    </div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                        Step {step} of {total}
+                    </div>
+                </div>
+            )}
+
+            {isLong && lecture.chunk_count > 0 && (
+                <p className="mt-6 inline-flex items-center gap-2 border border-border bg-background px-3 py-1 text-xs text-muted-foreground">
+                    <Lightning size={12} weight="duotone" />
+                    Long lecture detected · split into{" "}
+                    <span className="font-mono text-primary">{lecture.chunk_count}</span>{" "}
+                    chunks for hierarchical processing
+                </p>
+            )}
         </div>
     );
 }
