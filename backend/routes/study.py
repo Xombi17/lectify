@@ -83,7 +83,9 @@ async def export_pdf(lecture_id: str, user: UserPublic = Depends(get_current_use
         raise HTTPException(status_code=400, detail="Lecture is not ready")
 
     pdf_bytes = render_lecture_pdf(lecture)
-    filename = f"{lecture.title[:60].replace('/', '_')} — Notes.pdf"
+    # ASCII-only filename for Content-Disposition (latin-1 HTTP header constraint).
+    safe_title = "".join(c if ord(c) < 128 else "-" for c in lecture.title[:60]).replace('"', "'")
+    filename = f"{safe_title} - Notes.pdf"
 
     def _iter():
         yield pdf_bytes
