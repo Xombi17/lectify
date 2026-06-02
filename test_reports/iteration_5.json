@@ -1,0 +1,45 @@
+{
+  "summary": "Iteration 5 — Tested all 4 new study features (manual edits, PDF export, bookmarks, SM-2 flashcards) + dispatcher (Mongo/SQL). 34/36 tests pass. Found 1 CRITICAL bug: GET /api/lectures/{id}/pdf always returns 500 because filename in Content-Disposition contains em-dash (\u2014) which Starlette cannot encode as latin-1 HTTP header. Affects 100% of PDF downloads regardless of lecture content.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "GET /api/lectures/{id}/pdf",
+        "issue": "Returns 500 UnicodeEncodeError: 'latin-1' codec can't encode character '\\u2014'. Root cause: routes/study.py line 86 builds filename as `f\"{lecture.title[:60].replace('/', '_')} \u2014 Notes.pdf\"` — the literal em-dash (\u2014) in the f-string violates latin-1 used by HTTP headers in Starlette. Fix: replace the literal em-dash with a plain hyphen '-' (ASCII) OR use RFC 5987 encoding: `headers={'Content-Disposition': f\"attachment; filename*=UTF-8''{urllib.parse.quote(filename)}\"}`.",
+        "priority": "CRITICAL"
+      }
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_study.py",
+    "/app/test_reports/pytest/iteration5_study.xml"
+  ],
+  "action_items": [
+    "Fix /app/backend/routes/study.py line 86: replace literal em-dash '\u2014' in PDF filename with plain ASCII hyphen '-' (or use urllib.parse.quote + RFC 5987 filename*= encoding) so the Content-Disposition header is latin-1 safe. After fix, re-run tests/test_study.py::TestPdfExport to verify."
+  ],
+  "critical_code_review_comments": [
+    "routes/study.py:86 — non-ASCII em-dash in HTTP header filename is a 100% failure mode for PDF download. Either swap to '-' or RFC 5987-encode the filename.",
+    "routes/study.py:53 — `if not lecture or lecture.teacher_id != user.id: 404` is correct for edit_materials but loses signal for 'lecture exists but you don't own it'. Acceptable as security-by-obscurity; documented behaviour.",
+    "services/pdf_export.py — pure-function PDF generation works correctly (PDF magic header present, pypdf-decoded text contains title + all sections). No issues there.",
+    "repositories/_sql/bookmark_repository.find_existing — uses `BookmarkORM.ref_index.is_(ref_index) if ref_index is None else BookmarkORM.ref_index == ref_index` which is fine, but the conditional inside a boolean expression is fragile; consider explicit if/else branch.",
+    "services/spaced_repetition.py — SM-2 algorithm verified correct for Again/Good/Easy. quality=1 (Hard) is documented and implemented but not part of the PRD spec; reasonable extension."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_study.py (new, 36 tests)"
+  ],
+  "success_rate": {
+    "backend": "94% (34/36 study tests; the 2 failures are both the same PDF UnicodeEncodeError bug)",
+    "frontend": "not tested (backend-only request)"
+  },
+  "test_credentials": "Reused teacher@lecturemind.example.com / Password123! and student@lecturemind.example.com / Password123! from /app/memory/test_credentials.md. No changes.",
+  "seed_data_creation": "Tests seed TEST_-prefixed lectures via direct repo.col.insert_one and clean them up (plus bookmarks & flashcard_reviews) in fixture teardown. No leaks observed.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "After main agent fixes the em-dash bug in /app/backend/routes/study.py line 86, only re-running tests/test_study.py::TestPdfExport (5 tests) is needed to confirm. All other 31 tests in test_study.py are independent and passing. Bookmarks idempotency is verified; SM-2 algorithm verified pure-function; dispatcher verified for both mongo & postgres branches. PDF pure-function unit test (TestPdfUnit) confirms PDF generation itself is correct — bug is strictly in the HTTP header construction.",
+  "rca_of_the_issue": "RCA — PDF 500 error: routes/study.py builds f-string `f\"{title[:60].replace('/', '_')} \u2014 Notes.pdf\"` containing literal em-dash (U+2014). Starlette's StreamingResponse encodes headers as latin-1 (per HTTP RFC 7230 historical default in the library). latin-1 cannot encode U+2014, so the response init raises UnicodeEncodeError -> uvicorn returns 500. Reproduction: any GET /api/lectures/{ready_id}/pdf with valid auth. Mitigation: replace em-dash with hyphen (one-character change) OR use RFC 5987 `filename*=UTF-8''...` with urllib.parse.quote. PDF bytes themselves are well-formed (TestPdfUnit decodes the bytes via pypdf and finds the title + all section headings)."
+}

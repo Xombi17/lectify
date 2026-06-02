@@ -6,6 +6,8 @@ import {
     Microphone,
     BookOpen,
     User,
+    Brain,
+    BookmarkSimple,
 } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 
@@ -25,6 +27,8 @@ export default function AppShell({ children }) {
     ];
     const studentNav = [
         { to: "/student", label: "Library", icon: BookOpen },
+        { to: "/student/review", label: "Review", icon: Brain },
+        { to: "/student/bookmarks", label: "Bookmarks", icon: BookmarkSimple },
     ];
     const nav = user?.role === "teacher" ? teacherNav : studentNav;
 

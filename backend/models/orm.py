@@ -94,3 +94,36 @@ class QuizAttemptORM(Base):
     total: Mapped[int] = mapped_column(Integer, nullable=False)
     percentage: Mapped[float] = mapped_column(Float, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
+
+
+class BookmarkORM(Base):
+    __tablename__ = "bookmarks"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    lecture_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("lectures.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    ref_index: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
+
+
+class FlashcardReviewORM(Base):
+    __tablename__ = "flashcard_reviews"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    lecture_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("lectures.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    card_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    ease_factor: Mapped[float] = mapped_column(Float, default=2.5)
+    interval_days: Mapped[int] = mapped_column(Integer, default=0)
+    repetitions: Mapped[int] = mapped_column(Integer, default=0)
+    last_reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    due_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
+    total_reviews: Mapped[int] = mapped_column(Integer, default=0)

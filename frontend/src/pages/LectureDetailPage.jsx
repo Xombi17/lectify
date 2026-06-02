@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { lectureApi, API } from "@/lib/api";
+import { lectureApi, API, bookmarkApi } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import AppShell from "@/components/AppShell";
 import FlashcardDeck from "@/components/FlashcardDeck";
 import QuizRunner from "@/components/QuizRunner";
 import DoubtChat from "@/components/DoubtChat";
+import EditableNotes from "@/components/EditableNotes";
+import BookmarkButton from "@/components/BookmarkButton";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -24,6 +26,7 @@ import {
     Trash,
     EyeSlash,
     Translate,
+    DownloadSimple,
 } from "@phosphor-icons/react";
 import { toast } from "sonner";
 
@@ -149,6 +152,16 @@ export default function LectureDetailPage() {
 
                     {isOwner && (
                         <div className="flex gap-2">
+                            {ready && (
+                                <Button
+                                    variant="outline"
+                                    onClick={downloadPdf}
+                                    data-testid="download-pdf-btn"
+                                >
+                                    <DownloadSimple size={16} weight="duotone" className="mr-2" />
+                                    PDF
+                                </Button>
+                            )}
                             <Button
                                 onClick={togglePublish}
                                 disabled={!ready}
@@ -190,7 +203,7 @@ export default function LectureDetailPage() {
             ) : lecture.status === "error" ? (
                 <ErrorState message={lecture.error_message} />
             ) : (
-                <ContentTabs lecture={lecture} />
+                <ContentTabs lecture={lecture} isOwner={isOwner} onLectureUpdate={setLecture} />
             )}
         </AppShell>
     );
@@ -271,12 +284,36 @@ function ErrorState({ message }) {
     );
 }
 
-function ContentTabs({ lecture }) {
+function ContentTabs({ lecture, isOwner, onLectureUpdate }) {
     const baseMaterials = lecture.materials || {};
     const [language, setLanguage] = useState("original");
     const [translating, setTranslating] = useState(false);
     const [translated, setTranslated] = useState(null);
     const m = translated || baseMaterials;
+    const showOriginal = language === "original";
+
+    // Bookmarks (only for the original-language view)
+    const [bookmarks, setBookmarks] = useState([]);
+    useEffect(() => {
+        bookmarkApi
+            .forLecture(lecture.id)
+            .then(setBookmarks)
+            .catch(() => setBookmarks([]));
+    }, [lecture.id]);
+
+    const findBookmark = (kind, refIndex) =>
+        bookmarks.find(
+            (b) => b.kind === kind && b.ref_index === refIndex
+        ) || null;
+
+    const onBookmarkToggle = (kind, refIndex, bm) => {
+        setBookmarks((prev) => {
+            const without = prev.filter(
+                (b) => !(b.kind === kind && b.ref_index === refIndex)
+            );
+            return bm ? [...without, bm] : without;
+        });
+    };
 
     const onLanguage = async (lang) => {
         setLanguage(lang);
@@ -346,40 +383,71 @@ function ContentTabs({ lecture }) {
                     {translating && <span className="text-xs text-muted-foreground">Translating…</span>}
                 </div>
 
-                {m.summary && (
-                    <div className="mb-6 border-l-2 border-accent bg-card p-5">
-                        <div className="text-overline mb-2 text-primary">TL;DR</div>
-                        <p className="text-base leading-relaxed">{m.summary}</p>
-                    </div>
-                )}
-                <h3 className="text-overline mb-4 text-muted-foreground">Smart notes</h3>
-                <ul className="space-y-3">
-                    {(m.smart_notes || []).map((n, i) => (
-                        <li
-                            key={i}
-                            className="flex gap-3 border-b border-border pb-3 text-base leading-relaxed"
-                        >
-                            <span className="font-mono mt-1 text-xs text-primary">
-                                {String(i + 1).padStart(2, "0")}
-                            </span>
-                            <span>{n}</span>
-                        </li>
-                    ))}
-                </ul>
-                {m.key_concepts?.length > 0 && (
-                    <div className="mt-8">
-                        <h3 className="text-overline mb-3 text-muted-foreground">Key concepts</h3>
-                        <div className="flex flex-wrap gap-2">
-                            {m.key_concepts.map((c, i) => (
-                                <span
+                {showOriginal ? (
+                    <EditableNotes
+                        lecture={lecture}
+                        isOwner={!!isOwner}
+                        onSaved={onLectureUpdate}
+                        renderNoteExtras={(i, text) => (
+                            <BookmarkButton
+                                lectureId={lecture.id}
+                                kind="note"
+                                refIndex={i}
+                                text={text}
+                                existing={findBookmark("note", i)}
+                                onToggle={(bm) => onBookmarkToggle("note", i, bm)}
+                            />
+                        )}
+                        renderConceptExtras={(i, text) => (
+                            <BookmarkButton
+                                lectureId={lecture.id}
+                                kind="concept"
+                                refIndex={i}
+                                text={text}
+                                size={14}
+                                existing={findBookmark("concept", i)}
+                                onToggle={(bm) => onBookmarkToggle("concept", i, bm)}
+                            />
+                        )}
+                    />
+                ) : (
+                    <>
+                        {m.summary && (
+                            <div className="mb-6 border-l-2 border-accent bg-card p-5">
+                                <div className="text-overline mb-2 text-primary">TL;DR</div>
+                                <p className="text-base leading-relaxed">{m.summary}</p>
+                            </div>
+                        )}
+                        <h3 className="text-overline mb-4 text-muted-foreground">Smart notes</h3>
+                        <ul className="space-y-3">
+                            {(m.smart_notes || []).map((n, i) => (
+                                <li
                                     key={i}
-                                    className="border border-primary/20 bg-accent/20 px-3 py-1 text-sm font-medium"
+                                    className="flex gap-3 border-b border-border pb-3 text-base leading-relaxed"
                                 >
-                                    {c}
-                                </span>
+                                    <span className="font-mono mt-1 text-xs text-primary">
+                                        {String(i + 1).padStart(2, "0")}
+                                    </span>
+                                    <span>{n}</span>
+                                </li>
                             ))}
-                        </div>
-                    </div>
+                        </ul>
+                        {m.key_concepts?.length > 0 && (
+                            <div className="mt-8">
+                                <h3 className="text-overline mb-3 text-muted-foreground">Key concepts</h3>
+                                <div className="flex flex-wrap gap-2">
+                                    {m.key_concepts.map((c, i) => (
+                                        <span
+                                            key={i}
+                                            className="border border-primary/20 bg-accent/20 px-3 py-1 text-sm font-medium"
+                                        >
+                                            {c}
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </>
                 )}
             </TabsContent>
 
@@ -388,7 +456,7 @@ function ContentTabs({ lecture }) {
             </TabsContent>
 
             <TabsContent value="flashcards" className="mt-8" data-testid="flashcards-tab-content">
-                <FlashcardDeck cards={m.flashcards || []} />
+                <FlashcardDeck cards={m.flashcards || []} lectureId={showOriginal ? lecture.id : null} />
             </TabsContent>
 
             <TabsContent value="chat" className="mt-8" data-testid="chat-tab-content">

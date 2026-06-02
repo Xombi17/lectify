@@ -50,6 +50,26 @@ export const lectureApi = {
         api.post(`/lectures/${id}/quiz/attempt`, { answers }).then((r) => r.data),
     translate: (id, target_language) =>
         api.post(`/lectures/${id}/translate`, { target_language }).then((r) => r.data),
+    editMaterials: (id, patch) =>
+        api.patch(`/lectures/${id}/materials`, patch).then((r) => r.data),
+    pdfUrl: (id) => `${API}/lectures/${id}/pdf`,
+};
+
+export const bookmarkApi = {
+    create: (payload) => api.post("/bookmarks", payload).then((r) => r.data),
+    mine: () => api.get("/bookmarks/me").then((r) => r.data),
+    forLecture: (id) => api.get(`/lectures/${id}/bookmarks`).then((r) => r.data),
+    remove: (id) => api.delete(`/bookmarks/${id}`).then((r) => r.data),
+};
+
+export const reviewApi = {
+    submit: (lecture_id, card_index, quality) =>
+        api
+            .post("/flashcards/review", { lecture_id, card_index, quality })
+            .then((r) => r.data),
+    due: () => api.get("/flashcards/due").then((r) => r.data),
+    forLecture: (id) =>
+        api.get(`/lectures/${id}/flashcards/state`).then((r) => r.data),
 };
 
 export const chatApi = {

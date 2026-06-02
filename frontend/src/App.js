@@ -8,6 +8,8 @@ import TeacherDashboard from "@/pages/TeacherDashboard";
 import UploadLecturePage from "@/pages/UploadLecturePage";
 import LectureDetailPage from "@/pages/LectureDetailPage";
 import StudentDashboard from "@/pages/StudentDashboard";
+import ReviewPage from "@/pages/ReviewPage";
+import BookmarksPage from "@/pages/BookmarksPage";
 
 import "@/App.css";
 
@@ -74,6 +76,22 @@ export default function App() {
                         element={
                             <RequireAuth role="student">
                                 <LectureDetailPage />
+                            </RequireAuth>
+                        }
+                    />
+                    <Route
+                        path="/student/review"
+                        element={
+                            <RequireAuth role="student">
+                                <ReviewPage />
+                            </RequireAuth>
+                        }
+                    />
+                    <Route
+                        path="/student/bookmarks"
+                        element={
+                            <RequireAuth role="student">
+                                <BookmarksPage />
                             </RequireAuth>
                         }
                     />

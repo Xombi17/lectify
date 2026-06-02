@@ -9,7 +9,9 @@ from core.config import get_settings
 from core.db import close_db
 from core.sql_db import close_sql, init_models as init_sql_models
 from repositories.attempt_repository import AttemptRepository
+from repositories.bookmark_repository import BookmarkRepository
 from repositories.chat_repository import ChatRepository
+from repositories.flashcard_review_repository import FlashcardReviewRepository
 from repositories.lecture_repository import LectureRepository
 from repositories.user_repository import UserRepository
 from routes.analytics import router as analytics_router
@@ -17,6 +19,7 @@ from routes.auth import router as auth_router
 from routes.chat import router as chat_router
 from routes.lectures import router as lectures_router
 from routes.search import router as search_router
+from routes.study import router as study_router
 
 logging.basicConfig(
     level=logging.INFO,
@@ -68,6 +71,7 @@ api_router.include_router(lectures_router)
 api_router.include_router(chat_router)
 api_router.include_router(search_router)
 api_router.include_router(analytics_router)
+api_router.include_router(study_router)
 app.include_router(api_router)
 
 app.add_middleware(
