@@ -52,6 +52,15 @@ class AIProvider(ABC):
     @abstractmethod
     async def generate_study_materials(self, transcript: str) -> StudyMaterials: ...
 
+    @abstractmethod
+    async def chat(self, transcript: str, history: list[dict], question: str) -> str: ...
+
+    @abstractmethod
+    async def translate_pack(self, pack: dict, target_language: str) -> dict: ...
+
+    @abstractmethod
+    async def embed(self, text: str) -> list[float]: ...
+
 
 class GeminiProvider(AIProvider):
     def __init__(self, api_key: str, model: str):
@@ -93,6 +102,57 @@ class GeminiProvider(AIProvider):
             quiz=[QuizQuestion(**q) for q in (data.get("quiz") or []) if _valid_quiz(q)],
             flashcards=[Flashcard(**c) for c in (data.get("flashcards") or []) if _valid_card(c)],
         )
+
+    async def chat(self, transcript: str, history: list[dict], question: str) -> str:
+        """RAG-style Q&A bound to the lecture transcript."""
+        system = (
+            "You are LectureMind, a study assistant. Answer the student's question using "
+            "ONLY the lecture transcript below. If the transcript doesn't contain the "
+            "answer, say so honestly. Be concise, accurate, and student-friendly. "
+            "Use markdown formatting for lists and emphasis when helpful.\n\n"
+            f"--- LECTURE TRANSCRIPT ---\n{transcript[:80_000]}\n--- END TRANSCRIPT ---"
+        )
+        # Render history + question as a single prompt (simple and provider-agnostic)
+        convo_lines = [system, ""]
+        for m in history[-10:]:  # keep last 10 turns
+            role = "Student" if m.get("role") == "user" else "Assistant"
+            convo_lines.append(f"{role}: {m.get('content', '').strip()}")
+        convo_lines.append(f"Student: {question.strip()}")
+        convo_lines.append("Assistant:")
+        prompt = "\n".join(convo_lines)
+        response = self._client.models.generate_content(model=self._model, contents=prompt)
+        return (response.text or "").strip()
+
+    async def translate_pack(self, pack: dict, target_language: str) -> dict:
+        """Translate summary/notes/concepts/flashcards into `target_language`.
+
+        Preserves technical terms (formulas, code, proper nouns) where possible.
+        Returns dict matching `pack` shape.
+        """
+        from google.genai import types
+        prompt = (
+            f"Translate the following JSON object into {target_language}. "
+            "Preserve technical terminology, mathematical formulas, code, and proper "
+            "nouns. Keep the JSON structure identical — only translate string VALUES, "
+            "never keys. Output ONLY the translated JSON with no commentary.\n\n"
+            f"{json.dumps(pack, ensure_ascii=False)}"
+        )
+        response = self._client.models.generate_content(
+            model=self._model,
+            contents=prompt,
+            config=types.GenerateContentConfig(response_mime_type="application/json"),
+        )
+        return _parse_json_lenient(response.text or "{}")
+
+    async def embed(self, text: str) -> list[float]:
+        """Lightweight text embedding for semantic search."""
+        resp = self._client.models.embed_content(
+            model="text-embedding-004",
+            contents=text[:8_000],
+        )
+        # google-genai returns .embeddings (list) each with .values
+        emb = resp.embeddings[0]
+        return list(emb.values)
 
 
 def _parse_json_lenient(raw: str) -> dict:

@@ -48,4 +48,21 @@ export const lectureApi = {
     audioUrl: (id) => `${API}/lectures/${id}/audio`,
     submitQuiz: (id, answers) =>
         api.post(`/lectures/${id}/quiz/attempt`, { answers }).then((r) => r.data),
+    translate: (id, target_language) =>
+        api.post(`/lectures/${id}/translate`, { target_language }).then((r) => r.data),
+};
+
+export const chatApi = {
+    history: (lectureId) => api.get(`/lectures/${lectureId}/chat`).then((r) => r.data),
+    ask: (lectureId, question) =>
+        api.post(`/lectures/${lectureId}/chat`, { question }).then((r) => r.data),
+};
+
+export const searchApi = {
+    search: (q, limit = 8) =>
+        api.get("/search", { params: { q, limit } }).then((r) => r.data),
+};
+
+export const analyticsApi = {
+    me: () => api.get("/analytics/me").then((r) => r.data),
 };

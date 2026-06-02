@@ -7,10 +7,15 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from core.config import get_settings
 from core.db import close_db
+from repositories.attempt_repository import AttemptRepository
+from repositories.chat_repository import ChatRepository
 from repositories.lecture_repository import LectureRepository
 from repositories.user_repository import UserRepository
+from routes.analytics import router as analytics_router
 from routes.auth import router as auth_router
+from routes.chat import router as chat_router
 from routes.lectures import router as lectures_router
+from routes.search import router as search_router
 
 logging.basicConfig(
     level=logging.INFO,
@@ -27,6 +32,8 @@ async def lifespan(app: FastAPI):
     try:
         await UserRepository().ensure_indexes()
         await LectureRepository().ensure_indexes()
+        await ChatRepository().ensure_indexes()
+        await AttemptRepository().ensure_indexes()
         logger.info("Mongo indexes ready")
     except Exception:
         logger.exception("Failed to ensure indexes")
@@ -51,6 +58,9 @@ async def health():
 
 api_router.include_router(auth_router)
 api_router.include_router(lectures_router)
+api_router.include_router(chat_router)
+api_router.include_router(search_router)
+api_router.include_router(analytics_router)
 app.include_router(api_router)
 
 app.add_middleware(

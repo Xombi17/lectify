@@ -5,9 +5,17 @@ import { useAuth } from "@/lib/auth";
 import AppShell from "@/components/AppShell";
 import FlashcardDeck from "@/components/FlashcardDeck";
 import QuizRunner from "@/components/QuizRunner";
+import DoubtChat from "@/components/DoubtChat";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 import {
     Lightning,
     CheckCircle,
@@ -15,6 +23,7 @@ import {
     PaperPlaneTilt,
     Trash,
     EyeSlash,
+    Translate,
 } from "@phosphor-icons/react";
 import { toast } from "sonner";
 
@@ -225,7 +234,36 @@ function ErrorState({ message }) {
 }
 
 function ContentTabs({ lecture }) {
-    const m = lecture.materials || {};
+    const baseMaterials = lecture.materials || {};
+    const [language, setLanguage] = useState("original");
+    const [translating, setTranslating] = useState(false);
+    const [translated, setTranslated] = useState(null);
+    const m = translated || baseMaterials;
+
+    const onLanguage = async (lang) => {
+        setLanguage(lang);
+        if (lang === "original") {
+            setTranslated(null);
+            return;
+        }
+        setTranslating(true);
+        try {
+            const r = await lectureApi.translate(lecture.id, lang);
+            setTranslated({
+                summary: r.summary,
+                smart_notes: r.smart_notes || [],
+                key_concepts: r.key_concepts || [],
+                flashcards: r.flashcards || baseMaterials.flashcards,
+            });
+            toast.success(`Notes translated to ${lang}`);
+        } catch (err) {
+            toast.error(err?.response?.data?.detail || "Translation failed");
+            setLanguage("original");
+        } finally {
+            setTranslating(false);
+        }
+    };
+
     return (
         <Tabs defaultValue="notes" className="w-full" data-testid="lecture-tabs">
             <TabsList className="h-auto w-full justify-start gap-6 rounded-none border-b border-border bg-transparent p-0">
@@ -233,6 +271,7 @@ function ContentTabs({ lecture }) {
                     ["notes", "Smart Notes"],
                     ["quiz", "Quiz"],
                     ["flashcards", "Flashcards"],
+                    ["chat", "Doubt Chat"],
                     ["transcript", "Transcript"],
                 ].map(([v, label]) => (
                     <TabsTrigger
@@ -247,6 +286,28 @@ function ContentTabs({ lecture }) {
             </TabsList>
 
             <TabsContent value="notes" className="mt-8" data-testid="notes-tab-content">
+                <div className="mb-6 flex flex-wrap items-center gap-3 border-b border-border pb-3">
+                    <Translate size={16} weight="duotone" className="text-primary" />
+                    <span className="text-overline text-muted-foreground">View in</span>
+                    <Select value={language} onValueChange={onLanguage} disabled={translating}>
+                        <SelectTrigger data-testid="translate-language-select" className="h-9 w-48">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="original">Original</SelectItem>
+                            <SelectItem value="Hindi">Hindi (हिन्दी)</SelectItem>
+                            <SelectItem value="Marathi">Marathi (मराठी)</SelectItem>
+                            <SelectItem value="Tamil">Tamil (தமிழ்)</SelectItem>
+                            <SelectItem value="Spanish">Spanish</SelectItem>
+                            <SelectItem value="French">French</SelectItem>
+                            <SelectItem value="German">German</SelectItem>
+                            <SelectItem value="Arabic">Arabic</SelectItem>
+                            <SelectItem value="Chinese">Chinese (简体)</SelectItem>
+                        </SelectContent>
+                    </Select>
+                    {translating && <span className="text-xs text-muted-foreground">Translating…</span>}
+                </div>
+
                 {m.summary && (
                     <div className="mb-6 border-l-2 border-accent bg-card p-5">
                         <div className="text-overline mb-2 text-primary">TL;DR</div>
@@ -285,11 +346,15 @@ function ContentTabs({ lecture }) {
             </TabsContent>
 
             <TabsContent value="quiz" className="mt-8" data-testid="quiz-tab-content">
-                <QuizRunner lectureId={lecture.id} quiz={m.quiz || []} />
+                <QuizRunner lectureId={lecture.id} quiz={baseMaterials.quiz || []} />
             </TabsContent>
 
             <TabsContent value="flashcards" className="mt-8" data-testid="flashcards-tab-content">
                 <FlashcardDeck cards={m.flashcards || []} />
+            </TabsContent>
+
+            <TabsContent value="chat" className="mt-8" data-testid="chat-tab-content">
+                <DoubtChat lectureId={lecture.id} canChat={!!lecture.transcript} />
             </TabsContent>
 
             <TabsContent value="transcript" className="mt-8" data-testid="transcript-tab-content">

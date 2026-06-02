@@ -157,10 +157,26 @@ async def submit_quiz(
         raise HTTPException(status_code=400, detail="Answer count mismatch")
     score = sum(1 for u, c in zip(attempt.answers, correct_answers) if u == c)
     total = len(correct_answers)
+    percentage = round((score / total) * 100, 1) if total else 0.0
+
+    # Persist for analytics
+    from repositories.attempt_repository import AttemptRepository
+    from models.chat import QuizAttemptRecord
+    attempt_repo = AttemptRepository()
+    rec = QuizAttemptRecord(
+        id=attempt_repo.new_id(),
+        lecture_id=lecture_id,
+        user_id=user.id,
+        score=score,
+        total=total,
+        percentage=percentage,
+    )
+    await attempt_repo.add(rec)
+
     return QuizResult(
         score=score,
         total=total,
-        percentage=round((score / total) * 100, 1) if total else 0.0,
+        percentage=percentage,
         correct_answers=correct_answers,
         user_answers=attempt.answers,
     )

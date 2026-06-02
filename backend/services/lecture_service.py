@@ -72,11 +72,25 @@ async def process_lecture_background(lecture_id: str) -> None:
         logger.info("Generating study materials for %s ...", lecture_id)
         materials = await ai.generate_study_materials(transcript)
 
+        # Best-effort embedding for semantic search (fail soft)
+        embedding: list[float] | None = None
+        try:
+            seed = " ".join(filter(None, [
+                lecture.title,
+                materials.summary or "",
+                " ".join(materials.key_concepts or []),
+            ]))
+            if seed.strip():
+                embedding = await ai.embed(seed)
+        except Exception:  # noqa: BLE001
+            logger.exception("Embedding failed for %s; semantic search will use lexical only", lecture_id)
+
         await repo.update_fields(
             lecture_id,
             {
                 "transcript": transcript,
                 "materials": materials,
+                "embedding": embedding,
                 "status": "ready",
                 "error_message": None,
             },

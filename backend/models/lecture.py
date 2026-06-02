@@ -46,6 +46,8 @@ class LectureDB(BaseModel):
     status: LectureStatus = "uploaded"
     transcript: Optional[str] = None
     materials: StudyMaterials = Field(default_factory=StudyMaterials)
+    embedding: Optional[List[float]] = None
+    translations: dict = Field(default_factory=dict)
     error_message: Optional[str] = None
     published: bool = False
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

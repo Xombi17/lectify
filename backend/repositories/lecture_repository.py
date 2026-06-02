@@ -55,7 +55,7 @@ class LectureRepository:
     async def list_published(self) -> List[LectureSummary]:
         cursor = self.col.find(
             {"published": True},
-            {"_id": 0, "transcript": 0, "materials": 0},
+            {"_id": 0, "transcript": 0, "materials": 0, "embedding": 0, "translations": 0},
         ).sort("created_at", -1)
         items = []
         async for doc in cursor:
@@ -64,6 +64,15 @@ class LectureRepository:
                     doc[f] = datetime.fromisoformat(doc[f])
             items.append(LectureSummary(**{k: doc.get(k) for k in LectureSummary.model_fields}))
         return items
+
+    async def list_published_embeddings(self) -> list[dict]:
+        """Return minimal docs needed for semantic ranking."""
+        cursor = self.col.find(
+            {"published": True},
+            {"_id": 0, "id": 1, "title": 1, "subject": 1, "semester": 1,
+             "embedding": 1, "materials.summary": 1, "materials.key_concepts": 1},
+        )
+        return [doc async for doc in cursor]
 
     async def update_fields(self, lecture_id: str, fields: dict) -> None:
         fields["updated_at"] = datetime.now(timezone.utc).isoformat()
