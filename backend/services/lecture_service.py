@@ -178,12 +178,16 @@ async def process_lecture_background(lecture_id: str) -> None:
                 )
 
         logger.info("Lecture %s processed", lecture_id)
+        from services.metrics_service import record_lecture_processed
+        record_lecture_processed(status="success")
     except Exception as exc:  # noqa: BLE001
         logger.exception("Failed to process lecture %s", lecture_id)
         await repo.update_fields(
             lecture_id,
             {"status": "error", "error_message": str(exc)[:500]},
         )
+        from services.metrics_service import record_lecture_processed
+        record_lecture_processed(status="failed")
     finally:
         if chunks_made:
             cleanup_chunks(chunks_made)
@@ -200,7 +204,11 @@ async def _process_single_shot(*, lecture_id, audio_path, mime, ai, repo):
 
     settings = get_settings()
     try:
+        import time
+        from services.metrics_service import ai_generation_duration
+        _t0 = time.time()
         result = await provider.transcribe(audio_path, mime)
+        ai_generation_duration.labels(task_type="transcription").observe(time.time() - _t0)
     except Exception as e:
         # Fallback to Gemini if Groq Whisper fails
         if settings.TRANSCRIPTION_FALLBACK_PROVIDER == "gemini":
@@ -220,7 +228,9 @@ async def _process_single_shot(*, lecture_id, audio_path, mime, ai, repo):
         "progress_step": 3,
         "progress_label": "Generating study materials",
     })
+    _t1 = time.time()
     materials = await ai.generate_study_materials(result.text)
+    ai_generation_duration.labels(task_type="generate_materials").observe(time.time() - _t1)
     embedding = await _safe_embedding(ai, materials)
 
     lecture = await repo.get_by_id(lecture_id)

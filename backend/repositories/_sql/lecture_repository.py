@@ -149,6 +149,25 @@ class LectureRepository:
             if row is not None:
                 await s.delete(row)
 
+    async def get_lectures_by_date_range(self, start: datetime, end: datetime) -> List[LectureDB]:
+        """Get lectures created within a date range.
+
+        Args:
+            start: Start of range (inclusive).
+            end: End of range (exclusive).
+
+        Returns:
+            List of LectureDB objects ordered by created_at descending.
+        """
+        async with session_maker()() as s:
+            stmt = (
+                select(LectureORM)
+                .where(LectureORM.created_at >= start, LectureORM.created_at < end)
+                .order_by(LectureORM.created_at.desc())
+            )
+            rows = (await s.execute(stmt)).scalars().all()
+            return [_to_lecture(r) for r in rows]
+
     @staticmethod
     def new_id() -> str:
         return str(uuid.uuid4())

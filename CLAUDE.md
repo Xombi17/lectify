@@ -10,6 +10,7 @@ Deliver a production-grade MVP with queue-driven processing and optimized code.
 - Use queue-driven pipelines for scale.
 - No secrets in repo.
 - Update docs when services/models change.
+- No commits ever directly ever user will do the commits.
 
 ## graphify
 
@@ -53,7 +54,7 @@ Living project status, updated after every feature lands.
 - **Tests** — `backend/tests/test_queue.py` (13 tests: priority scoring, job models, idempotency), `backend/tests/test_workers.py` (7 tests: 3 worker types, success/failure/DLQ), `backend/tests/conftest.py` (global Redis mock), `backend/tests/test_queue_integration.py` (integration marker tests), `backend/tests/load_test_queue.py` (load test script)
 - **Test counts:** 20 new tests green / 56 total green (queue + existing)
 - **New graph nodes:** 2735 nodes, 6134 edges, 259 communities
-- **Next card in queue:** Phase 7 — Monitoring + Reliability (F)
+- **Next card in queue:** Phase 8 — Auth Polish (I)
 
 ### What was added (Phase 4)
 
@@ -83,7 +84,7 @@ Living project status, updated after every feature lands.
 | **4 — Admin Dashboard UI (A.5)** | React admin UI for hierarchy, assignments, QR | **DONE** | 4 plans, 6 new components, 4 backend changes, 3 test files |
 | **5 — Queue + Worker (C)** | Redis/ARQ queue, 3 worker pools, retry/DLQ, idempotency, priority | **DONE** | 7 plans, 20 new tests, 56 total green, queue-driven pipeline LIVE |
 | **6 — Transcription Integration (D ref.)** | Replace mock with Groq Whisper API, confidence scoring, cost tracking | **DONE** | Groq Whisper API, parallel chunking, Gemini fallback, 11 tests green |
-| **7 — Monitoring + Reliability (F)** | Prometheus, Grafana, SLA tracking, failure alerts | **NOT STARTED** | "95% same-day" SLA unmeasurable today |
+| **7 — Monitoring + Reliability (F)** | Prometheus, Grafana, SLA tracking, failure alerts | **DONE** | 3 plans, 15 panels, 6 queue metric groups, alert dedup |
 | **8 — Auth Polish (I)** | Full RBAC enforcement, session refresh, audit logging | **PARTIAL** | `core/deps.py` has admin/teacher/student/teacher_or_admin guards |
 | **B — Recording + upload** | Upload, store, transcribe | **DONE** | Pre-GSD, complete |
 | **D — AI pipeline** | Hierarchical chunking, embeddings, summary, notes, quiz, flashcards, exam-tag | **DONE** | `services/ai_service.py` (Gemini 2.5 Flash) |
@@ -97,7 +98,7 @@ Living project status, updated after every feature lands.
 | 2 | Teacher Assignment + Enrollment (A.3) | **DONE** (3 plans, 14 endpoints, 27 tests) |
 | 3 | QR generation + scan-to-enroll (A.4) | **DONE** (Pre-GSD) |
 | 4 | Admin Dashboard UI (A.5) | **DONE** (4 plans, 6 components, 3 test files) |
-| 5 | Queue + worker system (C) | Plan 01 complete (Redis infra) |
+| 5 | Queue + worker system (C) | **DONE** [adc7a54] |
 | 6 | Production transcription (D ref.) | **DONE** (Groq Whisper API, parallel chunks, confidence scoring, 11 tests) |
 | 7 | Monitoring + reliability (F) | Brief NOT written |
 | 8 | Auth polish (I) | Brief NOT written |

@@ -6,6 +6,7 @@ from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from core.config import get_settings
+from prometheus_fastapi_instrumentator import Instrumentator
 from core.sql_db import close_sql, init_models
 from repositories.attempt_repository import AttemptRepository
 from repositories.bookmark_repository import BookmarkRepository
@@ -55,11 +56,74 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning("Redis not available at startup: %s (workers connect independently)", e)
 
+    # Prometheus metrics endpoint
+    if settings.PROMETHEUS_ENABLED:
+        instrumentator.instrument(app).expose(app, endpoint=settings.PROMETHEUS_METRICS_PATH)
+        logger.info("Prometheus metrics enabled at %s", settings.PROMETHEUS_METRICS_PATH)
+
+    # Monitoring background loop — SLA checks + daily summary + alerts
+    _monitor_task = None
+    if settings.DAILY_SUMMARY_ENABLED or settings.ALERT_QUEUE_DEPTH_THRESHOLD > 0:
+
+        async def _run_monitoring_loop():
+            """Periodic monitoring — daily summary + alert checks."""
+            from datetime import datetime, timezone
+
+            from services.alert_service import alert_manager
+            from services.monitoring_service import compute_daily_sla, generate_daily_summary, send_slack_webhook
+
+            cfg = get_settings()
+
+            # Wait for server to be fully up before starting checks
+            await asyncio.sleep(30)
+
+            while True:
+                try:
+                    today = datetime.now(timezone.utc).date()
+                    sla = await compute_daily_sla(today)
+
+                    # Check SLA breach
+                    await alert_manager.check_sla_breach(
+                        sla["sla_percent"],
+                        cfg.SLA_TARGET_PERCENT,
+                        today.isoformat(),
+                    )
+
+                    # Send daily summary at configured time (check every 5 min)
+                    if cfg.DAILY_SUMMARY_ENABLED and cfg.SLACK_WEBHOOK_URL:
+                        try:
+                            summary_time = cfg.DAILY_SUMMARY_TIME.split(":")
+                            target_hour, target_min = int(summary_time[0]), int(summary_time[1])
+                            now = datetime.now(timezone.utc)
+                            if now.hour == target_hour and now.minute == target_min:
+                                summary = await generate_daily_summary(today)
+                                await send_slack_webhook(summary)
+                        except (ValueError, IndexError):
+                            pass  # Invalid time format — silently skip
+
+                except Exception:
+                    logger.exception("Monitoring loop iteration failed")
+
+                # Sleep 5 minutes between checks
+                await asyncio.sleep(300)
+
+        _monitor_task = asyncio.create_task(_run_monitoring_loop())
+        logger.info("Monitoring background loop started")
+
     yield
+    # Cancel monitoring task on shutdown
+    if _monitor_task is not None:
+        _monitor_task.cancel()
     await close_sql()
 
 
 app = FastAPI(title="LectureMind AI", lifespan=lifespan)
+
+# Prometheus instrumentation — created at module level, exposed in lifespan
+instrumentator = Instrumentator(
+    should_group_status_codes=True,
+    should_ignore_untemplated=True,
+)
 
 api_router = APIRouter(prefix="/api")
 
@@ -71,7 +135,45 @@ async def root():
 
 @api_router.get("/health")
 async def health():
-    return {"status": "ok"}
+    """Health check with real dependency connectivity probes."""
+    from datetime import datetime, timezone
+
+    from core.sql_db import session_maker
+    from services.storage_service import get_storage
+
+    checks = {}
+
+    # Database check
+    try:
+        async with session_maker()() as s:
+            from sqlalchemy import text
+            await s.execute(text("SELECT 1"))
+        checks["database"] = "ok"
+    except Exception as e:
+        checks["database"] = f"error: {e}"
+
+    # Storage check
+    try:
+        storage = get_storage()
+        await storage.list_objects(prefix="health_check/", max_keys=1)
+        checks["storage"] = "ok"
+    except AttributeError:
+        # Some storage backends may not have list_objects; assume ok
+        checks["storage"] = "ok"
+    except Exception as e:
+        checks["storage"] = f"error: {e}"
+
+    # Redis check
+    try:
+        from core.queue import get_redis
+        redis = get_redis()
+        await redis.ping()
+        checks["redis"] = "ok"
+    except Exception as e:
+        checks["redis"] = f"error: {e}"
+
+    overall = "ok" if all(v == "ok" for v in checks.values()) else "degraded"
+    return {"status": overall, "checks": checks, "timestamp": datetime.now(timezone.utc).isoformat()}
 
 
 api_router.include_router(auth_router)

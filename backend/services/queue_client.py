@@ -19,6 +19,15 @@ logger = logging.getLogger(__name__)
 IDEMPOTENCY_TTL = 86400  # 24 hours
 
 
+def _decode_or(value: bytes | str | None, default: str = "") -> str:
+    """Safely decode a Redis hash field that might be bytes, str, or None."""
+    if value is None:
+        return default
+    if isinstance(value, bytes):
+        return value.decode()
+    return str(value)
+
+
 async def enqueue_job(payload: JobCreate) -> JobDB:
     """Enqueue a lecture processing job with idempotency check.
 
@@ -36,9 +45,11 @@ async def enqueue_job(payload: JobCreate) -> JobDB:
         # Key already existed — this is a duplicate
         logger.info("Duplicate job detected for %s, skipping enqueue", idempotency_key)
         # Return a placeholder JobDB with status completed
+        # Use a UUID for consistent id format and preserve the payload's stage
         return JobDB(
-            id=idempotency_key,
+            id=str(uuid.uuid4()),
             lecture_id=payload.lecture_id,
+            stage=payload.stage,
             status="completed",
             version=payload.version,
         )
@@ -60,6 +71,10 @@ async def enqueue_job(payload: JobCreate) -> JobDB:
 
     # Push to the priority queue (Redis sorted set)
     await redis.zadd(QUEUE_PROCESS_LECTURE, {job_id: score})
+    # Update queue depth metric
+    from services.metrics_service import queue_depth as _qd
+    depth = await redis.zcard(QUEUE_PROCESS_LECTURE)
+    _qd.labels(queue_type="process_lecture").set(depth)
     # Store job metadata in a hash for quick lookup
     await redis.hset(
         f"job:{job_id}",
@@ -92,8 +107,8 @@ async def get_job_status(job_id: str) -> Optional[JobPublic]:
         status=data.get(b"status", b"queued").decode(),
         attempt=int(data.get(b"attempt", b"0")),
         error_message=data.get(b"error_message", b"").decode() or None,
-        created_at=datetime.fromisoformat(data.get(b"created_at", datetime.now(timezone.utc).isoformat()).decode()),
-        updated_at=datetime.fromisoformat(data.get(b"updated_at", datetime.now(timezone.utc).isoformat()).decode()),
+        created_at=datetime.fromisoformat(_decode_or(data.get(b"created_at")) or datetime.now(timezone.utc).isoformat()),
+        updated_at=datetime.fromisoformat(_decode_or(data.get(b"updated_at")) or datetime.now(timezone.utc).isoformat()),
     )
 
 
@@ -108,6 +123,19 @@ async def update_job_status(job_id: str, status: JobStatus, error_message: Optio
         mapping["error_message"] = error_message[:500]
     await redis.hset(f"job:{job_id}", mapping=mapping)
 
+    # Track processing duration on completion
+    from services.metrics_service import queue_processing_duration
+
+    if status in ("completed", "failed"):
+        job_hash = await redis.hgetall(f"job:{job_id}")
+        if job_hash and b"created_at" in job_hash:
+            created = datetime.fromisoformat(job_hash[b"created_at"].decode())
+            duration = (datetime.now(timezone.utc) - created).total_seconds()
+            queue_processing_duration.labels(
+                queue_type="process_lecture",
+                status="success" if status == "completed" else "failed",
+            ).observe(duration)
+
 
 async def move_to_dlq(job_id: str, error_message: str) -> None:
     """Move a failed job to the dead-letter queue."""
@@ -119,10 +147,18 @@ async def move_to_dlq(job_id: str, error_message: str) -> None:
     }
     await redis.lpush(DLQ_PROCESS_LECTURE, json.dumps(dlq_entry))
     await update_job_status(job_id, "dead_letter", error_message)
+    # Update DLQ depth metric
+    from services.metrics_service import dead_letter_depth as _dld
+    dlq_len = await redis.llen(DLQ_PROCESS_LECTURE)
+    _dld.labels(queue_type="process_lecture").set(dlq_len)
     logger.warning("Job %s moved to DLQ: %s", job_id, error_message[:100])
 
 
 async def get_queue_depth() -> int:
     """Get the number of jobs waiting in the priority queue."""
     redis = get_redis()
-    return await redis.zcard(QUEUE_PROCESS_LECTURE)
+    depth = await redis.zcard(QUEUE_PROCESS_LECTURE)
+    # Update queue depth metric
+    from services.metrics_service import queue_depth as _qd
+    _qd.labels(queue_type="process_lecture").set(depth)
+    return depth

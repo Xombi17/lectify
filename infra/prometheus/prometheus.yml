@@ -1,0 +1,17 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: "lectify-api"
+    static_configs:
+      - targets: ["backend:8001"]
+    metrics_path: /metrics
+
+  # Workers don't expose an HTTP server — they report metrics
+  # via shared Redis counters consumed by the API's /metrics endpoint.
+  # Uncomment and add a metrics HTTP server to workers when needed.
+  # - job_name: "lectify-workers"
+  #   static_configs:
+  #     - targets: ["worker:8002"]
+  #   metrics_path: /metrics

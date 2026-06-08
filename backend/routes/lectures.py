@@ -72,6 +72,10 @@ async def upload_lecture(
     )
     await repo.create(lecture)
 
+    # Record upload metric
+    from services.metrics_service import record_lecture_uploaded
+    record_lecture_uploaded(source="file_upload")
+
     # Enqueue processing job
     score = compute_priority_score()
     job_payload = JobCreate(

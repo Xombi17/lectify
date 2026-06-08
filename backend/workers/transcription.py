@@ -18,8 +18,6 @@ from services.lecture_service import (
     CHUNK_THRESHOLD_SECONDS,
     CHUNK_LENGTH_SECONDS,
     CHUNK_MIME,
-    _process_single_shot,
-    _process_chunked,
 )
 from services.queue_client import update_job_status, move_to_dlq, enqueue_job
 from services.storage_service import get_storage
@@ -140,6 +138,8 @@ class TranscriptionWorker(BaseWorker):
                 })
                 return {"status": "dead_letter", "error": str(e)[:200]}
 
+            from services.metrics_service import queue_retry_count
+            queue_retry_count.labels(queue_type="process_lecture").inc()
             return {"status": "retrying", "error": str(e)[:200]}
 
         finally:

@@ -160,3 +160,5 @@ zipp==4.1.0
 neo4j==5.15
 redis>=5.0,<6.0
 arq>=0.28,<1.0
+prometheus-fastapi-instrumentator>=7.0.0
+prometheus-client>=0.21.0

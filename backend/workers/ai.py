@@ -138,6 +138,8 @@ class AIWorker(BaseWorker):
                 })
                 return {"status": "dead_letter", "error": str(e)[:200]}
 
+            from services.metrics_service import queue_retry_count
+            queue_retry_count.labels(queue_type="process_lecture").inc()
             return {"status": "retrying", "error": str(e)[:200]}
 
     async def _generate_from_chunks(self, lecture, ai, repo) -> dict:
