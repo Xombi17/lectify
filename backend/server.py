@@ -19,6 +19,7 @@ from routes.chat import router as chat_router
 from routes.lectures import router as lectures_router
 from routes.search import router as search_router
 from routes.study import router as study_router
+from routes.admin import router as admin_router
 
 logging.basicConfig(
     level=logging.INFO,
@@ -67,6 +68,7 @@ api_router.include_router(chat_router)
 api_router.include_router(search_router)
 api_router.include_router(analytics_router)
 api_router.include_router(study_router)
+api_router.include_router(admin_router)
 app.include_router(api_router)
 
 app.add_middleware(

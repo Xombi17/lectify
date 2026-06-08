@@ -1,11 +1,12 @@
 """Academic hierarchy repositories - SQLAlchemy (async) implementation."""
 import uuid
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from sqlalchemy import select
 
 from core.sql_db import session_maker
 from models.academic import (
+    AuditLogDB,
     InstitutionDB,
     YearDB,
     BranchDB,
@@ -17,6 +18,7 @@ from models.academic import (
     StudentEnrollmentDB,
 )
 from models.orm import (
+    AuditLogORM,
     InstitutionORM,
     YearORM,
     BranchORM,
@@ -582,6 +584,64 @@ class TeacherAssignmentRepository:
             row.active = active
             await s.flush()
             return _to_teacher_assignment(row)
+
+    @staticmethod
+    def new_id() -> str:
+        return str(uuid.uuid4())
+
+
+# ============================================================================
+# AuditLog Repository
+# ============================================================================
+def _to_audit_log(row: AuditLogORM) -> AuditLogDB:
+    return AuditLogDB(
+        id=row.id,
+        admin_id=row.admin_id,
+        action=row.action,
+        entity_type=row.entity_type,
+        entity_id=row.entity_id,
+        details=row.details,
+        created_at=row.created_at,
+    )
+
+
+class AuditLogRepository:
+    async def ensure_indexes(self) -> None:
+        return None
+
+    async def create(self, entry: AuditLogDB) -> AuditLogDB:
+        async with session_maker()() as s, s.begin():
+            s.add(AuditLogORM(
+                id=entry.id,
+                admin_id=entry.admin_id,
+                action=entry.action,
+                entity_type=entry.entity_type,
+                entity_id=entry.entity_id,
+                details=entry.details,
+                created_at=entry.created_at,
+            ))
+        return entry
+
+    async def list_all(self) -> List[AuditLogDB]:
+        async with session_maker()() as s:
+            from sqlalchemy import desc
+            stmt = select(AuditLogORM).order_by(desc(AuditLogORM.created_at))
+            rows = (await s.execute(stmt)).scalars().all()
+            return [_to_audit_log(r) for r in rows]
+
+    async def list_by_entity(self, entity_type: str, entity_id: str) -> List[AuditLogDB]:
+        async with session_maker()() as s:
+            from sqlalchemy import desc
+            stmt = (
+                select(AuditLogORM)
+                .where(
+                    (AuditLogORM.entity_type == entity_type) &
+                    (AuditLogORM.entity_id == entity_id)
+                )
+                .order_by(desc(AuditLogORM.created_at))
+            )
+            rows = (await s.execute(stmt)).scalars().all()
+            return [_to_audit_log(r) for r in rows]
 
     @staticmethod
     def new_id() -> str:

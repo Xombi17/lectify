@@ -209,6 +209,34 @@ class TeacherAssignmentPublic(BaseModel):
 # ============================================================================
 # StudentEnrollment
 # ============================================================================
+class AuditLogCreate(BaseModel):
+    admin_id: str
+    action: str = Field(..., pattern=r"^(create|update|delete)$")
+    entity_type: str
+    entity_id: str
+    details: Optional[str] = None
+
+
+class AuditLogDB(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    admin_id: str
+    action: str
+    entity_type: str
+    entity_id: str
+    details: Optional[str] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class AuditLogPublic(BaseModel):
+    id: str
+    admin_id: str
+    action: str
+    entity_type: str
+    entity_id: str
+    details: Optional[str]
+    created_at: datetime
+
+
 class StudentEnrollmentCreate(BaseModel):
     class_id: str
     student_id: str

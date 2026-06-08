@@ -229,6 +229,19 @@ class TeacherAssignmentORM(Base):
     __table_args__ = (UniqueConstraint("class_id", "teacher_id", name="uq_teacher_assignment_class_teacher"),)
 
 
+class AuditLogORM(Base):
+    __tablename__ = "audit_logs"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    admin_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("users.id", ondelete="SET NULL"), index=True, nullable=False
+    )
+    action: Mapped[str] = mapped_column(String(16), nullable=False, index=True)
+    entity_type: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    entity_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    details: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
+
+
 class StudentEnrollmentORM(Base):
     __tablename__ = "student_enrollments"
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
