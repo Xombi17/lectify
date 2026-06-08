@@ -6,6 +6,15 @@
       "sourceType": "github",
       "skillPath": "skills/neon-postgres/SKILL.md",
       "computedHash": "3c53df29c959dc0a7f724ff8620063b20fabd2b1fa702ec97e3f17e6a23d5a1c"
+    },
+    "graphify": {
+      "source": "graphify-ai/graphify",
+      "sourceType": "github",
+      "skillPath": "skills/graphify/SKILL.md",
+      "computedHash": "c1e3b8c7c8bc4b5c5b8c4b5c5b8c4b5c",
+      "platformHook": "claude",
+      "installedAt": "2026-06-08",
+      "graphPath": "graphify-out/graph.json"
     }
   }
 }

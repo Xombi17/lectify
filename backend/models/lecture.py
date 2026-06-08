@@ -49,6 +49,10 @@ class LectureDB(BaseModel):
     progress_label: Optional[str] = None
     status: LectureStatus = "uploaded"
     transcript: Optional[str] = None
+    transcription_confidence: Optional[float] = None  # 0.0-1.0
+    transcription_language: Optional[str] = None  # "en", "hi", etc.
+    transcription_cost_usd: Optional[float] = None  # cost in USD
+    low_confidence_segments: list[dict] = Field(default_factory=list)  # flagged segments
     materials: StudyMaterials = Field(default_factory=StudyMaterials)
     embedding: Optional[List[float]] = None
     translations: dict = Field(default_factory=dict)

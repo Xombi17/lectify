@@ -2,9 +2,18 @@
 import logging
 from pathlib import Path
 
+from core.config import get_settings
 from models.lecture import LectureDB, StudyMaterials  # noqa: F401  (re-export shape)
 from repositories.lecture_repository import LectureRepository
 from services.ai_service import get_ai_service
+from services.transcription_service import (
+    GeminiFallbackProvider,
+    TranscriptionProvider,
+    TranscriptionResult,
+    flag_low_confidence_segments,
+    log_transcription_cost,
+    WhisperProvider,
+)
 from services.audio_chunker import (
     cleanup_chunks,
     format_timestamp,
@@ -34,6 +43,24 @@ ALLOWED_AUDIO_MIME = {
     "audio/ogg",
     "audio/flac",
 }
+
+
+def _get_transcription_provider() -> TranscriptionProvider:
+    """Get the configured transcription provider with fallback."""
+    settings = get_settings()
+
+    if settings.TRANSCRIPTION_PROVIDER == "groq" and settings.GROQ_API_KEY:
+        primary = WhisperProvider(
+            api_key=settings.GROQ_API_KEY,
+            model=settings.WHISPER_MODEL,
+            language=settings.WHISPER_LANGUAGE,
+        )
+    else:
+        # Use Gemini as primary if Groq not configured
+        primary = GeminiFallbackProvider(get_ai_service())
+
+    return primary
+
 
 def normalize_mime(mime: str, filename: str) -> str | None:
     """Return a canonical audio MIME type or None if the input is not audio."""
@@ -100,7 +127,7 @@ async def process_lecture_background(lecture_id: str) -> None:
     """Run the full AI pipeline. Catch errors and persist them on the doc.
 
     Long lectures (>30 min) are split into ~10-min chunks, transcribed in
-    sequence, digested per-chunk, then hierarchically merged into one study
+    parallel, digested per-chunk, then hierarchically merged into one study
     pack. Short lectures take the single-shot path.
     """
     repo = LectureRepository()
@@ -163,29 +190,49 @@ async def process_lecture_background(lecture_id: str) -> None:
 
 
 async def _process_single_shot(*, lecture_id, audio_path, mime, ai, repo):
+    provider = _get_transcription_provider()
+
     await repo.update_fields(lecture_id, {
         "progress_step": 2,
         "progress_total": 3,
         "progress_label": "Transcribing audio",
     })
-    transcript = await ai.transcribe_audio(audio_path, mime)
-    if not transcript:
-        raise RuntimeError("Empty transcript from AI provider")
+
+    settings = get_settings()
+    try:
+        result = await provider.transcribe(audio_path, mime)
+    except Exception as e:
+        # Fallback to Gemini if Groq Whisper fails
+        if settings.TRANSCRIPTION_FALLBACK_PROVIDER == "gemini":
+            logger.warning("Groq Whisper failed (%s), falling back to Gemini", e)
+            fallback = GeminiFallbackProvider(ai)
+            result = await fallback.transcribe(audio_path, mime)
+        else:
+            raise
+
+    if not result.text:
+        raise RuntimeError("Empty transcript from transcription provider")
+
+    # Flag low-confidence segments
+    flagged = flag_low_confidence_segments(result)
 
     await repo.update_fields(lecture_id, {
         "progress_step": 3,
         "progress_label": "Generating study materials",
     })
-    materials = await ai.generate_study_materials(transcript)
+    materials = await ai.generate_study_materials(result.text)
     embedding = await _safe_embedding(ai, materials)
 
-    # Store knowledge graph in Neo4j
     lecture = await repo.get_by_id(lecture_id)
     if lecture:
         await _extract_and_store_knowledge_graph(lecture_id, lecture, materials, repo)
 
     await repo.update_fields(lecture_id, {
-        "transcript": transcript,
+        "transcript": result.text,
+        "transcription_confidence": result.confidence,
+        "transcription_language": result.language,
+        "transcription_cost_usd": result.cost_usd,
+        "low_confidence_segments": flagged,
         "materials": materials,
         "embedding": embedding,
         "status": "ready",
@@ -195,8 +242,19 @@ async def _process_single_shot(*, lecture_id, audio_path, mime, ai, repo):
         "progress_label": "Done",
     })
 
+    log_transcription_cost(
+        lecture_id=lecture_id,
+        provider=result.provider,
+        duration_seconds=result.duration_seconds,
+        cost_usd=result.cost_usd,
+        chunks=1,
+    )
+
 
 async def _process_chunked(*, lecture_id, audio_path, duration, ai, repo, chunks_sink):
+    provider = _get_transcription_provider()
+    settings = get_settings()
+
     logger.info("Long lecture detected (%.1fs); using chunked pipeline", duration)
 
     # --- Step 2: split ---
@@ -208,7 +266,7 @@ async def _process_chunked(*, lecture_id, audio_path, duration, ai, repo, chunks
     chunks_sink.extend(chunk_paths)
     chunk_count = len(chunk_paths)
 
-    # progress plan: 1 (probe) + chunk_count (transcribe+digest each) + 1 (merge) + 1 (embed/save)
+    # progress plan: 1 (probe) + 1 (split) + chunk_count (transcribe only) + 1 (merge) + 1 (embed/save)
     total_steps = 2 + chunk_count + 2
     await repo.update_fields(lecture_id, {
         "chunk_count": chunk_count,
@@ -217,34 +275,61 @@ async def _process_chunked(*, lecture_id, audio_path, duration, ai, repo, chunks
         "progress_label": f"Split into {chunk_count} chunks",
     })
 
-    # --- Step 3..N: transcribe + digest each chunk ---
-    chunk_transcripts: list[str] = []
+    # --- Step 3..N: transcribe all chunks in parallel ---
+    chunk_pairs = [(cp, CHUNK_MIME) for cp in chunk_paths]
+    try:
+        results = await provider.transcribe_chunks(
+            chunk_pairs,
+            max_concurrent=settings.WHISPER_MAX_CONCURRENT,
+        )
+    except Exception as e:
+        # Fallback to sequential Gemini transcription
+        if settings.TRANSCRIPTION_FALLBACK_PROVIDER == "gemini":
+            logger.warning("Groq Whisper parallel failed (%s), falling back to Gemini sequential", e)
+            fallback = GeminiFallbackProvider(ai)
+            results = []
+            for cp in chunk_paths:
+                result = await fallback.transcribe(cp, CHUNK_MIME)
+                results.append(result)
+        else:
+            raise
+
+    # Collect transcripts and confidence data
+    chunk_transcripts = [r.text for r in results]
+    all_flagged = []
+    total_cost = 0.0
+
+    for idx, result in enumerate(results):
+        flagged = flag_low_confidence_segments(result)
+        for f in flagged:
+            f["chunk_index"] = idx
+        all_flagged.extend(flagged)
+        total_cost += result.cost_usd
+
+    # Stitch transcript with timestamps
+    transcript = "\n\n".join(
+        f"[Chunk {i + 1} · {format_timestamp(i * CHUNK_LENGTH_SECONDS)}]\n{t.strip()}"
+        for i, t in enumerate(chunk_transcripts)
+    )
+
+    # --- Digest each chunk ---
     chunk_digests: list[dict] = []
-    for idx, chunk_path in enumerate(chunk_paths):
+    for idx, chunk_text in enumerate(chunk_transcripts):
         step = 3 + idx
-        offset = idx * CHUNK_LENGTH_SECONDS
-        label = f"Transcribing chunk {idx + 1}/{chunk_count} ({format_timestamp(offset)})"
+        label = f"Digesting chunk {idx + 1}/{chunk_count}"
         await repo.update_fields(lecture_id, {
             "progress_step": step,
             "progress_label": label,
         })
-        chunk_text = await ai.transcribe_audio(chunk_path, CHUNK_MIME)
-        chunk_transcripts.append(chunk_text)
-
         digest = await ai.digest_chunk(chunk_text)
         digest["chunk_index"] = idx
-        digest["start_seconds"] = offset
+        digest["start_seconds"] = idx * CHUNK_LENGTH_SECONDS
         chunk_digests.append(digest)
 
-    # Stitch full transcript with timestamps so chat/transcript view stays useful.
-    transcript = "\\n\\n".join(
-        f"[Chunk {i + 1} · {format_timestamp(i * CHUNK_LENGTH_SECONDS)}]\\n{t.strip()}"
-        for i, t in enumerate(chunk_transcripts)
-    )
-
     # --- Merge step ---
+    merge_step = 3 + chunk_count
     await repo.update_fields(lecture_id, {
-        "progress_step": 3 + chunk_count,
+        "progress_step": merge_step,
         "progress_label": "Hierarchical merge",
     })
     materials = await ai.merge_chunk_digests(chunk_digests)
@@ -255,9 +340,16 @@ async def _process_chunked(*, lecture_id, audio_path, duration, ai, repo, chunks
     if lecture:
         await _extract_and_store_knowledge_graph(lecture_id, lecture, materials, repo)
 
-    # --- Save ---
+    # --- Save with confidence data ---
+    avg_confidence = sum(r.confidence for r in results) / len(results) if results else 0.0
+    detected_language = results[0].language if results else None
+
     await repo.update_fields(lecture_id, {
         "transcript": transcript,
+        "transcription_confidence": avg_confidence,
+        "transcription_language": detected_language,
+        "transcription_cost_usd": total_cost,
+        "low_confidence_segments": all_flagged,
         "materials": materials,
         "embedding": embedding,
         "status": "ready",
@@ -266,6 +358,14 @@ async def _process_chunked(*, lecture_id, audio_path, duration, ai, repo, chunks
         "progress_total": total_steps,
         "progress_label": "Done",
     })
+
+    log_transcription_cost(
+        lecture_id=lecture_id,
+        provider=results[0].provider if results else "unknown",
+        duration_seconds=duration,
+        cost_usd=total_cost,
+        chunks=len(results),
+    )
 
 
 async def _safe_embedding(ai, materials) -> list[float] | None:
