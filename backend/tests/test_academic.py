@@ -662,23 +662,29 @@ class TestSqlStudentEnrollmentRepository:
             await ClassRepository().create(cls)
 
             se_repo = StudentEnrollmentRepository()
+
+            # Before any enrollment, find_existing returns None
+            assert await se_repo.find_existing(cls.id, "S-X") is None
+
+            # Create first enrollment
             e = StudentEnrollmentDB(id=str(uuid.uuid4()), class_id=cls.id, student_id="S-X", enrolled_at=datetime.now(timezone.utc))
             await se_repo.create(e)
 
-            # No duplicate yet
-            assert await se_repo.find_existing(cls.id, "S-X") is None
-
-            # Simulate a second create with a new id but same (class, student) pair
-            e2 = StudentEnrollmentDB(id=str(uuid.uuid4()), class_id=cls.id, student_id="S-X", enrolled_at=datetime.now(timezone.utc))
-            await se_repo.create(e2)
-
-            # find_existing must locate one of them (the API layer uses this for
-            # idempotent enrollment; the data layer treats them as separate rows
-            # but the lookup should return at least one)
+            # find_existing now returns the enrollment
             found = await se_repo.find_existing(cls.id, "S-X")
             assert found is not None
             assert found.class_id == cls.id
             assert found.student_id == "S-X"
+
+            # Attempting to create a duplicate enrollment should raise IntegrityError
+            # (unique constraint on class_id + student_id)
+            e2 = StudentEnrollmentDB(id=str(uuid.uuid4()), class_id=cls.id, student_id="S-X", enrolled_at=datetime.now(timezone.utc))
+            try:
+                await se_repo.create(e2)
+                assert False, "Expected IntegrityError for duplicate enrollment"
+            except Exception as ex:
+                assert "UNIQUE constraint failed" in str(ex) or "IntegrityError" in type(ex).__name__
+
             await close_sql()
         _arun(go())
 
