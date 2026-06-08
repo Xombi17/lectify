@@ -5,7 +5,6 @@ from pathlib import Path
 
 from fastapi import (
     APIRouter,
-    BackgroundTasks,
     Depends,
     File,
     Form,
@@ -16,6 +15,8 @@ from fastapi import (
 from fastapi.responses import StreamingResponse
 
 from core.deps import get_current_user, require_teacher
+from core.queue_config import compute_priority_score
+from models.job import JobCreate, JobPublic
 from models.lecture import (
     LectureDB,
     LectureSummary,
@@ -27,8 +28,8 @@ from repositories.lecture_repository import LectureRepository
 from services.lecture_service import (
     ALLOWED_AUDIO_MIME,
     normalize_mime,
-    process_lecture_background,
 )
+from services.queue_client import enqueue_job
 from services.storage_service import get_storage
 
 router = APIRouter(prefix="/lectures", tags=["lectures"])
@@ -36,7 +37,6 @@ router = APIRouter(prefix="/lectures", tags=["lectures"])
 
 @router.post("", response_model=LectureDB, status_code=status.HTTP_202_ACCEPTED)
 async def upload_lecture(
-    background: BackgroundTasks,
     title: str = Form(...),
     subject: str | None = Form(None),
     semester: str | None = Form(None),
@@ -68,11 +68,24 @@ async def upload_lecture(
         audio_object_key=key,
         audio_filename=safe_filename,
         audio_mime=mime,
-        status="uploaded",
+        status="queued",
     )
     await repo.create(lecture)
 
-    background.add_task(process_lecture_background, lecture_id)
+    # Enqueue processing job
+    score = compute_priority_score()
+    job_payload = JobCreate(
+        lecture_id=lecture_id,
+        version=1,
+        priority_score=score,
+        stage="transcribe",
+    )
+    job = await enqueue_job(job_payload)
+
+    logger = __import__("logging").getLogger(__name__)
+    logger.info("Lecture %s uploaded, enqueued job %s", lecture_id, job.id)
+
+    # Return lecture with queued status
     return lecture
 
 
@@ -84,6 +97,34 @@ async def my_lectures(user: UserPublic = Depends(require_teacher)):
 @router.get("/published", response_model=list[LectureSummary])
 async def published_lectures(user: UserPublic = Depends(get_current_user)):
     return await LectureRepository().list_published()
+
+
+@router.get("/{lecture_id}/job-status", response_model=JobPublic)
+async def get_lecture_job_status(
+    lecture_id: str,
+    user: UserPublic = Depends(require_teacher),
+):
+    """Get the current queue status for a lecture's processing job.
+
+    Teachers can poll this endpoint to track processing progress.
+    Returns the job's current stage, status, and attempt count.
+    """
+    repo = LectureRepository()
+    lecture = await repo.get_by_id(lecture_id)
+    if not lecture or lecture.teacher_id != user.id:
+        raise HTTPException(status_code=404, detail="Lecture not found")
+
+    # Return a JobPublic from the lecture's current state
+    return JobPublic(
+        id=f"lecture:{lecture_id}",
+        lecture_id=lecture_id,
+        stage=_stage_from_status(lecture),
+        status=_status_from_lecture_status(lecture.status),
+        attempt=0,
+        error_message=lecture.error_message,
+        created_at=lecture.created_at,
+        updated_at=lecture.updated_at,
+    )
 
 
 @router.get("/{lecture_id}", response_model=LectureDB)
@@ -207,3 +248,31 @@ async def stream_audio(lecture_id: str, user: UserPublic = Depends(get_current_u
     if size is not None:
         headers["Content-Length"] = str(size)
     return StreamingResponse(body_iter, media_type=lecture.audio_mime, headers=headers)
+
+
+# ── Helper functions for job status mapping ────────────────────────────
+
+
+def _status_from_lecture_status(lecture_status: str) -> str:
+    """Map LectureDB status to JobPublic status."""
+    mapping = {
+        "queued": "queued",
+        "uploaded": "queued",
+        "processing": "processing",
+        "retrying": "retrying",
+        "ready": "completed",
+        "error": "failed",
+        "dead_letter": "dead_letter",
+    }
+    return mapping.get(lecture_status, "queued")
+
+
+def _stage_from_status(lecture) -> str:
+    """Determine current processing stage from lecture state."""
+    if lecture.status == "queued":
+        return "transcribe"
+    if lecture.transcript and not (lecture.materials and lecture.materials.summary):
+        return "generate_materials"
+    if not lecture.embedding:
+        return "embed"
+    return "neo4j_sync"

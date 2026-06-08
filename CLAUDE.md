@@ -32,7 +32,28 @@ Rules:
 ## Status
 
 Living project status, updated after every feature lands.
-**Last updated:** 2026-06-08 (after Phase 4 — Admin Dashboard UI)
+**Last updated:** 2026-06-08 (after Phase 5 — Queue + Worker System)
+
+### What was added (Phase 5 — Queue + Worker System)
+
+- **Redis Infrastructure & ARQ Configuration** — Queue foundation for lecture processing pipeline
+  - `backend/requirements.txt` — Added `redis>=5.0,<6.0`, `arq>=0.28,<1.0`
+  - `backend/core/queue.py` — `get_redis_pool()`, `get_redis()`, `close_redis()`
+  - `backend/core/queue_config.py` — Queue names, `compute_priority_score()` (same-day bonus + age), concurrency defaults
+  - `backend/core/config.py` — `REDIS_URL`, `REDIS_MAX_CONNECTIONS`, `TRANSCRIPTION_CONCURRENCY`, `AI_CONCURRENCY`, `EMBEDDING_CONCURRENCY`
+  - `docker-compose.yml` — Redis 7-alpine service with health check, persistent volume, port 6379
+- **Job Models** — `backend/models/job.py` — JobCreate/JobDB/JobPublic triple, JobStatus/JobStage literals
+- **Queue Client** — `backend/services/queue_client.py` — `enqueue_job()` with idempotency (SET NX + 24h per-key TTL), `get_job_status()`, `update_job_status()`, `move_to_dlq()`, `get_queue_depth()`
+- **Base Worker** — `backend/workers/base.py` — Abstract BaseWorker with ARQ integration, `worker_main()` entry point, `get_retry_delay()` (1m/5m/15m), health check
+- **Transcription Worker** — `backend/workers/transcription.py` — processes "transcribe" stage, single-shot + chunked paths, enqueues "generate_materials" on success, retry+DLQ on failure
+- **AI Worker** — `backend/workers/ai.py` — processes "generate_materials" stage, study materials from transcript, embeddings, Neo4j sync, enqueues "embed" on success
+- **Embedding Worker** — `backend/workers/embedding.py` — processes "embed" stage, idempotent embedding/Neo4j, sets lecture status to "ready"
+- **Route Migration** — `backend/routes/lectures.py` — `BackgroundTasks` → queue enqueue on upload; `GET /{id}/job-status` polling endpoint; `backend/server.py` — optional Redis connectivity check
+- **LectureStatus** — `backend/models/lecture.py` — Added `queued`, `retrying`, `dead_letter` to literal
+- **Tests** — `backend/tests/test_queue.py` (13 tests: priority scoring, job models, idempotency), `backend/tests/test_workers.py` (7 tests: 3 worker types, success/failure/DLQ), `backend/tests/conftest.py` (global Redis mock), `backend/tests/test_queue_integration.py` (integration marker tests), `backend/tests/load_test_queue.py` (load test script)
+- **Test counts:** 20 new tests green / 56 total green (queue + existing)
+- **New graph nodes:** 2735 nodes, 6134 edges, 259 communities
+- **Next card in queue:** Phase 7 — Monitoring + Reliability (F)
 
 ### What was added (Phase 4)
 
@@ -50,7 +71,7 @@ Living project status, updated after every feature lands.
   - Tests: `__tests__/adminApi.test.js`, `__tests__/AdminDashboard.test.jsx`, `__tests__/HierarchyTree.test.jsx`
 - **Test counts:** 3 new test files created (infrastructure; will pass after components are wired)
 - **New graph nodes:** AdminDashboard, HierarchyTree, CreateEntityDialog, TeacherAssignmentPanel, QRCodeCard, EnrollmentTable, adminApi, assignmentApi, qrApi, enrollmentApi, require_teacher_or_admin
-- **Next card in queue:** Phase 5 — Queue + Worker System (C)
+- **Next card in queue:** Phase 5 — Queue + Worker System (C) (Phase 6 is also complete)
 
 ### Build state vs ROADMAP.md
 
@@ -60,8 +81,8 @@ Living project status, updated after every feature lands.
 | **2 — Teacher Assignment + Enrollment (A.3)** | TeacherAssignment CRUD, StudentEnrollment, Teacher Dashboard | **DONE** | 14 endpoints, full RBAC, 27 tests green |
 | **3 — QR per Class + Scan-to-Enroll (A.4)** | QR generation, scan-to-enroll flow, analytics | **DONE** | Pre-GSD, complete |
 | **4 — Admin Dashboard UI (A.5)** | React admin UI for hierarchy, assignments, QR | **DONE** | 4 plans, 6 new components, 4 backend changes, 3 test files |
-| **5 — Queue + Worker (C)** | Redis/RabbitMQ queue, worker pools, retry, DLQ | **NOT STARTED** | Processing currently inline (violates non-negotiable) |
-| **6 — Transcription Integration (D ref.)** | Replace mock with Whisper API, confidence scoring, cost tracking | **NOT STARTED** | Depends on Phase 5 |
+| **5 — Queue + Worker (C)** | Redis/ARQ queue, 3 worker pools, retry/DLQ, idempotency, priority | **DONE** | 7 plans, 20 new tests, 56 total green, queue-driven pipeline LIVE |
+| **6 — Transcription Integration (D ref.)** | Replace mock with Groq Whisper API, confidence scoring, cost tracking | **DONE** | Groq Whisper API, parallel chunking, Gemini fallback, 11 tests green |
 | **7 — Monitoring + Reliability (F)** | Prometheus, Grafana, SLA tracking, failure alerts | **NOT STARTED** | "95% same-day" SLA unmeasurable today |
 | **8 — Auth Polish (I)** | Full RBAC enforcement, session refresh, audit logging | **PARTIAL** | `core/deps.py` has admin/teacher/student/teacher_or_admin guards |
 | **B — Recording + upload** | Upload, store, transcribe | **DONE** | Pre-GSD, complete |
@@ -76,8 +97,8 @@ Living project status, updated after every feature lands.
 | 2 | Teacher Assignment + Enrollment (A.3) | **DONE** (3 plans, 14 endpoints, 27 tests) |
 | 3 | QR generation + scan-to-enroll (A.4) | **DONE** (Pre-GSD) |
 | 4 | Admin Dashboard UI (A.5) | **DONE** (4 plans, 6 components, 3 test files) |
-| 5 | Queue + worker system (C) | Brief NOT written |
-| 6 | Production transcription (D ref.) | Brief NOT written |
+| 5 | Queue + worker system (C) | Plan 01 complete (Redis infra) |
+| 6 | Production transcription (D ref.) | **DONE** (Groq Whisper API, parallel chunks, confidence scoring, 11 tests) |
 | 7 | Monitoring + reliability (F) | Brief NOT written |
 | 8 | Auth polish (I) | Brief NOT written |
 

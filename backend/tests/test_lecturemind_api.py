@@ -215,7 +215,7 @@ class TestLectures:
         r = requests.post(f"{API}/lectures", headers=headers, files=files, data=data, timeout=60)
         assert r.status_code == 202, f"upload failed: {r.status_code} {r.text}"
         lecture = r.json()
-        assert lecture["status"] == "uploaded"
+        assert lecture["status"] == "queued"
         assert lecture["teacher_id"] == auth["user"]["id"]
         assert lecture["title"] == "TEST_ Lecture Intro"
         assert lecture["audio_mime"] in ("audio/wav", "audio/x-wav", "audio/wave")

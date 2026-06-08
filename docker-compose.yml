@@ -3,8 +3,10 @@
 # What this brings up:
 #   - postgres  : primary database
 #   - minio     : S3-compatible object storage for lecture audio files
+#   - redis     : Queue + caching for lecture processing
 #   - backend   : FastAPI app (with the swap-in PostgreSQL repositories)
 #   - frontend  : React app (production build served by nginx)
+#   - neo4j     : Knowledge graph database
 #
 # Usage:
 #   1. Copy `.env.docker.example` to `.env` next to this file and fill it in.
@@ -64,6 +66,35 @@ services:
       echo 'Bucket ready';
       "
 
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  neo4j:
+    image: neo4j:5.15
+    environment:
+      - NEO4J_AUTH=neo4j/lecturemind
+      - NEO4J_ACCEPT_LICENSE_AGREEMENT=yes
+    volumes:
+      - neo4jdata:/data
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7474"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
   backend:
     build:
       context: ./backend
@@ -110,22 +141,5 @@ services:
 volumes:
   pgdata:
   miniodata:
-
-  neo4j:
-    image: neo4j:5.15
-    environment:
-      - NEO4J_AUTH=neo4j/lecturemind
-      - NEO4J_ACCEPT_LICENSE_AGREEMENT=yes
-    volumes:
-      - neo4jdata:/data
-    ports:
-      - "7474:7474"
-      - "7687:7687"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:7474"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-
-volumes:
+  redis_data:
   neo4jdata:

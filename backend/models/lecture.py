@@ -4,7 +4,10 @@ from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
-LectureStatus = Literal["uploaded", "processing", "ready", "error"]
+LectureStatus = Literal[
+    "uploaded", "queued", "processing", "retrying",
+    "ready", "error", "dead_letter",
+]
 
 
 class QuizQuestion(BaseModel):

@@ -45,6 +45,16 @@ async def lifespan(app: FastAPI):
         logger.info("Database indexes ready (backend=%s)", settings.DATABASE_BACKEND)
     except Exception:
         logger.exception("Failed to ensure indexes/tables")
+
+    # Optional: verify Redis connectivity (non-fatal)
+    try:
+        from core.queue import get_redis
+        redis = get_redis()
+        await redis.ping()
+        logger.info("Redis connection OK")
+    except Exception as e:
+        logger.warning("Redis not available at startup: %s (workers connect independently)", e)
+
     yield
     await close_sql()
 

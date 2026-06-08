@@ -48,6 +48,15 @@ class Settings:
     TRANSCRIPTION_PROVIDER: str = os.environ.get("TRANSCRIPTION_PROVIDER", "groq")
     TRANSCRIPTION_FALLBACK_PROVIDER: str = os.environ.get("TRANSCRIPTION_FALLBACK_PROVIDER", "gemini")
 
+    # Redis / Queue
+    REDIS_URL: str = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+    REDIS_MAX_CONNECTIONS: int = int(os.environ.get("REDIS_MAX_CONNECTIONS", "20"))
+
+    # Worker concurrency (overridable per deployment)
+    TRANSCRIPTION_CONCURRENCY: int = int(os.environ.get("TRANSCRIPTION_CONCURRENCY", "3"))
+    AI_CONCURRENCY: int = int(os.environ.get("AI_CONCURRENCY", "5"))
+    EMBEDDING_CONCURRENCY: int = int(os.environ.get("EMBEDDING_CONCURRENCY", "10"))
+
     # App
     APP_URL: str = os.environ.get("APP_URL", "http://localhost:5173")
 
