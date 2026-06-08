@@ -16,6 +16,7 @@ from models.academic import (
     ClassDB,
     TeacherAssignmentDB,
     StudentEnrollmentDB,
+    QRCodeDB,
 )
 from models.orm import (
     AuditLogORM,
@@ -28,6 +29,7 @@ from models.orm import (
     ClassORM,
     TeacherAssignmentORM,
     StudentEnrollmentORM,
+    QRCodeORM,
 )
 
 
@@ -642,6 +644,108 @@ class AuditLogRepository:
             )
             rows = (await s.execute(stmt)).scalars().all()
             return [_to_audit_log(r) for r in rows]
+
+    @staticmethod
+    def new_id() -> str:
+        return str(uuid.uuid4())
+
+
+# ============================================================================
+# QRCode Repository
+# ============================================================================
+def _to_qr_code(row: QRCodeORM) -> QRCodeDB:
+    return QRCodeDB(
+        id=row.id,
+        class_id=row.class_id,
+        token_secret=row.token_secret,
+        svg_key=row.svg_key,
+        png_key=row.png_key,
+        scan_count=row.scan_count,
+        enrollment_count=row.enrollment_count,
+        is_active=row.is_active,
+        generated_at=row.generated_at,
+        generated_by=row.generated_by,
+    )
+
+
+class QRCodeRepository:
+    async def ensure_indexes(self) -> None:
+        return None
+
+    async def create(self, qr: QRCodeDB) -> QRCodeDB:
+        async with session_maker()() as s, s.begin():
+            s.add(QRCodeORM(
+                id=qr.id,
+                class_id=qr.class_id,
+                token_secret=qr.token_secret,
+                svg_key=qr.svg_key,
+                png_key=qr.png_key,
+                scan_count=qr.scan_count,
+                enrollment_count=qr.enrollment_count,
+                is_active=qr.is_active,
+                generated_at=qr.generated_at,
+                generated_by=qr.generated_by,
+            ))
+        return qr
+
+    async def get_by_id(self, qr_id: str) -> Optional[QRCodeDB]:
+        async with session_maker()() as s:
+            row = await s.get(QRCodeORM, qr_id)
+            return _to_qr_code(row) if row else None
+
+    async def get_active_for_class(self, class_id: str) -> Optional[QRCodeDB]:
+        async with session_maker()() as s:
+            stmt = (
+                select(QRCodeORM)
+                .where(
+                    (QRCodeORM.class_id == class_id) &
+                    (QRCodeORM.is_active.is_(True))
+                )
+                .order_by(QRCodeORM.generated_at.desc())
+                .limit(1)
+            )
+            row = (await s.execute(stmt)).scalar_one_or_none()
+            return _to_qr_code(row) if row else None
+
+    async def list_for_class(self, class_id: str) -> List[QRCodeDB]:
+        async with session_maker()() as s:
+            stmt = (
+                select(QRCodeORM)
+                .where(QRCodeORM.class_id == class_id)
+                .order_by(QRCodeORM.generated_at.desc())
+            )
+            rows = (await s.execute(stmt)).scalars().all()
+            return [_to_qr_code(r) for r in rows]
+
+    async def increment_scan(self, qr_id: str) -> Optional[QRCodeDB]:
+        async with session_maker()() as s, s.begin():
+            row = await s.get(QRCodeORM, qr_id)
+            if not row:
+                return None
+            row.scan_count = row.scan_count + 1
+            await s.flush()
+            # Refresh to get the updated value
+            await s.refresh(row)
+            return _to_qr_code(row)
+
+    async def increment_enrollment(self, qr_id: str) -> Optional[QRCodeDB]:
+        async with session_maker()() as s, s.begin():
+            row = await s.get(QRCodeORM, qr_id)
+            if not row:
+                return None
+            row.enrollment_count = row.enrollment_count + 1
+            await s.flush()
+            await s.refresh(row)
+            return _to_qr_code(row)
+
+    async def deactivate(self, qr_id: str) -> Optional[QRCodeDB]:
+        async with session_maker()() as s, s.begin():
+            row = await s.get(QRCodeORM, qr_id)
+            if not row:
+                return None
+            row.is_active = False
+            await s.flush()
+            return _to_qr_code(row)
 
     @staticmethod
     def new_id() -> str:

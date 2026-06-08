@@ -21,6 +21,7 @@ from routes.lectures import router as lectures_router
 from routes.search import router as search_router
 from routes.study import router as study_router
 from routes.admin import router as admin_router
+from routes.qr import router as qr_router
 
 logging.basicConfig(
     level=logging.INFO,
@@ -71,6 +72,7 @@ api_router.include_router(search_router)
 api_router.include_router(analytics_router)
 api_router.include_router(study_router)
 api_router.include_router(admin_router)
+api_router.include_router(qr_router)
 app.include_router(api_router)
 
 app.add_middleware(

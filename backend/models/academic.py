@@ -257,10 +257,54 @@ class StudentEnrollmentPublic(BaseModel):
 
 
 # ============================================================================
+# QR Code Models
+# ============================================================================
+class QRCodeCreate(BaseModel):
+    class_id: str
+
+
+class QRCodeDB(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    class_id: str
+    token_secret: str
+    svg_key: str
+    png_key: Optional[str] = None
+    scan_count: int = 0
+    enrollment_count: int = 0
+    is_active: bool = True
+    generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    generated_by: str
+
+
+class QRCodePublic(BaseModel):
+    id: str
+    class_id: str
+    svg_url: str
+    png_url: Optional[str] = None
+    scan_count: int
+    enrollment_count: int
+    is_active: bool
+    generated_at: datetime
+
+
+class QRAnalytics(BaseModel):
+    qr_id: str
+    class_id: str
+    scan_count: int
+    enrollment_count: int
+    conversion_rate: float
+    generated_at: datetime
+    is_active: bool
+    scan_count_per_day: Optional[int] = None
+    enrollment_count_per_day: Optional[int] = None
+
+
+# ============================================================================
 # Enrollment Request (for student self-enrollment)
 # ============================================================================
 class EnrollRequest(BaseModel):
     class_id: str
+    token: Optional[str] = None
 
 
 # ============================================================================

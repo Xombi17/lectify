@@ -13,14 +13,18 @@ Deliver a production-grade MVP with queue-driven processing and optimized code.
 
 ## graphify
 
-This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
+The project has a full-stack knowledge graph at graphify-out/ covering **2429 nodes, 5903 edges** across both backend (67 Python files) and frontend (79 JSX/JS files).
 
-Rules:
+**PRIMARY search tool** — use `graphify query` instead of `Read`/`Grep` for codebase questions. It returns a scoped subgraph with only relevant nodes, much smaller than full file reads.
 
-- For codebase questions, first run `graphify query "<question>"` when graphify-out/graph.json exists. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
-- If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
-- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
-- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
+| Command | When |
+|---------|------|
+| `graphify query "<question>"` | General codebase questions — "how does X work", "where is Y defined", "what connects to Z" |
+| `graphify path "<A>" "<B>"` | Find relationships between two specific nodes |
+| `graphify explain "<concept>"` | Focused deep-dive on one concept |
+| Read graphify-out/GRAPH_REPORT.md | Only when query/path/explain don't surface enough context |
+
+After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
 
 ## Prisma + Neon
 
@@ -33,43 +37,41 @@ Rules:
 ## Status
 
 Living project status, updated after every feature lands.
-**Last updated:** 2026-06-08 (after Card 3 — Phase A.3 enrollment endpoints)
+**Last updated:** 2026-06-08 (after Phase 2 — Teacher Assignment + Student Enrollment)
 
-### Build state vs PRODUCTION_MVP_PLAN
+### Build state vs ROADMAP.md
 
 | Phase | Scope | Status | Notes |
 |---|---|---|---|
-| **A — Academic hierarchy** | Institution/Year/Branch/Semester/Subject/Division/Class + admin CRUD + RBAC + QR enrollment | **PARTIAL** | Data layer done (Card 1). Phase A.3 enrollment endpoints done (Card 3). Admin APIs + QR pending. |
-| **A.3 — Teacher Assignment + Enrollment** | TeacherAssignment CRUD, StudentEnrollment, Teacher Dashboard | **DONE** | 14 endpoints, full RBAC, 27 tests green |
-| **B — Recording + upload** | Upload, store, transcribe | **DONE** | `routes/lectures.py` + `services/storage_service.py` |
-| **C — Queue + worker** | Redis queue, retry, DLQ, priority | **NOT STARTED** | Processing currently inline (violates non-negotiable) |
+| **1 — Admin APIs + RBAC (A.2)** | Admin CRUD for 7 hierarchy levels, RBAC, teacher assignment, audit log | **NOT STARTED** | Discuss/plan/execute needed |
+| **2 — Teacher Assignment + Enrollment (A.3)** | TeacherAssignment CRUD, StudentEnrollment, Teacher Dashboard | **DONE** | 14 endpoints, full RBAC, 27 tests green |
+| **3 — QR per Class + Scan-to-Enroll (A.4)** | QR generation, scan-to-enroll flow, analytics | **NOT STARTED** | Depends on Phase 2 |
+| **4 — Admin Dashboard UI (A.5)** | React admin UI for hierarchy, assignments, QR | **NOT STARTED** | Depends on Phase 1 |
+| **5 — Queue + Worker (C)** | Redis/RabbitMQ queue, worker pools, retry, DLQ | **NOT STARTED** | Processing currently inline (violates non-negotiable) |
+| **6 — Transcription Integration (D ref.)** | Replace mock with Whisper API, confidence scoring, cost tracking | **NOT STARTED** | Depends on Phase 5 |
+| **7 — Monitoring + Reliability (F)** | Prometheus, Grafana, SLA tracking, failure alerts | **NOT STARTED** | "95% same-day" SLA unmeasurable today |
+| **8 — Auth Polish (I)** | Full RBAC enforcement, session refresh, audit logging | **PARTIAL** | `core/deps.py` has admin/teacher/student guards |
+| **B — Recording + upload** | Upload, store, transcribe | **DONE** | Pre-GSD, complete |
 | **D — AI pipeline** | Hierarchical chunking, embeddings, summary, notes, quiz, flashcards, exam-tag | **DONE** | `services/ai_service.py` (Gemini 2.5 Flash) |
-| **E — Student features** | Dashboard, search, study, bookmarks, chat | **DONE** | `routes/study.py`, `routes/search.py`, `routes/dashboard.py` |
-| **F — Monitoring** | Prometheus, /metrics, Grafana, SLA tracking | **NOT STARTED** | "95% lectures same-day" SLA unmeasurable today |
-| **H — QR enrollment** | QR per class, scan-to-enroll | **NOT STARTED** | Card 4 |
-| **I — Auth polish** | Admin role enforcement, RBAC across all routes | **PARTIAL** | `core/deps.py` has admin/teacher/student guards |
+| **E — Student features** | Dashboard, search, study, bookmarks, chat | **DONE** | Pre-GSD, complete |
 
-### Card status
+### Phase status
 
-| # | Card | State | Tests |
-|---|---|---|---|
-| 1 | Phase A.1 — Academic hierarchy data layer | **DONE** (Claude Code 494s, $3.36, 14 tests) + 5 more by hand | 14+5 academic + 8 baseline = **27 total** |
-| 2 | Phase A.2 — Admin role + hierarchy CRUD + RBAC | Brief NOT written | — |
-| 3 | Phase A.3 — TeacherAssignment + StudentEnrollment endpoints | **DONE** (Phase 2 execution: 3 waves, 3 plans, 14 endpoints, 27 tests) | 27 baseline |
-| 4 | Phase A.4 — QR generation per class + scan-to-enroll | Brief NOT written | — |
-| 5 | Phase A.5 — Admin UI (React) | Brief NOT written | — |
-| 6 | Phase C — Queue + worker | Brief NOT written | — |
-| 7 | Phase F — Monitoring | Brief NOT written | — |
+| # | Phase | State |
+|---|---|---|
+| 1 | Admin APIs + RBAC (A.2) | Brief NOT written |
+| 2 | Teacher Assignment + Enrollment (A.3) | **DONE** (3 plans, 14 endpoints, 27 tests) |
+| 3 | QR generation + scan-to-enroll (A.4) | Brief NOT written |
+| 4 | Admin Dashboard UI (A.5) | Brief NOT written |
+| 5 | Queue + worker system (C) | Brief NOT written |
+| 6 | Production transcription (D ref.) | Brief NOT written |
+| 7 | Monitoring + reliability (F) | Brief NOT written |
+| 8 | Auth polish (I) | Brief NOT written |
 
-### Graph cheat-sheet (top communities by size)
+### Graph stats (latest)
 
-- **C0 (139)** — Academic hierarchy (this is the new code)
-- **C1 (136)** — Lecture business logic + audio MIME normalization
-- **C2 (103)** — FastAPI route handlers
-- **C4 (65)** — Search routes + lexical/cosine scoring
-- **C5 (64)** — Audio chunker + ffmpeg errors
-- **C6 (51)** — Storage service ABC + MinIO impl
-- **C8 (33)** — `server.py` entrypoint + lifespan
+- **2429 nodes**, **5900 edges**, **236 communities** (2026-06-08)
+- Previous: 919 nodes / 2517 edges — new graph captures enrollment routes
 
 ### Architectural invariants (DO NOT break)
 
@@ -84,35 +86,66 @@ Living project status, updated after every feature lands.
 
 ## Project
 
-Project not yet initialized. Run /gsd-new-project to set up.
+Lectify captures long-form lectures (live mic or upload), transcribes at scale, cleans transcripts, generates study assets (notes, quiz, flashcards, exam-importance tags), and publishes to students by end of day. Built for educational institutions with multi-tenant academic hierarchy.
+
+See [.planning/PROJECT.md](.planning/PROJECT.md) for full project context — requirements, key decisions, constraints.
 <!-- GSD:project-end -->
 
 <!-- GSD:stack-start source:STACK.md -->
 
 ## Technology Stack
 
-Technology stack not yet documented. Will populate after codebase mapping or first phase.
+- **Backend:** Python 3.14, FastAPI, SQLAlchemy (async), Pydantic
+- **Frontend:** React 19 + TypeScript
+- **Database:** PostgreSQL (Neon), SQLite for tests
+- **Storage:** MinIO (S3-compatible)
+- **Queue:** Redis/RabbitMQ (Phase 5 — not yet implemented)
+- **AI:** Google Gemini 2.5 Flash (transcription, summarization, quiz/flashcard gen)
+- **Auth:** Custom JWT with role-based access (admin, teacher, student)
+- **Search:** Lexical + cosine similarity
+- **Dev tools:** Graphify (knowledge graph), Prisma (schema management), aiosqlite (in-process tests)
 <!-- GSD:stack-end -->
 
 <!-- GSD:conventions-start source:CONVENTIONS.md -->
 
 ## Conventions
 
-Conventions not yet established. Will populate as patterns emerge during development.
+- **Repository pattern** — thin dispatcher files in `repositories/` re-export from `repositories/_sql/`
+- **Pydantic triple** — every entity has `*Create` / `*DB` / `*Public` models
+- **RBAC guards** — `require_admin`, `require_teacher`, `get_current_user` from `core/deps.py`
+- **Route pattern** — `APIRouter(prefix="/...", tags=["..."])` with dependency injection
+- **Async SQL** — `async with session_maker()() as s` for all database access
+- **Tests** — pytest with in-memory aiosqlite
+- **No secrets in repo** — use `.env` for all configuration
+- **Queue-driven pipeline** — non-negotiable for production (Phase 5)
 <!-- GSD:conventions-end -->
 
 <!-- GSD:architecture-start source:ARCHITECTURE.md -->
 
 ## Architecture
 
-Architecture not yet mapped. Follow existing patterns found in the codebase.
+The backend follows a layered architecture:
+
+1. **Routes** (`routes/`) — FastAPI endpoint definitions with RBAC guards
+2. **Services** (`services/`) — Business logic (AI pipeline, storage, audio chunking)
+3. **Repositories** (`repositories/`) — Data access via SQLAlchemy, dispatcher pattern
+4. **Models** (`models/`) — Pydantic schemas (Create/DB/Public triple)
+5. **Core** (`core/`) — Config, security, DB session, dependency providers
+
+Key integrations:
+- **MinIO** for lecture audio file storage
+- **Neon (Postgres)** via SQLAlchemy async engine
+- **Gemini 2.5 Flash** for all AI tasks
+- **Graphify** for codebase knowledge graph
+
+See [.planning/ROADMAP.md](.planning/ROADMAP.md) for phase progression and [.planning/STATE.md](.planning/STATE.md) for current status.
 <!-- GSD:architecture-end -->
 
 <!-- GSD:skills-start source:skills/ -->
 
 ## Project Skills
 
-No project skills found. Add skills to any of: `.claude/skills/`, `.agents/skills/`, `.cursor/skills/`, `.github/skills/`, or `.codex/skills/` with a `SKILL.md` index file.
+Project-level skills: `.claude/skills/` directory exists but no SKILL.md index found. See available skills via the Skill tool.
 <!-- GSD:skills-end -->
 
 <!-- GSD:workflow-start source:GSD defaults -->

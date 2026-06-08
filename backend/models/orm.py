@@ -13,11 +13,13 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.sql import expression as sql_expr
 
 
 def _now() -> datetime:
@@ -240,6 +242,27 @@ class AuditLogORM(Base):
     entity_id: Mapped[str] = mapped_column(String(64), nullable=False)
     details: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
+
+
+class QRCodeORM(Base):
+    __tablename__ = "qr_codes"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    class_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("classes.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    token_secret: Mapped[str] = mapped_column(String(255), nullable=False)
+    svg_key: Mapped[str] = mapped_column(String(500), nullable=False)
+    png_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    scan_count: Mapped[int] = mapped_column(Integer, default=0)
+    enrollment_count: Mapped[int] = mapped_column(Integer, default=0)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    generated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
+    generated_by: Mapped[str | None] = mapped_column(
+        String(64), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    __table_args__ = (
+        Index("uq_qr_active_class", "class_id", unique=True, postgresql_where=sql_expr.text("is_active = true")),
+    )
 
 
 class StudentEnrollmentORM(Base):

@@ -1,32 +1,49 @@
 """Enrollment routes — teacher assignments and student enrollment."""
-from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
 from typing import List, Optional
 
-from core.deps import require_admin, require_teacher, get_current_user
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from pydantic import BaseModel
+
+from core.deps import get_current_user, require_admin, require_teacher
+from core.rate_limiter import InMemoryRateLimiter
 from models.academic import (
+    EnrollRequest,
+    EnrolledStudent,
+    StudentEnrollmentCreate,
+    StudentEnrollmentDB,
+    StudentEnrollmentPublic,
     TeacherAssignmentCreate,
     TeacherAssignmentPublic,
     TeacherAssignmentDB,
-    StudentEnrollmentCreate,
-    StudentEnrollmentPublic,
-    StudentEnrollmentDB,
-    EnrollRequest,
     TeacherClassSummary,
-    EnrolledStudent,
 )
 from models.user import UserPublic
-from repositories.teacher_assignment_repository import TeacherAssignmentRepository
-from repositories.student_enrollment_repository import StudentEnrollmentRepository
 from repositories.class_repository import ClassRepository
-from repositories.subject_repository import SubjectRepository
 from repositories.division_repository import DivisionRepository
-from repositories.semester_repository import SemesterRepository
-from repositories.year_repository import YearRepository
 from repositories.institution_repository import InstitutionRepository
+from repositories.semester_repository import SemesterRepository
+from repositories.student_enrollment_repository import StudentEnrollmentRepository
+from repositories.subject_repository import SubjectRepository
+from repositories.teacher_assignment_repository import TeacherAssignmentRepository
 from repositories.user_repository import UserRepository
+from repositories.year_repository import YearRepository
 
 router = APIRouter(prefix="/enrollment", tags=["enrollment"])
+
+# Per-process in-memory rate limiter (replace with Redis in Phase 5)
+_enroll_limiter = InMemoryRateLimiter()
+
+
+async def rate_limit_enroll(request: Request) -> None:
+    """Rate limit enrollment endpoint per IP."""
+    ip = request.client.host if request.client else "unknown"
+    allowed = await _enroll_limiter.check(f"enroll:{ip}", 10, 60)
+    if not allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many requests",
+            headers={"Retry-After": "60"},
+        )
 
 
 class AssignmentUpdate(BaseModel):
@@ -165,6 +182,7 @@ async def my_assignments(
 async def enroll_student(
     payload: EnrollRequest,
     user = Depends(get_current_user),
+    _ = Depends(rate_limit_enroll),
 ):
     """Enroll the current student in a class. Returns 409 if already enrolled."""
     repo = StudentEnrollmentRepository()
@@ -184,6 +202,22 @@ async def enroll_student(
         student_id=user.id,
     )
     created = await repo.create(enrollment)
+
+    # If token provided, increment QR enrollment count
+    if payload.token:
+        try:
+            from core.security import decode_enrollment_token
+            qr_payload = decode_enrollment_token(payload.token)
+            qr_class_id = qr_payload["sub"]
+            if qr_class_id == payload.class_id:
+                from repositories.qr_code_repository import QRCodeRepository
+                qr_repo = QRCodeRepository()
+                qr = await qr_repo.get_active_for_class(payload.class_id)
+                if qr:
+                    await qr_repo.increment_enrollment(qr.id)
+        except (ValueError, LookupError, HTTPException):
+            pass  # Non-critical — enrollment already succeeded
+
     return StudentEnrollmentPublic(**created.model_dump())
 
 
