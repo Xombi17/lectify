@@ -140,6 +140,34 @@ export const analyticsApi = {
 };
 
 // ============================================================================
+// Phase 9 — AI Study Expansion API stubs
+// ============================================================================
+export const cheatsheetApi = {
+    generate: (lectureId) => api.post(`/lectures/${lectureId}/cheatsheet`).then((r) => r.data),
+};
+
+export const podcastApi = {
+    generate: (lectureId) => api.post(`/lectures/${lectureId}/podcast`).then((r) => r.data),
+};
+
+export const quizV2Api = {
+    generate: (lectureId, opts) => api.post(`/lectures/${lectureId}/quiz-v2/generate`, opts).then((r) => r.data),
+    submit: (lectureId, data) => api.post(`/lectures/${lectureId}/quiz-v2/submit`, data).then((r) => r.data),
+};
+
+export const conceptsV2Api = {
+    generate: (lectureId) => api.post(`/lectures/${lectureId}/concepts-v2`).then((r) => r.data),
+};
+
+export const analyticsV2Api = {
+    conceptMastery: () => api.get("/analytics/concept-mastery").then((r) => r.data),
+    conceptMasteryForLecture: (lectureId) => api.get(`/analytics/concept-mastery/${lectureId}`).then((r) => r.data),
+    streaks: () => api.get("/analytics/streaks").then((r) => r.data),
+    goals: () => api.get("/analytics/goals").then((r) => r.data),
+    searchConcepts: (q) => api.get("/search/concepts", { params: { q } }).then((r) => r.data),
+};
+
+// ============================================================================
 // Admin API — Academic Hierarchy CRUD
 // ============================================================================
 export const adminApi = {
