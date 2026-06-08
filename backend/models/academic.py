@@ -165,12 +165,14 @@ class DivisionPublic(BaseModel):
 class ClassCreate(BaseModel):
     division_id: str
     subject_id: str
+    name: Optional[str] = Field(None, max_length=120)  # Display name for admin UI
 
 
 class ClassDB(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid4()))
     division_id: str
     subject_id: str
+    name: Optional[str] = None  # Display name for admin UI
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
@@ -178,6 +180,7 @@ class ClassPublic(BaseModel):
     id: str
     division_id: str
     subject_id: str
+    name: Optional[str]  # Display name for admin UI
     created_at: datetime
 
 

@@ -4,7 +4,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 
-from core.deps import get_current_user, require_admin, require_teacher
+from core.deps import get_current_user, require_admin, require_teacher, require_teacher_or_admin
 from core.rate_limiter import InMemoryRateLimiter
 from models.academic import (
     EnrollRequest,
@@ -278,19 +278,19 @@ async def drop_enrollment(
 )
 async def list_class_students(
     class_id: str,
-    user = Depends(require_teacher),
+    user = Depends(require_teacher_or_admin),
 ):
-    """List all students enrolled in a class the teacher teaches."""
-    # Verify teacher owns this class
-    ta_repo = TeacherAssignmentRepository()
-    assignments = await ta_repo.list_for_teacher(user.id)
-    class_ids = {a.class_id for a in assignments}
-
-    if class_id not in class_ids:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Teacher not assigned to this class",
-        )
+    """List all students enrolled in a class. Teachers see only their classes; admins see all."""
+    # Only teachers need assignment check — admins bypass
+    if user.role == "teacher":
+        ta_repo = TeacherAssignmentRepository()
+        assignments = await ta_repo.list_for_teacher(user.id)
+        class_ids = {a.class_id for a in assignments}
+        if class_id not in class_ids:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Teacher not assigned to this class",
+            )
 
     repo = StudentEnrollmentRepository()
     enrollments = await repo.list_for_class(class_id)

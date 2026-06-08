@@ -103,6 +103,16 @@ async def delete_institution(institution_id: str):
     return {"ok": True}
 
 
+@router.get(
+    "/institutions/{institution_id}/years",
+    response_model=List[YearPublic],
+)
+async def list_institution_years(institution_id: str):
+    """List all years for an institution."""
+    repo = YearRepository()
+    return await repo.list_by_institution(institution_id)
+
+
 # ============================================================================
 # Year
 # ============================================================================

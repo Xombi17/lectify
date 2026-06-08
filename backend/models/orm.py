@@ -213,6 +213,7 @@ class ClassORM(Base):
     subject_id: Mapped[str] = mapped_column(
         String(64), ForeignKey("subjects.id", ondelete="CASCADE"), index=True, nullable=False
     )
+    name: Mapped[str | None] = mapped_column(String(120), nullable=True)  # Display name for admin UI
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     __table_args__ = (UniqueConstraint("division_id", "subject_id", name="uq_class_division_subject"),)
 

@@ -8,7 +8,7 @@ from fastapi.responses import StreamingResponse
 from qrcode.image.svg import SvgImage
 
 from core.config import get_settings
-from core.deps import get_current_user, require_teacher
+from core.deps import get_current_user, require_teacher, require_teacher_or_admin
 from core.rate_limiter import InMemoryRateLimiter
 from models.academic import (
     QRAnalytics,
@@ -134,7 +134,7 @@ async def _create_qr_internal(class_id: str, user_id: str) -> QRCodePublic:
 )
 async def generate_qr(
     class_id: str,
-    user: UserPublic = Depends(require_teacher),
+    user: UserPublic = Depends(require_teacher_or_admin),
     _ = Depends(rate_limit_qr_generate),
 ):
     """Generate a QR code for a class. Requires teacher role and class assignment."""
@@ -167,7 +167,7 @@ async def generate_qr(
 )
 async def regenerate_qr(
     class_id: str,
-    user: UserPublic = Depends(require_teacher),
+    user: UserPublic = Depends(require_teacher_or_admin),
     _ = Depends(rate_limit_qr_generate),
 ):
     """Regenerate QR code for a class. Deactivates the old QR and creates a new one."""
@@ -188,7 +188,7 @@ async def regenerate_qr(
 )
 async def get_qr(
     class_id: str,
-    user: UserPublic = Depends(require_teacher),
+    user: UserPublic = Depends(require_teacher_or_admin),
 ):
     """Get the latest active QR code for a class."""
     # Verify teacher assignment for non-admin
@@ -218,7 +218,7 @@ async def get_qr(
 async def download_qr(
     class_id: str,
     fmt: str = Query("svg", pattern="^(svg|png)$"),
-    user: UserPublic = Depends(require_teacher),
+    user: UserPublic = Depends(require_teacher_or_admin),
 ):
     """Download QR code image for a class."""
     # Verify teacher assignment
@@ -265,7 +265,7 @@ async def download_qr(
 async def qr_analytics(
     class_id: str,
     days: Optional[int] = Query(None, ge=1, le=365),
-    user: UserPublic = Depends(require_teacher),
+    user: UserPublic = Depends(require_teacher_or_admin),
 ):
     """Get QR analytics for a class."""
     # Verify teacher assignment
@@ -313,7 +313,7 @@ async def qr_analytics(
 )
 async def qr_history(
     class_id: str,
-    user: UserPublic = Depends(require_teacher),
+    user: UserPublic = Depends(require_teacher_or_admin),
 ):
     """Get QR code history for a class (all generations)."""
     # Verify teacher assignment

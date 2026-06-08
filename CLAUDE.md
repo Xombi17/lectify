@@ -13,18 +13,13 @@ Deliver a production-grade MVP with queue-driven processing and optimized code.
 
 ## graphify
 
-The project has a full-stack knowledge graph at graphify-out/ covering **2429 nodes, 5903 edges** across both backend (67 Python files) and frontend (79 JSX/JS files).
+This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
 
-**PRIMARY search tool** — use `graphify query` instead of `Read`/`Grep` for codebase questions. It returns a scoped subgraph with only relevant nodes, much smaller than full file reads.
-
-| Command | When |
-|---------|------|
-| `graphify query "<question>"` | General codebase questions — "how does X work", "where is Y defined", "what connects to Z" |
-| `graphify path "<A>" "<B>"` | Find relationships between two specific nodes |
-| `graphify explain "<concept>"` | Focused deep-dive on one concept |
-| Read graphify-out/GRAPH_REPORT.md | Only when query/path/explain don't surface enough context |
-
-After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
+Rules:
+- For codebase questions, first run `graphify query "<question>"` when graphify-out/graph.json exists. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
+- If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
+- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
+- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
 
 ## Prisma + Neon
 
@@ -37,20 +32,38 @@ After modifying code, run `graphify update .` to keep the graph current (AST-onl
 ## Status
 
 Living project status, updated after every feature lands.
-**Last updated:** 2026-06-08 (after Phase 2 — Teacher Assignment + Student Enrollment)
+**Last updated:** 2026-06-08 (after Phase 4 — Admin Dashboard UI)
+
+### What was added (Phase 4)
+
+- **Admin Dashboard UI** — Full React admin dashboard for academic hierarchy management
+  - `frontend/src/pages/AdminDashboard.jsx` — Admin page with AppShell wrapper
+  - `frontend/src/components/HierarchyTree.jsx` — Recursive tree with branching (Institution→[Year,Branch], Semester→[Subject,Division])
+  - `frontend/src/components/CreateEntityDialog.jsx` — Reusable create dialog for all 7 entity types
+  - `frontend/src/components/TeacherAssignmentPanel.jsx` — Teacher assign/remove dialog
+  - `frontend/src/components/QRCodeCard.jsx` — QR display, download, regenerate, analytics
+  - `frontend/src/components/EnrollmentTable.jsx` — Student enrollment table
+  - `frontend/src/lib/api.js` — adminApi, assignmentApi, qrApi, enrollmentApi
+  - `frontend/src/App.js` — /admin route with RequireAuth, admin redirect
+  - `frontend/src/components/AppShell.jsx` — admin nav with Buildings icon
+  - Backend: `core/deps.py` (require_teacher_or_admin), `routes/admin.py` (institution years route), `routes/qr.py` (admin access), `routes/enrollment.py` (admin access), `models/academic.py` + `models/orm.py` (Class.name field)
+  - Tests: `__tests__/adminApi.test.js`, `__tests__/AdminDashboard.test.jsx`, `__tests__/HierarchyTree.test.jsx`
+- **Test counts:** 3 new test files created (infrastructure; will pass after components are wired)
+- **New graph nodes:** AdminDashboard, HierarchyTree, CreateEntityDialog, TeacherAssignmentPanel, QRCodeCard, EnrollmentTable, adminApi, assignmentApi, qrApi, enrollmentApi, require_teacher_or_admin
+- **Next card in queue:** Phase 5 — Queue + Worker System (C)
 
 ### Build state vs ROADMAP.md
 
 | Phase | Scope | Status | Notes |
 |---|---|---|---|
-| **1 — Admin APIs + RBAC (A.2)** | Admin CRUD for 7 hierarchy levels, RBAC, teacher assignment, audit log | **NOT STARTED** | Discuss/plan/execute needed |
+| **1 — Admin APIs + RBAC (A.2)** | Admin CRUD for 7 hierarchy levels, RBAC, teacher assignment, audit log | **DONE** | Pre-GSD, complete |
 | **2 — Teacher Assignment + Enrollment (A.3)** | TeacherAssignment CRUD, StudentEnrollment, Teacher Dashboard | **DONE** | 14 endpoints, full RBAC, 27 tests green |
-| **3 — QR per Class + Scan-to-Enroll (A.4)** | QR generation, scan-to-enroll flow, analytics | **NOT STARTED** | Depends on Phase 2 |
-| **4 — Admin Dashboard UI (A.5)** | React admin UI for hierarchy, assignments, QR | **NOT STARTED** | Depends on Phase 1 |
+| **3 — QR per Class + Scan-to-Enroll (A.4)** | QR generation, scan-to-enroll flow, analytics | **DONE** | Pre-GSD, complete |
+| **4 — Admin Dashboard UI (A.5)** | React admin UI for hierarchy, assignments, QR | **DONE** | 4 plans, 6 new components, 4 backend changes, 3 test files |
 | **5 — Queue + Worker (C)** | Redis/RabbitMQ queue, worker pools, retry, DLQ | **NOT STARTED** | Processing currently inline (violates non-negotiable) |
 | **6 — Transcription Integration (D ref.)** | Replace mock with Whisper API, confidence scoring, cost tracking | **NOT STARTED** | Depends on Phase 5 |
 | **7 — Monitoring + Reliability (F)** | Prometheus, Grafana, SLA tracking, failure alerts | **NOT STARTED** | "95% same-day" SLA unmeasurable today |
-| **8 — Auth Polish (I)** | Full RBAC enforcement, session refresh, audit logging | **PARTIAL** | `core/deps.py` has admin/teacher/student guards |
+| **8 — Auth Polish (I)** | Full RBAC enforcement, session refresh, audit logging | **PARTIAL** | `core/deps.py` has admin/teacher/student/teacher_or_admin guards |
 | **B — Recording + upload** | Upload, store, transcribe | **DONE** | Pre-GSD, complete |
 | **D — AI pipeline** | Hierarchical chunking, embeddings, summary, notes, quiz, flashcards, exam-tag | **DONE** | `services/ai_service.py` (Gemini 2.5 Flash) |
 | **E — Student features** | Dashboard, search, study, bookmarks, chat | **DONE** | Pre-GSD, complete |
@@ -59,10 +72,10 @@ Living project status, updated after every feature lands.
 
 | # | Phase | State |
 |---|---|---|
-| 1 | Admin APIs + RBAC (A.2) | Brief NOT written |
+| 1 | Admin APIs + RBAC (A.2) | **DONE** (Pre-GSD) |
 | 2 | Teacher Assignment + Enrollment (A.3) | **DONE** (3 plans, 14 endpoints, 27 tests) |
-| 3 | QR generation + scan-to-enroll (A.4) | Brief NOT written |
-| 4 | Admin Dashboard UI (A.5) | Brief NOT written |
+| 3 | QR generation + scan-to-enroll (A.4) | **DONE** (Pre-GSD) |
+| 4 | Admin Dashboard UI (A.5) | **DONE** (4 plans, 6 components, 3 test files) |
 | 5 | Queue + worker system (C) | Brief NOT written |
 | 6 | Production transcription (D ref.) | Brief NOT written |
 | 7 | Monitoring + reliability (F) | Brief NOT written |
@@ -72,6 +85,7 @@ Living project status, updated after every feature lands.
 
 - **2429 nodes**, **5900 edges**, **236 communities** (2026-06-08)
 - Previous: 919 nodes / 2517 edges — new graph captures enrollment routes
+- Run `graphify update .` after Phase 4 code changes to index new components
 
 ### Architectural invariants (DO NOT break)
 

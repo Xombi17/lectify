@@ -10,6 +10,7 @@ import LectureDetailPage from "@/pages/LectureDetailPage";
 import StudentDashboard from "@/pages/StudentDashboard";
 import ReviewPage from "@/pages/ReviewPage";
 import BookmarksPage from "@/pages/BookmarksPage";
+import AdminDashboard from "@/pages/AdminDashboard";
 
 import "@/App.css";
 
@@ -25,7 +26,10 @@ function RequireAuth({ role, children }) {
 
 function HomeRedirect() {
     const { user } = useAuth();
-    if (user) return <Navigate to={user.role === "teacher" ? "/teacher" : "/student"} replace />;
+    if (user) {
+        if (user.role === "admin") return <Navigate to="/admin" replace />;
+        return <Navigate to={user.role === "teacher" ? "/teacher" : "/student"} replace />;
+    }
     return <LandingPage />;
 }
 
@@ -92,6 +96,15 @@ export default function App() {
                         element={
                             <RequireAuth role="student">
                                 <BookmarksPage />
+                            </RequireAuth>
+                        }
+                    />
+
+                    <Route
+                        path="/admin"
+                        element={
+                            <RequireAuth role="admin">
+                                <AdminDashboard />
                             </RequireAuth>
                         }
                     />

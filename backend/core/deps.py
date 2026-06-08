@@ -47,3 +47,12 @@ def require_admin(user: UserPublic = Depends(get_current_user)) -> UserPublic:
             detail="Admin role required",
         )
     return user
+
+
+def require_teacher_or_admin(user: UserPublic = Depends(get_current_user)) -> UserPublic:
+    if user.role not in ("teacher", "admin"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Teacher or admin role required",
+        )
+    return user

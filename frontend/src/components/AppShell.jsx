@@ -8,6 +8,7 @@ import {
     User,
     Brain,
     BookmarkSimple,
+    Buildings,
 } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 
@@ -30,14 +31,23 @@ export default function AppShell({ children }) {
         { to: "/student/review", label: "Review", icon: Brain },
         { to: "/student/bookmarks", label: "Bookmarks", icon: BookmarkSimple },
     ];
-    const nav = user?.role === "teacher" ? teacherNav : studentNav;
+    const adminNav = [
+        { to: "/admin", label: "Hierarchy", icon: Buildings },
+    ];
+    const nav = user?.role === "admin" ? adminNav : user?.role === "teacher" ? teacherNav : studentNav;
 
     return (
         <div className="min-h-screen bg-background">
             <header className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur">
                 <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
                     <Link
-                        to={user?.role === "teacher" ? "/teacher" : "/student"}
+                        to={
+                            user?.role === "admin"
+                                ? "/admin"
+                                : user?.role === "teacher"
+                                ? "/teacher"
+                                : "/student"
+                        }
                         className="flex items-center gap-2"
                         data-testid="brand-link"
                     >
