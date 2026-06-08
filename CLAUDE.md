@@ -22,10 +22,18 @@ Rules:
 - Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
 - After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
 
+## Prisma + Neon
+
+- **Prisma is a dev-only tool** for database management (Studio, schema validation, db pull/push). Runtime queries still go through the Python backend's SQLAlchemy.
+- Two connection strings in `.env`: `DATABASE_URL` (pooled via `-pooler` endpoint for app queries) and `DIRECT_URL` (non-pooled for Prisma migrations/Studio).
+- Schema lives at [prisma/schema.prisma](prisma/schema.prisma) — keep it in sync with [backend/models/orm.py](backend/models/orm.py) if models change.
+- Run `npx prisma studio` to open the database GUI.
+- `npx prisma db push` syncs schema to Neon (safe for dev; use proper migrations in prod).
+
 ## Status
 
 Living project status, updated after every feature lands.
-**Last updated:** 2026-06-02 (after Card 1 — Phase A.1 data layer)
+**Last updated:** 2026-06-08 (after Card 1 — Phase A.1 data layer + Prisma/Neon integration + MongoDB removal)
 
 ### Build state vs PRODUCTION_MVP_PLAN
 
@@ -66,7 +74,7 @@ Living project status, updated after every feature lands.
 
 1. **Read before edit.** (per AGENTS.md #4)
 2. **Optimize from the start.** No later refactors expected.
-3. **Repository dispatcher pattern.** New repos go in `repositories/_sql/` + `repositories/_mongo/`, plus a 1-line dispatcher at `repositories/<name>_repository.py` that picks the impl based on `DATABASE_BACKEND`. Both impls must have identical method signatures.
+3. **Repository pattern (SQL only).** All repos in `repositories/_sql/` with a thin re-export at `repositories/<name>_repository.py`. MongoDB was removed — only PostgreSQL/SQLite is supported.
 4. **Pydantic triple pattern.** Every entity has `*Create` / `*DB` / `*Public` variants.
 5. **Em-dash bytes (E2 80 94) break HTTP headers** (latin-1 in Starlette). All 27 occurrences in backend are cosmetic; do not introduce new ones in headers.
 6. **Test against in-process aiosqlite** when DB is unavailable.

@@ -1,7 +1,7 @@
 # LectureMind AI — Docker Compose for self-hosting.
 #
 # What this brings up:
-#   - postgres  : primary database (replaces MongoDB in production)
+#   - postgres  : primary database
 #   - minio     : S3-compatible object storage for lecture audio files
 #   - backend   : FastAPI app (with the swap-in PostgreSQL repositories)
 #   - frontend  : React app (production build served by nginx)
@@ -13,8 +13,7 @@
 #                http://localhost:8001/docs (FastAPI docs)
 #                http://localhost:9001 (MinIO console — user: minioadmin / pass: minioadmin)
 #
-# See MIGRATION.md for what to change in the code to actually use Postgres
-# instead of MongoDB.
+# See MIGRATION.md for deployment notes.
 
 version: "3.9"
 
@@ -75,12 +74,9 @@ services:
       minio:
         condition: service_healthy
     environment:
-      # Use Postgres via SQLAlchemy. Set DATABASE_BACKEND=mongo + MONGO_URL to
-      # fall back to the MongoDB driver implementations.
+      # Use Postgres via SQLAlchemy.
       DATABASE_BACKEND: postgres
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-lecturemind}:${POSTGRES_PASSWORD:-lecturemind}@postgres:5432/${POSTGRES_DB:-lecturemind}
-      MONGO_URL: ""
-      DB_NAME: ${POSTGRES_DB:-lecturemind}
 
       JWT_SECRET: ${JWT_SECRET:?set a strong JWT_SECRET}
       JWT_ALGORITHM: HS256

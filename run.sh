@@ -132,7 +132,7 @@ if [[ "$REQS_HASH" != "$CACHED_HASH" ]]; then
     pip install -q \
         fastapi uvicorn sqlalchemy aiosqlite aiofiles bcrypt pyjwt \
         pydantic pydantic-settings python-dotenv python-multipart \
-        passlib email-validator httpx python-jose motor \
+        passlib email-validator httpx python-jose \
         neo4j reportlab tiktoken google-genai google-generativeai stripe \
         2>&1 | tail -3
     echo "$REQS_HASH" > .requirements_hash

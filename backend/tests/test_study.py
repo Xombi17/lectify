@@ -4,9 +4,9 @@
   2. GET   /api/lectures/{id}/pdf        (PDF export)
   3. Bookmarks CRUD + isolation
   4. Spaced-repetition flashcards (SM-2 lite) — pure-function & HTTP tests
-  5. Repository dispatcher: Mongo (live) and SQL (in-memory SQLite) impls
+  5. Repository dispatcher tests
 
-External APIs: NONE (no Gemini calls). Only Mongo (live) + reportlab + SM-2 math.
+External APIs: NONE (no Gemini calls). Uses in-process SQLite.
 """
 import asyncio
 import os
@@ -62,7 +62,7 @@ def _signup_or_login(creds: dict) -> dict:
 def _seed_ready_lecture(teacher_id: str, with_transcript: bool = True,
                         published: bool = False, title: str = "TEST_ Study Lecture",
                         status: str = "ready") -> str:
-    """Insert ready+materials lecture directly into Mongo. Returns lecture_id."""
+    """Insert ready+materials lecture directly via the repo. Returns lecture_id."""
     from repositories.lecture_repository import LectureRepository
     from models.lecture import LectureDB, StudyMaterials, QuizQuestion, Flashcard
 
@@ -788,22 +788,8 @@ class TestSqlBookmarkAndReviewRepos:
 
 
 class TestDispatcher:
-    def test_dispatcher_mongo_default(self, monkeypatch):
-        """With default mongo backend, dispatcher should re-export _mongo impls."""
-        monkeypatch.setenv("DATABASE_BACKEND", "mongo")
-        import importlib
-        from core import config as cfg
-        cfg.get_settings.cache_clear()
-        importlib.reload(cfg)
-        import repositories.bookmark_repository as bref
-        import repositories.flashcard_review_repository as fref
-        importlib.reload(bref); importlib.reload(fref)
-        from repositories._mongo.bookmark_repository import BookmarkRepository as MBM
-        from repositories._mongo.flashcard_review_repository import FlashcardReviewRepository as MFR
-        assert bref.BookmarkRepository is MBM
-        assert fref.FlashcardReviewRepository is MFR
-
-    def test_dispatcher_postgres_picks_sql(self, monkeypatch):
+    def test_dispatcher_returns_sql_impls(self, monkeypatch):
+        """Dispatchers should re-export _sql implementations."""
         monkeypatch.setenv("DATABASE_BACKEND", "postgres")
         monkeypatch.setenv("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
         import importlib

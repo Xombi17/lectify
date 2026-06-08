@@ -1,7 +1,4 @@
 """User repository — SQLAlchemy (async) implementation.
-
-Public surface MUST match `_mongo/user_repository.UserRepository` so callers
-don't notice the swap.
 """
 import uuid
 from typing import Optional

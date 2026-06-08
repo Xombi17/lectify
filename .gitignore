@@ -129,3 +129,6 @@ credentials.json
 .planning/*
 .claude/settings.json
 .agents/*
+
+# Prisma dev artifacts (generated client lives in node_modules)
+prisma/generated/

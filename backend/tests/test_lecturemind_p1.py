@@ -26,13 +26,9 @@ import requests
 
 sys.path.insert(0, "/app/backend")
 
-# Helper: run an async coroutine on a fresh event loop AND reset the
-# core.db singleton (which caches a Motor client bound to the previous loop).
+# Helper: run an async coroutine on a fresh event loop.
 def _arun(coro_factory):
     """coro_factory: a zero-arg callable that returns a fresh coroutine."""
-    import core.db as core_db  # noqa
-    # Reset cached client so a new one is created on the new loop
-    core_db._client = None
     return asyncio.run(coro_factory())
 
 
@@ -111,7 +107,7 @@ def student_id(student_auth):
 
 def _seed_ready_lecture(teacher_id: str, with_transcript: bool = True,
                         published: bool = False, title: str = "TEST_ P1 Lecture") -> str:
-    """Insert a ready+materials lecture directly via Mongo so tests don't depend on Gemini."""
+    """Insert a ready+materials lecture directly via the repo so tests don't depend on Gemini."""
     from repositories.lecture_repository import LectureRepository
     from models.lecture import LectureDB
 

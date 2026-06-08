@@ -690,7 +690,7 @@ class TestSqlStudentEnrollmentRepository:
 
 
 # ===========================================================================
-# Dispatcher Tests (verify SQL branch selected when DATABASE_BACKEND != mongo)
+# Dispatcher Tests (verify SQL branch selected when DATABASE_BACKEND = postgres)
 # ===========================================================================
 class TestDispatcher:
     def test_dispatcher_returns_sql_for_all_nine_entities(self):
@@ -715,8 +715,7 @@ class TestDispatcher:
         )
 
         # Each dispatcher module exposes exactly one *Repository class with the
-        # same name as the SQL impl (the Mongo impl also has the same name,
-        # which is the point of the dispatcher).
+        # same name as the SQL impl — that's the point of the dispatcher.
         assert institution_repository.InstitutionRepository is SqlInst
         assert year_repository.YearRepository is SqlYear
         assert branch_repository.BranchRepository is SqlBranch

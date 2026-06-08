@@ -1,7 +1,6 @@
 """SQLAlchemy ORM models — mirror of the Pydantic models for SQL backends.
 
 Used by the PostgreSQL (and SQLite-for-tests) repository implementations.
-The Mongo implementations don't touch this module.
 """
 from __future__ import annotations
 

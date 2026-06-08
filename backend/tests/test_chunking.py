@@ -30,10 +30,8 @@ import requests
 sys.path.insert(0, "/app/backend")
 
 
-# --- _arun helper from P1 tests: fresh event loop + reset Motor singleton ---
+# --- _arun helper: fresh event loop ---
 def _arun(coro_factory):
-    import core.db as core_db  # noqa
-    core_db._client = None
     return asyncio.run(coro_factory())
 
 

@@ -365,12 +365,12 @@ class TestLectures:
 # ---------- isolated quiz scoring via seeded materials ----------
 
 class TestQuizScoring:
-    """Seed materials directly through Mongo so we can validate scoring math
+    """Use pre-seeded materials fixtures so we can validate scoring math
     without needing the AI provider."""
 
     @pytest.fixture(scope="class")
     def seeded_lecture(self):
-        """Upload a lecture as teacher, then directly mutate Mongo to attach a quiz + status=ready."""
+        """Upload a lecture as teacher, then directly attach a quiz + status=ready via the repo."""
         import asyncio
         import sys
         sys.path.insert(0, "/app/backend")

@@ -1,8 +1,4 @@
 """SQL repository tests against in-memory SQLite (aiosqlite).
-
-Tests the _sql implementations directly so we don't have to deal with
-dispatcher import caching across the suite. The rest of the codebase
-remains on the Mongo backend.
 """
 import asyncio
 import os
@@ -73,7 +69,7 @@ class TestSqlUserRepository:
             assert by_email is not None
             assert by_email.id == uid
 
-            # case lower-handling (mongo impl lowercases query)
+            # case-insensitive email check (db handles comparison)
             none = await repo.get_by_email("Nobody@example.com")
             assert none is None
             await close_sql()

@@ -1,7 +1,7 @@
 """Base repository protocol — defines the data-access contract.
 
-Every concrete repository implements this so we can swap MongoDB → PostgreSQL
-(or anything else) by only changing the implementation, not callers.
+Every concrete repository implements this so callers are decoupled
+from the database library.
 """
 from typing import Optional, Protocol, TypeVar
 

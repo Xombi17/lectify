@@ -14,10 +14,8 @@ load_dotenv(ROOT_DIR / ".env")
 
 class Settings:
     # Database
-    DATABASE_BACKEND: str = os.environ.get("DATABASE_BACKEND", "mongo")
-    MONGO_URL: str = os.environ.get("MONGO_URL", "")
-    DB_NAME: str = os.environ.get("DB_NAME", "lecturemind")
-    DATABASE_URL: str = os.environ.get("DATABASE_URL", "")  # SQL backend (postgres/sqlite)
+    DATABASE_BACKEND: str = os.environ.get("DATABASE_BACKEND", "postgres")
+    DATABASE_URL: str = os.environ.get("DATABASE_URL", "")  # postgres:// or sqlite+aiosqlite://
 
     # CORS
     CORS_ORIGINS: str = os.environ.get("CORS_ORIGINS", "*")
