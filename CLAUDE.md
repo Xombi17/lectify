@@ -33,13 +33,14 @@ Rules:
 ## Status
 
 Living project status, updated after every feature lands.
-**Last updated:** 2026-06-08 (after Card 1 — Phase A.1 data layer + Prisma/Neon integration + MongoDB removal)
+**Last updated:** 2026-06-08 (after Card 3 — Phase A.3 enrollment endpoints)
 
 ### Build state vs PRODUCTION_MVP_PLAN
 
 | Phase | Scope | Status | Notes |
 |---|---|---|---|
-| **A — Academic hierarchy** | Institution/Year/Branch/Semester/Subject/Division/Class + admin CRUD + RBAC + QR enrollment | **PARTIAL** | Data layer done (Card 1). Admin APIs + UI pending. |
+| **A — Academic hierarchy** | Institution/Year/Branch/Semester/Subject/Division/Class + admin CRUD + RBAC + QR enrollment | **PARTIAL** | Data layer done (Card 1). Phase A.3 enrollment endpoints done (Card 3). Admin APIs + QR pending. |
+| **A.3 — Teacher Assignment + Enrollment** | TeacherAssignment CRUD, StudentEnrollment, Teacher Dashboard | **DONE** | 14 endpoints, full RBAC, 27 tests green |
 | **B — Recording + upload** | Upload, store, transcribe | **DONE** | `routes/lectures.py` + `services/storage_service.py` |
 | **C — Queue + worker** | Redis queue, retry, DLQ, priority | **NOT STARTED** | Processing currently inline (violates non-negotiable) |
 | **D — AI pipeline** | Hierarchical chunking, embeddings, summary, notes, quiz, flashcards, exam-tag | **DONE** | `services/ai_service.py` (Gemini 2.5 Flash) |
@@ -53,8 +54,8 @@ Living project status, updated after every feature lands.
 | # | Card | State | Tests |
 |---|---|---|---|
 | 1 | Phase A.1 — Academic hierarchy data layer | **DONE** (Claude Code 494s, $3.36, 14 tests) + 5 more by hand | 14+5 academic + 8 baseline = **27 total** |
-| 2 | Phase A.2 — Admin role + hierarchy CRUD + RBAC | Brief on disk; needs fix before dispatch (use `create()`+`find_existing()` not invented `assign()`/`unassign()`) | — |
-| 3 | Phase A.3 — TeacherAssignment + StudentEnrollment endpoints | Brief NOT written | — |
+| 2 | Phase A.2 — Admin role + hierarchy CRUD + RBAC | Brief NOT written | — |
+| 3 | Phase A.3 — TeacherAssignment + StudentEnrollment endpoints | **DONE** (Phase 2 execution: 3 waves, 3 plans, 14 endpoints, 27 tests) | 27 baseline |
 | 4 | Phase A.4 — QR generation per class + scan-to-enroll | Brief NOT written | — |
 | 5 | Phase A.5 — Admin UI (React) | Brief NOT written | — |
 | 6 | Phase C — Queue + worker | Brief NOT written | — |

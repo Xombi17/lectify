@@ -16,6 +16,7 @@ from repositories.user_repository import UserRepository
 from routes.analytics import router as analytics_router
 from routes.auth import router as auth_router
 from routes.chat import router as chat_router
+from routes.enrollment import router as enrollment_router
 from routes.lectures import router as lectures_router
 from routes.search import router as search_router
 from routes.study import router as study_router
@@ -65,6 +66,7 @@ async def health():
 api_router.include_router(auth_router)
 api_router.include_router(lectures_router)
 api_router.include_router(chat_router)
+api_router.include_router(enrollment_router)
 api_router.include_router(search_router)
 api_router.include_router(analytics_router)
 api_router.include_router(study_router)

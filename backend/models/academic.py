@@ -254,3 +254,32 @@ class StudentEnrollmentPublic(BaseModel):
     class_id: str
     student_id: str
     enrolled_at: datetime
+
+
+# ============================================================================
+# Enrollment Request (for student self-enrollment)
+# ============================================================================
+class EnrollRequest(BaseModel):
+    class_id: str
+
+
+# ============================================================================
+# Teacher Dashboard Summary Models
+# ============================================================================
+class TeacherClassSummary(BaseModel):
+    class_id: str
+    subject_name: str
+    division_name: str
+    semester_label: str
+    year_number: int
+    institution_name: str
+    assignment_active: bool
+    assignment_id: str
+
+
+class EnrolledStudent(BaseModel):
+    student_id: str
+    student_name: str
+    student_email: str
+    enrolled_at: datetime
+    enrollment_id: str
