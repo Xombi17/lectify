@@ -51,6 +51,23 @@ class InstitutionRepository:
         doc = await self.col.find_one({"code": code}, {"_id": 0})
         return _to_institution(doc) if doc else None
 
+    async def list_all(self) -> List[InstitutionDB]:
+        cursor = self.col.find({}, {"_id": 0})
+        docs = await cursor.to_list(length=None)
+        return [_to_institution(d) for d in docs]
+
+    async def update(self, institution_id: str, fields: dict) -> Optional[InstitutionDB]:
+        if not fields:
+            return await self.get_by_id(institution_id)
+        result = await self.col.update_one({"id": institution_id}, {"$set": fields})
+        if result.matched_count == 0:
+            return None
+        return await self.get_by_id(institution_id)
+
+    async def delete(self, institution_id: str) -> bool:
+        result = await self.col.delete_one({"id": institution_id})
+        return result.deleted_count > 0
+
     @staticmethod
     def new_id() -> str:
         return str(uuid.uuid4())
@@ -91,6 +108,23 @@ class YearRepository:
         cursor = self.col.find({"institution_id": institution_id}, {"_id": 0})
         docs = await cursor.to_list(length=None)
         return [_to_year(d) for d in docs]
+
+    async def list_all(self) -> List[YearDB]:
+        cursor = self.col.find({}, {"_id": 0})
+        docs = await cursor.to_list(length=None)
+        return [_to_year(d) for d in docs]
+
+    async def update(self, year_id: str, fields: dict) -> Optional[YearDB]:
+        if not fields:
+            return await self.get_by_id(year_id)
+        result = await self.col.update_one({"id": year_id}, {"$set": fields})
+        if result.matched_count == 0:
+            return None
+        return await self.get_by_id(year_id)
+
+    async def delete(self, year_id: str) -> bool:
+        result = await self.col.delete_one({"id": year_id})
+        return result.deleted_count > 0
 
     @staticmethod
     def new_id() -> str:
@@ -133,6 +167,23 @@ class BranchRepository:
         docs = await cursor.to_list(length=None)
         return [_to_branch(d) for d in docs]
 
+    async def list_all(self) -> List[BranchDB]:
+        cursor = self.col.find({}, {"_id": 0})
+        docs = await cursor.to_list(length=None)
+        return [_to_branch(d) for d in docs]
+
+    async def update(self, branch_id: str, fields: dict) -> Optional[BranchDB]:
+        if not fields:
+            return await self.get_by_id(branch_id)
+        result = await self.col.update_one({"id": branch_id}, {"$set": fields})
+        if result.matched_count == 0:
+            return None
+        return await self.get_by_id(branch_id)
+
+    async def delete(self, branch_id: str) -> bool:
+        result = await self.col.delete_one({"id": branch_id})
+        return result.deleted_count > 0
+
     @staticmethod
     def new_id() -> str:
         return str(uuid.uuid4())
@@ -173,6 +224,23 @@ class SemesterRepository:
         cursor = self.col.find({"year_id": year_id}, {"_id": 0})
         docs = await cursor.to_list(length=None)
         return [_to_semester(d) for d in docs]
+
+    async def list_all(self) -> List[SemesterDB]:
+        cursor = self.col.find({}, {"_id": 0})
+        docs = await cursor.to_list(length=None)
+        return [_to_semester(d) for d in docs]
+
+    async def update(self, semester_id: str, fields: dict) -> Optional[SemesterDB]:
+        if not fields:
+            return await self.get_by_id(semester_id)
+        result = await self.col.update_one({"id": semester_id}, {"$set": fields})
+        if result.matched_count == 0:
+            return None
+        return await self.get_by_id(semester_id)
+
+    async def delete(self, semester_id: str) -> bool:
+        result = await self.col.delete_one({"id": semester_id})
+        return result.deleted_count > 0
 
     @staticmethod
     def new_id() -> str:
@@ -215,6 +283,23 @@ class SubjectRepository:
         docs = await cursor.to_list(length=None)
         return [_to_subject(d) for d in docs]
 
+    async def list_all(self) -> List[SubjectDB]:
+        cursor = self.col.find({}, {"_id": 0})
+        docs = await cursor.to_list(length=None)
+        return [_to_subject(d) for d in docs]
+
+    async def update(self, subject_id: str, fields: dict) -> Optional[SubjectDB]:
+        if not fields:
+            return await self.get_by_id(subject_id)
+        result = await self.col.update_one({"id": subject_id}, {"$set": fields})
+        if result.matched_count == 0:
+            return None
+        return await self.get_by_id(subject_id)
+
+    async def delete(self, subject_id: str) -> bool:
+        result = await self.col.delete_one({"id": subject_id})
+        return result.deleted_count > 0
+
     @staticmethod
     def new_id() -> str:
         return str(uuid.uuid4())
@@ -256,6 +341,23 @@ class DivisionRepository:
         docs = await cursor.to_list(length=None)
         return [_to_division(d) for d in docs]
 
+    async def list_all(self) -> List[DivisionDB]:
+        cursor = self.col.find({}, {"_id": 0})
+        docs = await cursor.to_list(length=None)
+        return [_to_division(d) for d in docs]
+
+    async def update(self, division_id: str, fields: dict) -> Optional[DivisionDB]:
+        if not fields:
+            return await self.get_by_id(division_id)
+        result = await self.col.update_one({"id": division_id}, {"$set": fields})
+        if result.matched_count == 0:
+            return None
+        return await self.get_by_id(division_id)
+
+    async def delete(self, division_id: str) -> bool:
+        result = await self.col.delete_one({"id": division_id})
+        return result.deleted_count > 0
+
     @staticmethod
     def new_id() -> str:
         return str(uuid.uuid4())
@@ -296,6 +398,23 @@ class ClassRepository:
         cursor = self.col.find({"division_id": division_id}, {"_id": 0})
         docs = await cursor.to_list(length=None)
         return [_to_class(d) for d in docs]
+
+    async def list_all(self) -> List[ClassDB]:
+        cursor = self.col.find({}, {"_id": 0})
+        docs = await cursor.to_list(length=None)
+        return [_to_class(d) for d in docs]
+
+    async def update(self, class_id: str, fields: dict) -> Optional[ClassDB]:
+        if not fields:
+            return await self.get_by_id(class_id)
+        result = await self.col.update_one({"id": class_id}, {"$set": fields})
+        if result.matched_count == 0:
+            return None
+        return await self.get_by_id(class_id)
+
+    async def delete(self, class_id: str) -> bool:
+        result = await self.col.delete_one({"id": class_id})
+        return result.deleted_count > 0
 
     @staticmethod
     def new_id() -> str:
@@ -342,6 +461,19 @@ class TeacherAssignmentRepository:
         cursor = self.col.find({"teacher_id": teacher_id, "active": True}, {"_id": 0})
         docs = await cursor.to_list(length=None)
         return [_to_teacher_assignment(d) for d in docs]
+
+    async def find_existing(self, class_id: str, teacher_id: str, *, active_only: bool = True) -> Optional[TeacherAssignmentDB]:
+        query = {"class_id": class_id, "teacher_id": teacher_id}
+        if active_only:
+            query["active"] = True
+        doc = await self.col.find_one(query, {"_id": 0})
+        return _to_teacher_assignment(doc) if doc else None
+
+    async def set_active(self, assignment_id: str, active: bool) -> Optional[TeacherAssignmentDB]:
+        result = await self.col.update_one({"id": assignment_id}, {"$set": {"active": active}})
+        if result.matched_count == 0:
+            return None
+        return await self.get_by_id(assignment_id)
 
     @staticmethod
     def new_id() -> str:
@@ -392,6 +524,10 @@ class StudentEnrollmentRepository:
     async def find_existing(self, class_id: str, student_id: str) -> Optional[StudentEnrollmentDB]:
         doc = await self.col.find_one({"class_id": class_id, "student_id": student_id}, {"_id": 0})
         return _to_student_enrollment(doc) if doc else None
+
+    async def delete(self, enrollment_id: str) -> bool:
+        result = await self.col.delete_one({"id": enrollment_id})
+        return result.deleted_count > 0
 
     @staticmethod
     def new_id() -> str:

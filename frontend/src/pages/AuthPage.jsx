@@ -8,7 +8,7 @@ import { GraduationCap, Sparkle, Lightning, Headphones } from "@phosphor-icons/r
 import { toast } from "sonner";
 
 const BG_IMG =
-    "https://static.prod-images.emergentagent.com/jobs/91b3ea2c-96c1-44fe-a015-83c5d67da69d/images/28d6e12ec0e157364b3ca6d509833ee7ffafc8c70673bd84642cbe4fe0b11b76.png";
+    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='800' height='1000' viewBox='0 0 800 1000'%3E%3Crect fill='%231e3a5f' width='800' height='1000'/%3E%3Ccircle cx='200' cy='300' r='150' fill='%23f5c842' opacity='0.3'/%3E%3Ccircle cx='600' cy='700' r='200' fill='%23f5c842' opacity='0.15'/%3E%3Crect x='300' y='400' width='200' height='300' fill='%23f5c842' opacity='0.08'/%3E%3C/svg%3E";
 
 export default function AuthPage({ mode }) {
     const isSignup = mode === "signup";

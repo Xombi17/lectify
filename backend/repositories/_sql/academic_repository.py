@@ -68,6 +68,31 @@ class InstitutionRepository:
             row = (await s.execute(stmt)).scalar_one_or_none()
             return _to_institution(row) if row else None
 
+    async def list_all(self) -> List[InstitutionDB]:
+        async with session_maker()() as s:
+            stmt = select(InstitutionORM)
+            rows = (await s.execute(stmt)).scalars().all()
+            return [_to_institution(r) for r in rows]
+
+    async def update(self, institution_id: str, fields: dict) -> Optional[InstitutionDB]:
+        async with session_maker()() as s, s.begin():
+            row = await s.get(InstitutionORM, institution_id)
+            if not row:
+                return None
+            for key, value in fields.items():
+                if hasattr(row, key):
+                    setattr(row, key, value)
+            await s.flush()
+            return _to_institution(row)
+
+    async def delete(self, institution_id: str) -> bool:
+        async with session_maker()() as s, s.begin():
+            row = await s.get(InstitutionORM, institution_id)
+            if not row:
+                return False
+            await s.delete(row)
+            return True
+
     @staticmethod
     def new_id() -> str:
         return str(uuid.uuid4())
@@ -111,6 +136,31 @@ class YearRepository:
             stmt = select(YearORM).where(YearORM.institution_id == institution_id)
             rows = (await s.execute(stmt)).scalars().all()
             return [_to_year(r) for r in rows]
+
+    async def list_all(self) -> List[YearDB]:
+        async with session_maker()() as s:
+            stmt = select(YearORM)
+            rows = (await s.execute(stmt)).scalars().all()
+            return [_to_year(r) for r in rows]
+
+    async def update(self, year_id: str, fields: dict) -> Optional[YearDB]:
+        async with session_maker()() as s, s.begin():
+            row = await s.get(YearORM, year_id)
+            if not row:
+                return None
+            for key, value in fields.items():
+                if hasattr(row, key):
+                    setattr(row, key, value)
+            await s.flush()
+            return _to_year(row)
+
+    async def delete(self, year_id: str) -> bool:
+        async with session_maker()() as s, s.begin():
+            row = await s.get(YearORM, year_id)
+            if not row:
+                return False
+            await s.delete(row)
+            return True
 
     @staticmethod
     def new_id() -> str:
@@ -156,6 +206,31 @@ class BranchRepository:
             rows = (await s.execute(stmt)).scalars().all()
             return [_to_branch(r) for r in rows]
 
+    async def list_all(self) -> List[BranchDB]:
+        async with session_maker()() as s:
+            stmt = select(BranchORM)
+            rows = (await s.execute(stmt)).scalars().all()
+            return [_to_branch(r) for r in rows]
+
+    async def update(self, branch_id: str, fields: dict) -> Optional[BranchDB]:
+        async with session_maker()() as s, s.begin():
+            row = await s.get(BranchORM, branch_id)
+            if not row:
+                return None
+            for key, value in fields.items():
+                if hasattr(row, key):
+                    setattr(row, key, value)
+            await s.flush()
+            return _to_branch(row)
+
+    async def delete(self, branch_id: str) -> bool:
+        async with session_maker()() as s, s.begin():
+            row = await s.get(BranchORM, branch_id)
+            if not row:
+                return False
+            await s.delete(row)
+            return True
+
     @staticmethod
     def new_id() -> str:
         return str(uuid.uuid4())
@@ -199,6 +274,31 @@ class SemesterRepository:
             stmt = select(SemesterORM).where(SemesterORM.year_id == year_id)
             rows = (await s.execute(stmt)).scalars().all()
             return [_to_semester(r) for r in rows]
+
+    async def list_all(self) -> List[SemesterDB]:
+        async with session_maker()() as s:
+            stmt = select(SemesterORM)
+            rows = (await s.execute(stmt)).scalars().all()
+            return [_to_semester(r) for r in rows]
+
+    async def update(self, semester_id: str, fields: dict) -> Optional[SemesterDB]:
+        async with session_maker()() as s, s.begin():
+            row = await s.get(SemesterORM, semester_id)
+            if not row:
+                return None
+            for key, value in fields.items():
+                if hasattr(row, key):
+                    setattr(row, key, value)
+            await s.flush()
+            return _to_semester(row)
+
+    async def delete(self, semester_id: str) -> bool:
+        async with session_maker()() as s, s.begin():
+            row = await s.get(SemesterORM, semester_id)
+            if not row:
+                return False
+            await s.delete(row)
+            return True
 
     @staticmethod
     def new_id() -> str:
@@ -246,6 +346,31 @@ class SubjectRepository:
             rows = (await s.execute(stmt)).scalars().all()
             return [_to_subject(r) for r in rows]
 
+    async def list_all(self) -> List[SubjectDB]:
+        async with session_maker()() as s:
+            stmt = select(SubjectORM)
+            rows = (await s.execute(stmt)).scalars().all()
+            return [_to_subject(r) for r in rows]
+
+    async def update(self, subject_id: str, fields: dict) -> Optional[SubjectDB]:
+        async with session_maker()() as s, s.begin():
+            row = await s.get(SubjectORM, subject_id)
+            if not row:
+                return None
+            for key, value in fields.items():
+                if hasattr(row, key):
+                    setattr(row, key, value)
+            await s.flush()
+            return _to_subject(row)
+
+    async def delete(self, subject_id: str) -> bool:
+        async with session_maker()() as s, s.begin():
+            row = await s.get(SubjectORM, subject_id)
+            if not row:
+                return False
+            await s.delete(row)
+            return True
+
     @staticmethod
     def new_id() -> str:
         return str(uuid.uuid4())
@@ -290,6 +415,31 @@ class DivisionRepository:
             rows = (await s.execute(stmt)).scalars().all()
             return [_to_division(r) for r in rows]
 
+    async def list_all(self) -> List[DivisionDB]:
+        async with session_maker()() as s:
+            stmt = select(DivisionORM)
+            rows = (await s.execute(stmt)).scalars().all()
+            return [_to_division(r) for r in rows]
+
+    async def update(self, division_id: str, fields: dict) -> Optional[DivisionDB]:
+        async with session_maker()() as s, s.begin():
+            row = await s.get(DivisionORM, division_id)
+            if not row:
+                return None
+            for key, value in fields.items():
+                if hasattr(row, key):
+                    setattr(row, key, value)
+            await s.flush()
+            return _to_division(row)
+
+    async def delete(self, division_id: str) -> bool:
+        async with session_maker()() as s, s.begin():
+            row = await s.get(DivisionORM, division_id)
+            if not row:
+                return False
+            await s.delete(row)
+            return True
+
     @staticmethod
     def new_id() -> str:
         return str(uuid.uuid4())
@@ -331,6 +481,31 @@ class ClassRepository:
             stmt = select(ClassORM).where(ClassORM.division_id == division_id)
             rows = (await s.execute(stmt)).scalars().all()
             return [_to_class(r) for r in rows]
+
+    async def list_all(self) -> List[ClassDB]:
+        async with session_maker()() as s:
+            stmt = select(ClassORM)
+            rows = (await s.execute(stmt)).scalars().all()
+            return [_to_class(r) for r in rows]
+
+    async def update(self, class_id: str, fields: dict) -> Optional[ClassDB]:
+        async with session_maker()() as s, s.begin():
+            row = await s.get(ClassORM, class_id)
+            if not row:
+                return None
+            for key, value in fields.items():
+                if hasattr(row, key):
+                    setattr(row, key, value)
+            await s.flush()
+            return _to_class(row)
+
+    async def delete(self, class_id: str) -> bool:
+        async with session_maker()() as s, s.begin():
+            row = await s.get(ClassORM, class_id)
+            if not row:
+                return False
+            await s.delete(row)
+            return True
 
     @staticmethod
     def new_id() -> str:
@@ -388,6 +563,26 @@ class TeacherAssignmentRepository:
             rows = (await s.execute(stmt)).scalars().all()
             return [_to_teacher_assignment(r) for r in rows]
 
+    async def find_existing(self, class_id: str, teacher_id: str, *, active_only: bool = True) -> Optional[TeacherAssignmentDB]:
+        async with session_maker()() as s:
+            stmt = select(TeacherAssignmentORM).where(
+                (TeacherAssignmentORM.class_id == class_id) &
+                (TeacherAssignmentORM.teacher_id == teacher_id)
+            )
+            if active_only:
+                stmt = stmt.where(TeacherAssignmentORM.active.is_(True))
+            row = (await s.execute(stmt)).scalar_one_or_none()
+            return _to_teacher_assignment(row) if row else None
+
+    async def set_active(self, assignment_id: str, active: bool) -> Optional[TeacherAssignmentDB]:
+        async with session_maker()() as s, s.begin():
+            row = await s.get(TeacherAssignmentORM, assignment_id)
+            if not row:
+                return None
+            row.active = active
+            await s.flush()
+            return _to_teacher_assignment(row)
+
     @staticmethod
     def new_id() -> str:
         return str(uuid.uuid4())
@@ -444,6 +639,14 @@ class StudentEnrollmentRepository:
             )
             row = (await s.execute(stmt)).scalar_one_or_none()
             return _to_student_enrollment(row) if row else None
+
+    async def delete(self, enrollment_id: str) -> bool:
+        async with session_maker()() as s, s.begin():
+            row = await s.get(StudentEnrollmentORM, enrollment_id)
+            if not row:
+                return False
+            await s.delete(row)
+            return True
 
     @staticmethod
     def new_id() -> str:

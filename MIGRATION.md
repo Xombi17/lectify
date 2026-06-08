@@ -1,6 +1,6 @@
 # Migrating LectureMind AI from MongoDB → PostgreSQL
 
-The Emergent preview uses MongoDB because that is what the managed environment
+The original preview used MongoDB because that is what the managed environment
 provides. The code is now structured so the swap is **a single env-var flip**:
 set `DATABASE_BACKEND=postgres` + `DATABASE_URL=...` and you're done.
 
@@ -76,7 +76,7 @@ Same dispatch pattern via `STORAGE_BACKEND=local|s3`.
 
 ## Env variables
 
-### Preview (Emergent / MongoDB / local FS)
+### Preview (MongoDB / local FS)
 ```env
 DATABASE_BACKEND=mongo
 MONGO_URL=mongodb://localhost:27017

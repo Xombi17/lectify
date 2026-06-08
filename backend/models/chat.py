@@ -17,6 +17,17 @@ class ChatMessageDB(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
+class ChatMessageCreate(BaseModel):
+    """Payload for creating a new chat message."""
+    lecture_id: str
+    question: str = Field(..., min_length=1, max_length=2000)
+
+
+class ChatMessagePublic(ChatMessageDB):
+    """Read-only response shape for chat messages."""
+    pass
+
+
 class ChatAskRequest(BaseModel):
     question: str = Field(..., min_length=1, max_length=2000)
 

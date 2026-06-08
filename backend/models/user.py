@@ -4,7 +4,7 @@ from typing import Literal
 
 from pydantic import BaseModel, EmailStr, Field
 
-Role = Literal["teacher", "student"]
+Role = Literal["teacher", "student", "admin"]
 
 
 class UserCreate(BaseModel):

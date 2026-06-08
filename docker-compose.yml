@@ -1,7 +1,7 @@
 # LectureMind AI — Docker Compose for self-hosting.
 #
 # What this brings up:
-#   - postgres  : primary database (replaces MongoDB in the Emergent preview)
+#   - postgres  : primary database (replaces MongoDB in production)
 #   - minio     : S3-compatible object storage for lecture audio files
 #   - backend   : FastAPI app (with the swap-in PostgreSQL repositories)
 #   - frontend  : React app (production build served by nginx)

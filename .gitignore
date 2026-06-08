@@ -107,3 +107,25 @@ credentials.json
 
 # Hermes agent runtime (planning/dispatch files, private)
 .hermes/
+
+# SQLite / test DBs (residue from local smoke tests)
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Local-only Claude Code artifacts (force-add .claude/settings.json below)
+.claude/*
+!.claude/
+
+# App logs from local runs (created by run.sh or live backend)
+.logs/
+
+# requirements-hash sentinel from setup scripts
+*.requirements_hash
+.requirements_hash
+.planning/*
+.claude/settings.json
+.agents/*

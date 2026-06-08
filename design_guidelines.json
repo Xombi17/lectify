@@ -93,12 +93,12 @@
   },
   "image_urls": {
     "auth_background": {
-      "url": "https://static.prod-images.emergentagent.com/jobs/91b3ea2c-96c1-44fe-a015-83c5d67da69d/images/28d6e12ec0e157364b3ca6d509833ee7ffafc8c70673bd84642cbe4fe0b11b76.png",
-      "description": "Abstract minimalist Swiss poster design, overlapping geometric shapes in Oxford Blue and bright yellow on bone white background. Use for Login/Signup split screen right side."
+      "url": "",
+      "description": "Abstract minimalist Swiss poster design, overlapping geometric shapes in Oxford Blue and bright yellow on bone white background. Use for Login/Signup split screen right side. Replaced with inline SVG in AuthPage.jsx."
     },
     "empty_state_learning": {
-      "url": "https://static.prod-images.emergentagent.com/jobs/91b3ea2c-96c1-44fe-a015-83c5d67da69d/images/5c7c236ce203cb9ff8cfa0e9c9f793e07ff59096977e2bd795d4e28997823c76.png",
-      "description": "Clean minimalist illustration of an open book with floating glowing geometric shapes. Use for 'No lectures uploaded yet' or 'No active topics'."
+      "url": "",
+      "description": "Clean minimalist illustration of an open book with floating glowing geometric shapes. Use for 'No lectures uploaded yet' or 'No active topics'. Replaced with inline SVG in TeacherDashboard.jsx."
     },
     "teacher_dashboard_hero": {
       "url": "https://images.unsplash.com/photo-1524178232363-1fb2b075b655?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjY2NzN8MHwxfHNlYXJjaHwxfHx1bml2ZXJzaXR5JTIwdGVhY2hlciUyMGxlY3R1cmV8ZW58MHx8fHwxNzgwMzc3NzY4fDA&ixlib=rb-4.1.0&q=85",

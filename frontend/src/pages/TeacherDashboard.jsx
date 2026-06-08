@@ -15,7 +15,7 @@ import {
 import { motion } from "framer-motion";
 
 const EMPTY_IMG =
-    "https://static.prod-images.emergentagent.com/jobs/91b3ea2c-96c1-44fe-a015-83c5d67da69d/images/5c7c236ce203cb9ff8cfa0e9c9f793e07ff59096977e2bd795d4e28997823c76.png";
+    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='300' viewBox='0 0 400 300'%3E%3Crect fill='%23f8f9fa' width='400' height='300'/%3E%3Cpath d='M120 100h160v100H120z' fill='%23ddd'/%3E%3Cpath d='M140 130h120v4H140zM140 145h100v3H140zM140 160h80v3H140z' fill='%23bbb'/%3E%3C/svg%3E";
 
 const STATUS = {
     uploaded: { label: "Queued", icon: Clock, cls: "bg-muted text-muted-foreground" },

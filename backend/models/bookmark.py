@@ -25,6 +25,11 @@ class BookmarkCreate(BaseModel):
     ref_index: Optional[int] = None
 
 
+class BookmarkPublic(BookmarkDB):
+    """Read-only response shape for bookmark endpoints."""
+    pass
+
+
 class BookmarkWithLecture(BookmarkDB):
     lecture_title: str
     lecture_subject: Optional[str] = None
