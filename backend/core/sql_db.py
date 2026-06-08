@@ -37,7 +37,17 @@ def _engine() -> AsyncEngine:
     key = _loop_key()
     eng = _engines.get(key)
     if eng is None:
-        eng = create_async_engine(_settings.DATABASE_URL, echo=False, future=True)
+        # Pool settings only for PostgreSQL; SQLite/aiosqlite uses StaticPool
+        is_postgres = _settings.DATABASE_URL.startswith("postgres")
+        engine_kwargs = dict(echo=False, future=True)
+        if is_postgres:
+            engine_kwargs.update(
+                pool_size=20,
+                max_overflow=10,
+                pool_pre_ping=True,
+                pool_recycle=3600,
+            )
+        eng = create_async_engine(_settings.DATABASE_URL, **engine_kwargs)
         _engines[key] = eng
         _makers[key] = async_sessionmaker(eng, expire_on_commit=False, class_=AsyncSession)
     return eng

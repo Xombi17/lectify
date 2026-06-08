@@ -1,7 +1,9 @@
-"""Auth routes — signup, login, /me."""
+"""Auth routes — signup, login, /me, logout, refresh."""
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from core.deps import get_current_user
+from core.deps import extract_token_data, get_current_user
 from core.security import create_access_token, hash_password, verify_password
 from models.user import AuthResponse, UserCreate, UserDB, UserLogin, UserPublic
 from repositories.user_repository import UserRepository
@@ -41,3 +43,38 @@ async def login(payload: UserLogin):
 @router.get("/me", response_model=UserPublic)
 async def me(user: UserPublic = Depends(get_current_user)):
     return user
+
+
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+async def logout(
+    token_data: dict = Depends(extract_token_data),
+    user: UserPublic = Depends(get_current_user),
+):
+    """Logout: blacklist the current JWT so it can't be reused."""
+    from repositories.token_repository import TokenRepository
+
+    repo = TokenRepository()
+    jti = token_data.get("jti")
+    exp = token_data.get("exp")
+    if jti and exp:
+        expires_at = datetime.fromtimestamp(exp, tz=timezone.utc)
+        await repo.blacklist_token(jti, expires_at)
+
+
+@router.post("/refresh", response_model=AuthResponse)
+async def refresh_token(
+    token_data: dict = Depends(extract_token_data),
+    user: UserPublic = Depends(get_current_user),
+):
+    """Refresh the current token: blacklist the old one, issue a new one."""
+    from repositories.token_repository import TokenRepository
+
+    repo = TokenRepository()
+    jti = token_data.get("jti")
+    exp = token_data.get("exp")
+    if jti and exp:
+        expires_at = datetime.fromtimestamp(exp, tz=timezone.utc)
+        await repo.blacklist_token(jti, expires_at)
+
+    new_token = create_access_token(subject=user.id, role=user.role)
+    return AuthResponse(access_token=new_token, user=user)

@@ -270,6 +270,18 @@ class QRCodeORM(Base):
     )
 
 
+class TokenBlacklistORM(Base):
+    __tablename__ = "token_blacklist"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    jti: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    revoked_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=_now,
+    )
+
+
 class StudentEnrollmentORM(Base):
     __tablename__ = "student_enrollments"
     id: Mapped[str] = mapped_column(String(64), primary_key=True)

@@ -147,6 +147,8 @@ async def get_lecture(lecture_id: str, user: UserPublic = Depends(get_current_us
 
 @router.post("/{lecture_id}/publish", response_model=LectureDB)
 async def publish_lecture(lecture_id: str, user: UserPublic = Depends(require_teacher)):
+    from core.deps import AUDIT_PUBLISH, log_audit
+
     repo = LectureRepository()
     lecture = await repo.get_by_id(lecture_id)
     if not lecture or lecture.teacher_id != user.id:
@@ -154,25 +156,56 @@ async def publish_lecture(lecture_id: str, user: UserPublic = Depends(require_te
     if lecture.status != "ready":
         raise HTTPException(status_code=400, detail="Lecture is not ready to publish")
     await repo.update_fields(lecture_id, {"published": True})
+
+    await log_audit(
+        action=AUDIT_PUBLISH,
+        entity_type="lecture",
+        entity_id=lecture_id,
+        details=f"Published lecture: {lecture.title}",
+        admin_id=user.id,
+    )
+
     return await repo.get_by_id(lecture_id)
 
 
 @router.post("/{lecture_id}/unpublish", response_model=LectureDB)
 async def unpublish_lecture(lecture_id: str, user: UserPublic = Depends(require_teacher)):
+    from core.deps import AUDIT_UNPUBLISH, log_audit
+
     repo = LectureRepository()
     lecture = await repo.get_by_id(lecture_id)
     if not lecture or lecture.teacher_id != user.id:
         raise HTTPException(status_code=404, detail="Lecture not found")
     await repo.update_fields(lecture_id, {"published": False})
+
+    await log_audit(
+        action=AUDIT_UNPUBLISH,
+        entity_type="lecture",
+        entity_id=lecture_id,
+        details=f"Unpublished lecture: {lecture.title}",
+        admin_id=user.id,
+    )
+
     return await repo.get_by_id(lecture_id)
 
 
 @router.delete("/{lecture_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_lecture(lecture_id: str, user: UserPublic = Depends(require_teacher)):
+    from core.deps import AUDIT_DELETE, log_audit
+
     repo = LectureRepository()
     lecture = await repo.get_by_id(lecture_id)
     if not lecture or lecture.teacher_id != user.id:
         raise HTTPException(status_code=404, detail="Lecture not found")
+
+    await log_audit(
+        action=AUDIT_DELETE,
+        entity_type="lecture",
+        entity_id=lecture_id,
+        details=f"Deleted lecture: {lecture.title}",
+        admin_id=user.id,
+    )
+
     await repo.delete(lecture_id)
     # also remove the stored file (best-effort)
     storage = get_storage()

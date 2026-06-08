@@ -23,8 +23,11 @@ def verify_password(plain: str, hashed: str) -> bool:
 
 
 def create_access_token(subject: str, role: str, extra: Optional[dict] = None) -> str:
+    import uuid
+
     now = datetime.now(timezone.utc)
     payload = {
+        "jti": str(uuid.uuid4()),  # unique token identifier for revocation
         "sub": subject,
         "role": role,
         "iat": int(now.timestamp()),

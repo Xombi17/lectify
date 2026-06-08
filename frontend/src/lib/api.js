@@ -14,14 +14,66 @@ api.interceptors.request.use((config) => {
     return config;
 });
 
-api.interceptors.response.use(
-    (r) => r,
-    (err) => {
-        if (err?.response?.status === 401) {
-            localStorage.removeItem("lm_token");
-            localStorage.removeItem("lm_user");
+// Response interceptor: handle 401 with token refresh
+let isRefreshing = false;
+let failedQueue = [];
+
+const processQueue = (error, token = null) => {
+    failedQueue.forEach((prom) => {
+        if (error) {
+            prom.reject(error);
+        } else {
+            prom.resolve(token);
         }
-        return Promise.reject(err);
+    });
+    failedQueue = [];
+};
+
+api.interceptors.response.use(
+    (response) => response,
+    async (error) => {
+        const originalRequest = error.config;
+
+        // If 401 and not a refresh/logout request and not already retried
+        if (
+            error.response?.status === 401 &&
+            !originalRequest._retry &&
+            !originalRequest.url?.includes("/auth/refresh") &&
+            !originalRequest.url?.includes("/auth/logout")
+        ) {
+            if (isRefreshing) {
+                // Queue this request until refresh completes
+                return new Promise((resolve, reject) => {
+                    failedQueue.push({ resolve, reject });
+                }).then((token) => {
+                    originalRequest.headers.Authorization = `Bearer ${token}`;
+                    return api(originalRequest);
+                });
+            }
+
+            originalRequest._retry = true;
+            isRefreshing = true;
+
+            try {
+                const response = await api.post("/auth/refresh");
+                const { access_token } = response.data;
+                localStorage.setItem("lm_token", access_token);
+                originalRequest.headers.Authorization = `Bearer ${access_token}`;
+                processQueue(null, access_token);
+                return api(originalRequest);
+            } catch (refreshError) {
+                processQueue(refreshError, null);
+                // Refresh failed — force logout
+                localStorage.removeItem("lm_token");
+                localStorage.removeItem("lm_user");
+                window.location.href = "/auth";
+                return Promise.reject(refreshError);
+            } finally {
+                isRefreshing = false;
+            }
+        }
+
+        return Promise.reject(error);
     }
 );
 

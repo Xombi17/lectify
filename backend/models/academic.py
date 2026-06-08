@@ -214,7 +214,7 @@ class TeacherAssignmentPublic(BaseModel):
 # ============================================================================
 class AuditLogCreate(BaseModel):
     admin_id: str
-    action: str = Field(..., pattern=r"^(create|update|delete)$")
+    action: str = Field(..., pattern=r"^(create|update|delete|publish|unpublish|generate|assign_teacher|unassign_teacher)$")
     entity_type: str
     entity_id: str
     details: Optional[str] = None

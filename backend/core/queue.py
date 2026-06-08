@@ -18,6 +18,8 @@ def get_redis_pool() -> ConnectionPool:
         settings.REDIS_URL,
         max_connections=settings.REDIS_MAX_CONNECTIONS,
         decode_responses=False,  # arq needs bytes for job serialization
+        retry_on_timeout=True,
+        health_check_interval=30,
     )
 
 

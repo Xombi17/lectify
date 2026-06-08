@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState } from "react";
-import { authApi } from "@/lib/api";
+import { api, authApi } from "@/lib/api";
 
 const AuthCtx = createContext(null);
 
@@ -47,10 +47,18 @@ export function AuthProvider({ children }) {
         return u;
     };
 
-    const logout = () => {
-        localStorage.removeItem("lm_token");
-        localStorage.removeItem("lm_user");
-        setUser(null);
+    const logout = async () => {
+        // Call backend to blacklist the token (best-effort)
+        try {
+            await api.post("/auth/logout");
+        } catch (e) {
+            // Even if the request fails, clear local state
+            console.warn("Logout API call failed:", e);
+        } finally {
+            localStorage.removeItem("lm_token");
+            localStorage.removeItem("lm_user");
+            setUser(null);
+        }
     };
 
     return (

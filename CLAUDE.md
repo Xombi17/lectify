@@ -33,7 +33,36 @@ Rules:
 ## Status
 
 Living project status, updated after every feature lands.
-**Last updated:** 2026-06-08 (after Phase 5 — Queue + Worker System)
+**Last updated:** 2026-06-09 (after Phase 8 — Auth Polish)
+
+### What was added (Phase 8 — Auth Polish)
+
+- **RBAC Enforcement** — `backend/core/deps.py`: `require_student()`, `require_role()` factory, `can_access_lecture()`, `get_admin_user()`, blacklist check in `get_current_user()`, `extract_token_data()` with expired-token fallback
+- **Token Session Management** — JTI (UUID) in all JWT payloads, `models/orm.py` (`TokenBlacklistORM`), `models/user.py` (`TokenBlacklistDB`), `repositories/token_repository.py` (`blacklist_token`, `is_blacklisted`, `clean_expired`)
+- **Logout & Refresh** — `routes/auth.py`: `POST /auth/logout` (204, blacklists token), `POST /auth/refresh` (blacklists old, issues new)
+- **Token Cleanup** — `server.py` lifespan: periodic background task (every 6h) removing expired blacklist entries
+- **Frontend Session** — `frontend/src/lib/auth.jsx`: backend logout call; `frontend/src/lib/api.js`: queued 401→refresh interceptor with queued retry
+- **Audit Logging** — `core/deps.py`: `log_audit()` function + 8 action constants; `models/academic.py`: expanded `AuditLogCreate` regex
+- **Admin CRUD Audited** — `routes/admin.py`: all 7 hierarchy entity create/update/delete endpoints wired, old `_log_action()` removed
+- **Lecture Audited** — `routes/lectures.py`: publish/unpublish/delete now log AUDIT_PUBLISH, AUDIT_UNPUBLISH, AUDIT_DELETE
+- **QR Audited** — `routes/qr.py`: QR generation logs AUDIT_GENERATE_QR
+- **Audit Tests** — `tests/test_audit.py`: 6 unit tests for model validation + action types
+- **Test counts:** 28 pass (6 new audit + 22 existing), 4 pre-existing Redis-dependent worker tests
+
+### What was added (Phase 7 — Monitoring + Reliability)
+
+- **Prometheus Metrics** — 12 custom metrics exposed at /metrics via prometheus-fastapi-instrumentator
+  - `backend/services/metrics_service.py` — Counter/Gauge/Histogram for lectures, queue, AI pipeline, processing
+  - `backend/core/config.py` — `PROMETHEUS_ENABLED`, `PROMETHEUS_METRICS_PATH`, `SLA_TARGET_PERCENT`, `SLACK_WEBHOOK_URL`, alert thresholds, `DAILY_SUMMARY_TIME`
+  - `backend/server.py` — Instrumentator in lifespan with `should_group_status_codes=True`, enhanced /health with DB/Storage/Redis probes
+  - `docker-compose.yml` — Prometheus service (port 9090) + Grafana service (port 3000) with provisioning volumes
+- **SLA Tracking** — `backend/services/monitoring_service.py` — `compute_daily_sla()`, `compute_rolling_sla()`, `generate_daily_summary()`, Slack Block Kit formatting
+- **Alert Manager** — `backend/services/alert_service.py` — `AlertManager` with 5-min dedup cooldown, `check_queue_depth()`, `check_dlq_growth()`, `check_sla_breach()`, Slack webhook integration
+- **Background Monitoring Loop** — `backend/server.py` lifespan — periodic loop (every 5 min) for SLA, alerts, daily summary dispatch
+- **Metric Instrumentation** — All workers (`ai.py`, `embedding.py`, `transcription.py`): `queue_retry_count` on exceptions; `queue_client.py`: queue depth/failures tracking; `lecture_service.py`: `ai_generation_duration` timing, `record_lecture_processed`
+- **Grafana Dashboard** — `infra/grafana/dashboards/lectify-overview.json` — 12 panels across API (Request Rate, Latency p95, Error 5xx), Pipeline (Queue Depth, Processing Duration, Failure Rate, DLQ Size), SLA (Same-day %, Processed/24h, Time Trend), and System (AI Gen Latency, Token Consumption)
+- **Infrastructure Config** — `infra/prometheus/prometheus.yml` — scrape target `backend:8001`; `infra/grafana/datasources/prometheus.yml` — uid-based datasource; `infra/grafana/dashboards/dashboard.yml` — provisioning config
+- **Test counts:** 16/20 pass (same baseline — 4 worker tests need Redis)
 
 ### What was added (Phase 5 — Queue + Worker System)
 
@@ -85,7 +114,7 @@ Living project status, updated after every feature lands.
 | **5 — Queue + Worker (C)** | Redis/ARQ queue, 3 worker pools, retry/DLQ, idempotency, priority | **DONE** | 7 plans, 20 new tests, 56 total green, queue-driven pipeline LIVE |
 | **6 — Transcription Integration (D ref.)** | Replace mock with Groq Whisper API, confidence scoring, cost tracking | **DONE** | Groq Whisper API, parallel chunking, Gemini fallback, 11 tests green |
 | **7 — Monitoring + Reliability (F)** | Prometheus, Grafana, SLA tracking, failure alerts | **DONE** | 3 plans, 15 panels, 6 queue metric groups, alert dedup |
-| **8 — Auth Polish (I)** | Full RBAC enforcement, session refresh, audit logging | **PARTIAL** | `core/deps.py` has admin/teacher/student/teacher_or_admin guards |
+| **8 — Auth Polish (I)** | Full RBAC enforcement, session refresh, audit logging | **DONE** | require_student, require_role, can_access_lecture, token blacklist, logout/refresh, audit logging wired to 25+ endpoints |
 | **B — Recording + upload** | Upload, store, transcribe | **DONE** | Pre-GSD, complete |
 | **D — AI pipeline** | Hierarchical chunking, embeddings, summary, notes, quiz, flashcards, exam-tag | **DONE** | `services/ai_service.py` (Gemini 2.5 Flash) |
 | **E — Student features** | Dashboard, search, study, bookmarks, chat | **DONE** | Pre-GSD, complete |
@@ -100,8 +129,8 @@ Living project status, updated after every feature lands.
 | 4 | Admin Dashboard UI (A.5) | **DONE** (4 plans, 6 components, 3 test files) |
 | 5 | Queue + worker system (C) | **DONE** [adc7a54] |
 | 6 | Production transcription (D ref.) | **DONE** (Groq Whisper API, parallel chunks, confidence scoring, 11 tests) |
-| 7 | Monitoring + reliability (F) | Brief NOT written |
-| 8 | Auth polish (I) | Brief NOT written |
+| 7 | Monitoring + reliability (F) | **DONE** (12 custom metrics, 12-panel Grafana dashboard, SLA tracking, Slack alerts, background monitoring loop) |
+| 8 | Auth polish (I) | **DONE** (3 plans: RBAC, session management, audit logging — 28 tests pass) |
 
 ### Graph stats (latest)
 

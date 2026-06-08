@@ -36,6 +36,13 @@ class UserPublic(BaseModel):
     created_at: datetime
 
 
+class TokenBlacklistDB(BaseModel):
+    id: str
+    jti: str
+    expires_at: datetime
+    revoked_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
 class AuthResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"

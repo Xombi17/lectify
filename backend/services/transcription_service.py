@@ -101,7 +101,10 @@ class WhisperProvider(TranscriptionProvider):
         logger.info("Transcribing %s with Groq Whisper (%.1f MB, lang=%s, model=%s)",
                     audio_path.name, file_size / 1024 / 1024, lang, self._model)
 
-        async with httpx.AsyncClient(timeout=300.0) as client:
+        async with httpx.AsyncClient(
+            timeout=300.0,
+            limits=httpx.Limits(max_connections=100, max_keepalive_connections=20),
+        ) as client:
             with open(audio_path, "rb") as f:
                 response = await client.post(
                     self._WHISPER_ENDPOINT,

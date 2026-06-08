@@ -61,6 +61,25 @@ async def lifespan(app: FastAPI):
         instrumentator.instrument(app).expose(app, endpoint=settings.PROMETHEUS_METRICS_PATH)
         logger.info("Prometheus metrics enabled at %s", settings.PROMETHEUS_METRICS_PATH)
 
+    # Token cleanup background task — every 6 hours
+    _token_cleanup_task = None
+
+    async def _cleanup_expired_tokens():
+        """Periodically clean expired token blacklist entries."""
+        while True:
+            try:
+                from repositories.token_repository import TokenRepository
+                repo = TokenRepository()
+                removed = await repo.clean_expired()
+                if removed:
+                    logger.info("Cleaned %d expired token blacklist entries", removed)
+            except Exception as e:
+                logger.warning("Token cleanup failed: %s", e)
+            await asyncio.sleep(6 * 3600)  # 6 hours
+
+    _token_cleanup_task = asyncio.create_task(_cleanup_expired_tokens())
+    logger.info("Token cleanup background task started (every 6h)")
+
     # Monitoring background loop — SLA checks + daily summary + alerts
     _monitor_task = None
     if settings.DAILY_SUMMARY_ENABLED or settings.ALERT_QUEUE_DEPTH_THRESHOLD > 0:
@@ -111,7 +130,9 @@ async def lifespan(app: FastAPI):
         logger.info("Monitoring background loop started")
 
     yield
-    # Cancel monitoring task on shutdown
+    # Cancel background tasks on shutdown
+    if _token_cleanup_task is not None:
+        _token_cleanup_task.cancel()
     if _monitor_task is not None:
         _monitor_task.cancel()
     await close_sql()

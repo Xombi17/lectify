@@ -138,6 +138,8 @@ async def generate_qr(
     _ = Depends(rate_limit_qr_generate),
 ):
     """Generate a QR code for a class. Requires teacher role and class assignment."""
+    from core.deps import AUDIT_GENERATE_QR, log_audit
+
     # Verify class exists
     cls = await ClassRepository().get_by_id(class_id)
     if not cls:
@@ -157,7 +159,17 @@ async def generate_qr(
                 detail="Teacher not assigned to this class",
             )
 
-    return await _create_qr_internal(class_id, user.id)
+    qr_result = await _create_qr_internal(class_id, user.id)
+
+    await log_audit(
+        action=AUDIT_GENERATE_QR,
+        entity_type="qr_code",
+        entity_id=qr_result.id,
+        details=f"Generated QR code for class: {class_id}",
+        admin_id=user.id,
+    )
+
+    return qr_result
 
 
 @router.post(
