@@ -11,7 +11,6 @@ import {
 } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import AppShell from "@/components/AppShell";
 import { reviewApi } from "@/lib/api";
 import { toast } from "sonner";
 
@@ -68,17 +67,13 @@ export default function ReviewPage() {
 
     if (loading) {
         return (
-            <AppShell>
-                <div className="h-64 animate-pulse border border-border bg-muted/40" />
-            </AppShell>
+            <div className="h-64 animate-pulse border border-border bg-muted/40" />
         );
     }
 
     if (queue.length === 0 || done) {
         return (
-            <AppShell>
-                <EmptyState onRefresh={load} reviewed={done && queue.length > 0 ? queue.length : 0} />
-            </AppShell>
+            <EmptyState onRefresh={load} reviewed={done && queue.length > 0 ? queue.length : 0} />
         );
     }
 
@@ -86,7 +81,6 @@ export default function ReviewPage() {
     const progress = Math.round(((i) / queue.length) * 100);
 
     return (
-        <AppShell>
             <div className="mx-auto max-w-3xl">
                 <div className="text-overline mb-3 text-primary">Daily review</div>
                 <h1 className="font-display text-4xl font-black tracking-tighter sm:text-5xl">
@@ -189,7 +183,6 @@ export default function ReviewPage() {
                     </motion.div>
                 )}
             </div>
-        </AppShell>
     );
 }
 

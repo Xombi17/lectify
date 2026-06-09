@@ -1,4 +1,5 @@
 """Main FastAPI entrypoint."""
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 
@@ -56,11 +57,6 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning("Redis not available at startup: %s (workers connect independently)", e)
 
-    # Prometheus metrics endpoint
-    if settings.PROMETHEUS_ENABLED:
-        instrumentator.instrument(app).expose(app, endpoint=settings.PROMETHEUS_METRICS_PATH)
-        logger.info("Prometheus metrics enabled at %s", settings.PROMETHEUS_METRICS_PATH)
-
     # Token cleanup background task — every 6 hours
     _token_cleanup_task = None
 
@@ -99,14 +95,16 @@ async def lifespan(app: FastAPI):
             while True:
                 try:
                     today = datetime.now(timezone.utc).date()
-                    sla = await compute_daily_sla(today)
-
-                    # Check SLA breach
-                    await alert_manager.check_sla_breach(
-                        sla["sla_percent"],
-                        cfg.SLA_TARGET_PERCENT,
-                        today.isoformat(),
-                    )
+                    try:
+                        sla = await compute_daily_sla(today)
+                        # Check SLA breach
+                        await alert_manager.check_sla_breach(
+                            sla["sla_percent"],
+                            cfg.SLA_TARGET_PERCENT,
+                            today.isoformat(),
+                        )
+                    except Exception as inner:
+                        logger.warning("SLA check failed (non-fatal): %s", inner)
 
                     # Send daily summary at configured time (check every 5 min)
                     if cfg.DAILY_SUMMARY_ENABLED and cfg.SLACK_WEBHOOK_URL:
@@ -215,3 +213,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Prometheus instrumentation — must happen BEFORE lifespan starts
+if settings.PROMETHEUS_ENABLED:
+    instrumentator.instrument(app).expose(app, endpoint=settings.PROMETHEUS_METRICS_PATH)
+    logger.info("Prometheus metrics enabled at %s", settings.PROMETHEUS_METRICS_PATH)

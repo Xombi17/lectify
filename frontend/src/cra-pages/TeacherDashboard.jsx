@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { lectureApi } from "@/lib/api";
-import AppShell from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -50,8 +49,7 @@ export default function TeacherDashboard() {
     };
 
     return (
-        <AppShell>
-            <section className="mb-10 flex flex-col items-start justify-between gap-6 md:flex-row md:items-end">
+        <section className="mb-10 flex flex-col items-start justify-between gap-6 md:flex-row md:items-end">
                 <div>
                     <div className="text-overline mb-3 text-primary">Teacher dashboard</div>
                     <h1 className="font-display text-4xl font-black tracking-tighter sm:text-5xl">
@@ -184,7 +182,6 @@ export default function TeacherDashboard() {
                     </div>
                 )}
             </section>
-        </AppShell>
     );
 }
 

@@ -9,7 +9,6 @@ import {
     Tag,
     Trash,
 } from "@phosphor-icons/react";
-import AppShell from "@/components/AppShell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { bookmarkApi } from "@/lib/api";
@@ -54,7 +53,6 @@ export default function BookmarksPage() {
     }, {});
 
     return (
-        <AppShell>
             <div className="text-overline mb-3 text-primary">Saved for later</div>
             <h1 className="font-display text-4xl font-black tracking-tighter sm:text-5xl">
                 Your bookmarks.
@@ -150,6 +148,5 @@ export default function BookmarksPage() {
                     </div>
                 )}
             </div>
-        </AppShell>
     );
 }

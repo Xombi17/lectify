@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { lectureApi } from "@/lib/api";
-import AppShell from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -48,7 +47,6 @@ export default function UploadLecturePage() {
     };
 
     return (
-        <AppShell>
             <div className="mx-auto max-w-3xl">
                 <div className="text-overline mb-3 text-primary">New lecture</div>
                 <h1 className="font-display text-4xl font-black tracking-tighter sm:text-5xl">
@@ -129,7 +127,6 @@ export default function UploadLecturePage() {
                     </div>
                 </form>
             </div>
-        </AppShell>
     );
 }
 

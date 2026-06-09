@@ -2,15 +2,15 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider, useAuth } from "@/lib/auth";
 
-import LandingPage from "@/pages/LandingPage";
-import AuthPage from "@/pages/AuthPage";
-import TeacherDashboard from "@/pages/TeacherDashboard";
-import UploadLecturePage from "@/pages/UploadLecturePage";
-import LectureDetailPage from "@/pages/LectureDetailPage";
-import StudentDashboard from "@/pages/StudentDashboard";
-import ReviewPage from "@/pages/ReviewPage";
-import BookmarksPage from "@/pages/BookmarksPage";
-import AdminDashboard from "@/pages/AdminDashboard";
+import LandingPage from "@/cra-pages/LandingPage";
+import AuthPage from "@/cra-pages/AuthPage";
+import TeacherDashboard from "@/cra-pages/TeacherDashboard";
+import UploadLecturePage from "@/cra-pages/UploadLecturePage";
+import LectureDetailPage from "@/cra-pages/LectureDetailPage";
+import StudentDashboard from "@/cra-pages/StudentDashboard";
+import ReviewPage from "@/cra-pages/ReviewPage";
+import BookmarksPage from "@/cra-pages/BookmarksPage";
+import AdminDashboard from "@/cra-pages/AdminDashboard";
 
 import "@/App.css";
 

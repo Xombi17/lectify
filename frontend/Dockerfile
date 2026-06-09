@@ -1,18 +1,16 @@
-FROM node:20-alpine AS build
-
+FROM node:20-alpine AS builder
 WORKDIR /app
-
-ARG REACT_APP_BACKEND_URL
-ENV REACT_APP_BACKEND_URL=$REACT_APP_BACKEND_URL
-
-COPY package.json yarn.lock ./
-RUN yarn install --frozen-lockfile
-
+COPY package.json package-lock.json ./
+RUN npm ci
 COPY . .
-RUN yarn build
+RUN npm run build
 
-FROM nginx:alpine
-COPY --from=build /app/build /usr/share/nginx/html
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-EXPOSE 80
-CMD ["nginx", "-g", "daemon off;"]
+FROM node:20-alpine AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+COPY --from=builder /app/.next ./.next
+COPY --from=builder /app/public ./public
+COPY --from=builder /app/package.json package-lock.json ./
+RUN npm ci --production
+EXPOSE 3000
+CMD ["npm", "start"]

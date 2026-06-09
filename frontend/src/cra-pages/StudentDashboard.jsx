@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import { Link } from "react-router-dom";
 import { lectureApi, searchApi, analyticsApi } from "@/lib/api";
-import AppShell from "@/components/AppShell";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import {
@@ -68,8 +68,7 @@ export default function StudentDashboard() {
         : lectures;
 
     return (
-        <AppShell>
-            {/* Hero banner */}
+        {/* Hero banner */}
             <section className="mb-10 grid grid-cols-1 gap-6 lg:grid-cols-5">
                 <div className="lg:col-span-3">
                     <div className="text-overline mb-3 text-primary">Your library</div>
@@ -103,10 +102,13 @@ export default function StudentDashboard() {
                 </div>
                 <div className="lg:col-span-2">
                     <div className="relative overflow-hidden border border-border">
-                        <img
+                        <Image
                             src={STUDENT_IMG}
-                            alt="Student"
+                            alt="Student studying"
+                            width={940}
+                            height={650}
                             className="h-48 w-full object-cover lg:h-56"
+                            priority
                         />
                         <div className="absolute inset-0 bg-primary/40" />
                         <div className="absolute bottom-4 left-4 right-4 text-white">
@@ -205,7 +207,6 @@ export default function StudentDashboard() {
                     </div>
                 )}
             </section>
-        </AppShell>
     );
 }
 

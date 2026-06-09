@@ -32,6 +32,8 @@ export function AuthProvider({ children }) {
     const persist = (token, u) => {
         localStorage.setItem("lm_token", token);
         localStorage.setItem("lm_user", JSON.stringify(u));
+        // Dual-write to cookie for Next.js middleware
+        document.cookie = `lm_token=${token}; path=/; max-age=86400; SameSite=Lax`;
         setUser(u);
     };
 
@@ -57,6 +59,8 @@ export function AuthProvider({ children }) {
         } finally {
             localStorage.removeItem("lm_token");
             localStorage.removeItem("lm_user");
+            // Clear cookie for Next.js middleware
+            document.cookie = "lm_token=; path=/; max-age=0; SameSite=Lax";
             setUser(null);
         }
     };

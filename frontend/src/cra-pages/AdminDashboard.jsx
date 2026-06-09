@@ -1,11 +1,9 @@
-import AppShell from "@/components/AppShell";
 import HierarchyTree from "@/components/HierarchyTree";
 import { Buildings } from "@phosphor-icons/react";
 import { motion } from "framer-motion";
 
 export default function AdminDashboard() {
     return (
-        <AppShell>
             <div data-testid="admin-dashboard">
                 <section className="mb-10">
                     <div className="text-overline mb-3 text-primary">Admin dashboard</div>
@@ -25,6 +23,5 @@ export default function AdminDashboard() {
                     <HierarchyTree />
                 </motion.div>
             </div>
-        </AppShell>
     );
 }

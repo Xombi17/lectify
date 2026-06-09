@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { lectureApi, API, bookmarkApi } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import AppShell from "@/components/AppShell";
 import FlashcardDeck from "@/components/FlashcardDeck";
 import QuizRunner from "@/components/QuizRunner";
 import DoubtChat from "@/components/DoubtChat";
@@ -77,13 +76,11 @@ export default function LectureDetailPage() {
             .then((r) => (r.ok ? r.blob() : Promise.reject(r)))
             .then((blob) => setAudioToken(URL.createObjectURL(blob)))
             .catch(() => setAudioToken(null));
-    }, [lecture?.id, lecture?.status]);
+    }, [lecture]);
 
     if (!lecture) {
         return (
-            <AppShell>
-                <div className="h-40 animate-pulse border border-border bg-muted/40" />
-            </AppShell>
+            <div className="h-40 animate-pulse border border-border bg-muted/40" />
         );
     }
 
@@ -114,7 +111,6 @@ export default function LectureDetailPage() {
     };
 
     return (
-        <AppShell>
             <div className="mb-8">
                 <div className="text-overline mb-2 text-primary">Lecture</div>
                 <div className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-end">
@@ -205,7 +201,6 @@ export default function LectureDetailPage() {
             ) : (
                 <ContentTabs lecture={lecture} isOwner={isOwner} onLectureUpdate={setLecture} />
             )}
-        </AppShell>
     );
 }
 
