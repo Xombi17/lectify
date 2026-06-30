@@ -66,6 +66,22 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> UserPublic:
         detail="Invalid authentication credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
+    from core.config import get_settings
+    settings = get_settings()
+
+    if settings.SERVICE_NAME == "interaction":
+        import httpx
+        try:
+            async with httpx.AsyncClient() as client:
+                headers = {"Authorization": f"Bearer {token}"}
+                response = await client.get("http://auth-service:8001/api/auth/me", headers=headers, timeout=5.0)
+                if response.status_code == 200:
+                    return UserPublic(**response.json())
+                else:
+                    raise credentials_exc
+        except Exception:
+            raise credentials_exc
+
     try:
         payload = decode_access_token(token)
         user_id: str = payload.get("sub")

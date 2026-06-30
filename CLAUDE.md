@@ -33,7 +33,19 @@ Rules:
 ## Status
 
 Living project status, updated after every feature lands.
-**Last updated:** 2026-06-09 (after Phase 8 — Auth Polish)
+**Last updated:** 2026-06-30 (after Phase 11 — Microservices Migration)
+
+### What was added (Phase 11 — Microservices Migration)
+
+- **API Gateway Routing Proxy** — `gateway/nginx.conf` routing `/api/auth`, `/api/admin`, `/api/enrollment`, `/api/qr`, `/api/study`, `/api/chat`, `/api/lectures`, and `/api/search` to their respective microservices.
+- **Microservice Routing Switches** — Configured dynamic router mounting based on the `SERVICE_NAME` setting inside `backend/server.py` and `backend/core/config.py` to run the same backend codebase as independent services.
+- **Standalone Worker Pools** — Docker Compose configured with standalone worker processes (`worker-transcription`, `worker-ai`, `worker-embedding`) to run decoupled processing pools.
+- **Inter-service Auth Client** — Refactored token validation in `backend/core/deps.py` to make internal API calls to `auth-service` when running the interaction service.
+- **Integration Tests** — Added `backend/tests/test_gateway_auth.py` to verify API Gateway routing, token exchange, and validation across the proxy.
+- **Test environment fix** — Modified `backend/core/config.py` to detect `pytest` and prevent dotenv overriding test DB connection.
+- **Test counts:** 98 passed, 19/19 passing in `test_academic.py`, 6/6 passing in `test_audit.py`.
+- **New graph nodes:** `test_gateway_auth.py`.
+- **Next card in queue:** Phase 9 — AI Study Expansion (G)
 
 ### What was added (Phase 8 — Auth Polish)
 

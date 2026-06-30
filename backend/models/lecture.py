@@ -59,6 +59,11 @@ class LectureDB(BaseModel):
     materials: StudyMaterials = Field(default_factory=StudyMaterials)
     embedding: Optional[List[float]] = None
     translations: dict = Field(default_factory=dict)
+    # Phase 9: lazy-generated AI content (cached on lecture row)
+    cheatsheet: Optional[dict] = None  # {"sections": [{"heading": "...", "points": [...]}]}
+    podcast_script: Optional[dict] = None  # {"script": "...", "title": "..."}
+    quiz_v2: Optional[list] = None  # list of QuizQuestionV2 dicts
+    concepts_v2: Optional[list] = None  # list of concept dicts
     error_message: Optional[str] = None
     published: bool = False
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -87,3 +92,40 @@ class QuizResult(BaseModel):
     percentage: float
     correct_answers: List[int]
     user_answers: List[int]
+
+
+# ── Phase 9: Quiz v2 models ────────────────────────────────────────────────────
+
+class QuizV2Answer(BaseModel):
+    """Individual answer for a v2 quiz question."""
+    question_index: int
+    answer: int | str | bool | None = None
+
+
+class QuizV2Attempt(BaseModel):
+    """Submission payload for v2 quiz attempt."""
+    answers: List[QuizV2Answer]
+
+
+class QuizV2Result(BaseModel):
+    """Detailed result for v2 quiz attempt."""
+    id: str
+    score: int
+    total: int
+    percentage: float
+    questions: list  # list of QuizQuestionV2 dicts
+    answers: list  # list of QuizV2Answer dicts with correct/correct_answer added
+    topic_scores: dict = Field(default_factory=dict)
+
+
+class CheatsheetResponse(BaseModel):
+    """Lazy-generated cheatsheet response."""
+    sections: list[dict]
+    generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class PodcastScriptResponse(BaseModel):
+    """Lazy-generated podcast narration script."""
+    script: str
+    title: str
+    generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

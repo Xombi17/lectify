@@ -3,6 +3,9 @@
 Today: Google Gemini 2.5 Flash via google-genai SDK.
 Tomorrow: swap to Ollama / vLLM by writing a new `AIProvider` subclass
 and changing one line in `get_ai_service()`.
+
+Also supports NVIDIA NIM (OpenAI-compatible) for text generation and embeddings.
+Select provider via AI_PROVIDER env var ("nim" | "gemini").
 """
 import json
 import logging
@@ -17,6 +20,8 @@ from models.lecture import Flashcard, QuizQuestion, StudyMaterials
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
+
+# ── Prompts ────────────────────────────────────────────────────────────────────
 
 STUDY_PROMPT = """You are an expert academic assistant. Read this lecture transcript and produce a comprehensive study pack.
 
@@ -88,6 +93,106 @@ Rules:
 CHUNK DIGESTS (JSON array, in chronological order):
 """
 
+# ── Phase 9: New prompts for lazy-generated content ─────────────────────────────
+
+CHEATSHEET_PROMPT = """You are an expert academic assistant. Create a concise cheatsheet from this lecture transcript.
+
+Return ONLY valid JSON (no markdown fences):
+{
+  "sections": [
+    {
+      "heading": "Section Title",
+      "points": ["key fact or formula", "another key point", "..."]
+    }
+  ]
+}
+
+Rules:
+- 4-8 sections, each with a clear academic heading.
+- 3-6 bullet points per section — keep them terse and exam-relevant.
+- Prioritise definitions, formulas, theorems, and cause-effect chains.
+- Do NOT include conversational filler.
+
+TRANSCRIPT:
+"""
+
+
+PODCAST_SCRIPT_PROMPT = """You are writing a short podcast narration script for a student audience. Turn this lecture transcript into an engaging 2-3 minute spoken overview.
+
+Return ONLY valid JSON (no markdown fences):
+{
+  "script": "The full narration text, 300-600 words, written in a conversational but academic tone.",
+  "title": "A catchy episode title (under 60 characters)"
+}
+
+Rules:
+- Open with a hook (question, surprising fact, or real-world analogy).
+- Explain 2-4 key concepts in simple language — as if explaining to a classmate.
+- Close with a memorable takeaway or study tip.
+- Use short sentences and natural transitions suitable for text-to-speech.
+- Avoid acronyms that aren't spelled out; avoid complex formulas in speech form.
+
+TRANSCRIPT:
+"""
+
+
+QUIZ_V2_PROMPT = """You are generating a fresh quiz from a lecture transcript. Produce varied, high-quality questions.
+
+Return ONLY valid JSON (no markdown fences):
+{
+  "questions": [
+    {
+      "type": "multiple_choice",
+      "question": "The question text?",
+      "options": ["A", "B", "C", "D"],
+      "answer_index": 0,
+      "explanation": "Why this is correct.",
+      "difficulty": "medium",
+      "topic": "The topic this covers"
+    }
+  ]
+}
+
+Rules:
+- Exactly 10 questions total:
+  - 5 multiple_choice (4 options, answer_index 0-3)
+  - 3 true_false (options: ["True", "False"])
+  - 2 fill_blank (options: [], answer: "the exact answer string", accepted_answers: ["alt1", "alt2"])
+- Mix difficulties: ~3 easy, ~4 medium, ~3 hard.
+- Each question must have a clear topic (1-3 words).
+- For fill_blank: the question should contain "____" where the answer goes.
+
+TRANSCRIPT:
+"""
+
+
+CONCEPTS_V2_PROMPT = """You are extracting and expanding key concepts from a lecture for deep study.
+
+Return ONLY valid JSON (no markdown fences):
+{
+  "concepts": [
+    {
+      "name": "Concept Name",
+      "definition": "1-2 sentence definition",
+      "explanation": "3-5 sentence deeper explanation with examples",
+      "importance": "exam_importance" or "foundational" or "applied",
+      "related_concepts": ["Related concept 1", "Related concept 2"]
+    }
+  ]
+}
+
+Rules:
+- Extract 6-12 core concepts from the transcript.
+- importance must be one of: "exam_importance", "foundational", "applied".
+- Each explanation should include at least one example or analogy.
+- related_concepts should reference other concepts in this list where possible.
+- Order by importance (exam_importance first).
+
+TRANSCRIPT:
+"""
+
+
+# ── ABC ─────────────────────────────────────────────────────────────────────────
 
 class AIProvider(ABC):
     @abstractmethod
@@ -111,6 +216,25 @@ class AIProvider(ABC):
     @abstractmethod
     async def embed(self, text: str) -> list[float]: ...
 
+    # Phase 9: lazy-generated content methods (not abstract — default raises)
+    async def generate_cheatsheet(self, transcript: str) -> dict:
+        """Lazy-generated cheatsheet. Override in provider subclasses."""
+        raise NotImplementedError("Cheatsheet generation not supported by this provider")
+
+    async def generate_podcast_script(self, transcript: str) -> dict:
+        """Lazy-generated podcast narration script. Override in provider subclasses."""
+        raise NotImplementedError("Podcast script generation not supported by this provider")
+
+    async def generate_quiz_v2(self, transcript: str) -> list[dict]:
+        """Lazy-generated v2 quiz questions (MC/TF/fill-blank). Override in provider subclasses."""
+        raise NotImplementedError("Quiz v2 generation not supported by this provider")
+
+    async def generate_concepts_v2(self, transcript: str) -> list[dict]:
+        """Lazy-generated v2 concept deep-dives. Override in provider subclasses."""
+        raise NotImplementedError("Concepts v2 generation not supported by this provider")
+
+
+# ── Gemini Provider ────────────────────────────────────────────────────────────
 
 class GeminiProvider(AIProvider):
     def __init__(self, api_key: str, model: str):
@@ -138,6 +262,34 @@ class GeminiProvider(AIProvider):
     async def generate_study_materials(self, transcript: str) -> StudyMaterials:
         from google.genai import types
         prompt = STUDY_PROMPT + transcript[:120_000]  # safety guard
+        response = self._client.models.generate_content(
+            model=self._model,
+            contents=prompt,
+            config=types.GenerateContentConfig(response_mime_type="application/json"),
+        )
+        raw = (response.text or "").strip()
+        data = _parse_json_lenient(raw)
+        return StudyMaterials(
+            summary=data.get("summary"),
+            smart_notes=list(data.get("smart_notes") or []),
+            key_concepts=list(data.get("key_concepts") or []),
+            quiz=[QuizQuestion(**q) for q in (data.get("quiz") or []) if _valid_quiz(q)],
+            flashcards=[Flashcard(**c) for c in (data.get("flashcards") or []) if _valid_card(c)],
+        )
+
+    async def digest_chunk(self, chunk_transcript: str) -> dict:
+        from google.genai import types
+        prompt = CHUNK_DIGEST_PROMPT + chunk_transcript[:60_000]
+        response = self._client.models.generate_content(
+            model=self._model,
+            contents=prompt,
+            config=types.GenerateContentConfig(response_mime_type="application/json"),
+        )
+        return _parse_json_lenient(response.text or "{}")
+
+    async def merge_chunk_digests(self, digests: list[dict]) -> StudyMaterials:
+        from google.genai import types
+        prompt = HIERARCHICAL_MERGE_PROMPT + json.dumps(digests, ensure_ascii=False)
         response = self._client.models.generate_content(
             model=self._model,
             contents=prompt,
@@ -204,6 +356,179 @@ class GeminiProvider(AIProvider):
         emb = resp.embeddings[0]
         return list(emb.values)
 
+    # Phase 9 overrides for Gemini
+    async def _generate_json(self, prompt: str, max_tokens: int = 4096) -> dict:
+        """Shared helper: call Gemini with JSON mode."""
+        from google.genai import types
+        response = self._client.models.generate_content(
+            model=self._model,
+            contents=prompt,
+            config=types.GenerateContentConfig(response_mime_type="application/json"),
+        )
+        return _parse_json_lenient(response.text or "{}")
+
+    async def generate_cheatsheet(self, transcript: str) -> dict:
+        return await self._generate_json(CHEATSHEET_PROMPT + transcript[:100_000])
+
+    async def generate_podcast_script(self, transcript: str) -> dict:
+        return await self._generate_json(PODCAST_SCRIPT_PROMPT + transcript[:100_000])
+
+    async def generate_quiz_v2(self, transcript: str) -> list[dict]:
+        data = await self._generate_json(QUIZ_V2_PROMPT + transcript[:120_000])
+        return data.get("questions", [])
+
+    async def generate_concepts_v2(self, transcript: str) -> list[dict]:
+        data = await self._generate_json(CONCEPTS_V2_PROMPT + transcript[:100_000])
+        return data.get("concepts", [])
+
+
+# ── NVIDIA NIM Provider ─────────────────────────────────────────────────────────
+
+class NIMProvider(AIProvider):
+    """OpenAI-compatible provider using NVIDIA NIM API.
+
+    Handles text generation and embeddings. Delegates transcription to
+    the Gemini fallback provider (NIM has no audio models).
+    """
+
+    def __init__(self, api_key: str, base_url: str, chat_model: str, embed_model: str):
+        from openai import AsyncOpenAI  # lazy import
+        self._client = AsyncOpenAI(api_key=api_key, base_url=base_url)
+        self._chat_model = chat_model
+        self._embed_model = embed_model
+        self._gemini: GeminiProvider | None = None
+
+    def _get_gemini(self) -> GeminiProvider:
+        """Lazy-initialise a Gemini client for transcription fallback."""
+        if self._gemini is None:
+            if not settings.GEMINI_API_KEY:
+                raise RuntimeError(
+                    "NIM provider requires GEMINI_API_KEY as transcription fallback. "
+                    "Set GEMINI_API_KEY in backend/.env."
+                )
+            self._gemini = GeminiProvider(settings.GEMINI_API_KEY, settings.GEMINI_MODEL)
+        return self._gemini
+
+    # ── Transcription (delegated to Gemini) ────────────────────────────────────
+
+    async def transcribe_audio(self, audio_path: Path, mime_type: str) -> str:
+        """NIM has no audio models — delegate to Gemini."""
+        logger.info("NIM: delegating transcription to Gemini fallback")
+        return await self._get_gemini().transcribe_audio(audio_path, mime_type)
+
+    # ── Core AI methods ────────────────────────────────────────────────────────
+
+    async def _chat_completion(self, prompt: str, json_mode: bool = False, max_tokens: int = 4096) -> str:
+        """Shared helper: call NIM chat completion."""
+        kwargs: dict = {
+            "model": self._chat_model,
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": max_tokens,
+        }
+        if json_mode:
+            kwargs["response_format"] = {"type": "json_object"}
+        response = await self._client.chat.completions.create(**kwargs)
+        return (response.choices[0].message.content or "").strip()
+
+    async def generate_study_materials(self, transcript: str) -> StudyMaterials:
+        prompt = STUDY_PROMPT + transcript[:120_000]
+        raw = await self._chat_completion(prompt, json_mode=True, max_tokens=4096)
+        data = _parse_json_lenient(raw)
+        return StudyMaterials(
+            summary=data.get("summary"),
+            smart_notes=list(data.get("smart_notes") or []),
+            key_concepts=list(data.get("key_concepts") or []),
+            quiz=[QuizQuestion(**q) for q in (data.get("quiz") or []) if _valid_quiz(q)],
+            flashcards=[Flashcard(**c) for c in (data.get("flashcards") or []) if _valid_card(c)],
+        )
+
+    async def digest_chunk(self, chunk_transcript: str) -> dict:
+        prompt = CHUNK_DIGEST_PROMPT + chunk_transcript[:60_000]
+        raw = await self._chat_completion(prompt, json_mode=True)
+        return _parse_json_lenient(raw)
+
+    async def merge_chunk_digests(self, digests: list[dict]) -> StudyMaterials:
+        prompt = HIERARCHICAL_MERGE_PROMPT + json.dumps(digests, ensure_ascii=False)
+        raw = await self._chat_completion(prompt, json_mode=True, max_tokens=4096)
+        data = _parse_json_lenient(raw)
+        return StudyMaterials(
+            summary=data.get("summary"),
+            smart_notes=list(data.get("smart_notes") or []),
+            key_concepts=list(data.get("key_concepts") or []),
+            quiz=[QuizQuestion(**q) for q in (data.get("quiz") or []) if _valid_quiz(q)],
+            flashcards=[Flashcard(**c) for c in (data.get("flashcards") or []) if _valid_card(c)],
+        )
+
+    async def chat(self, transcript: str, history: list[dict], question: str) -> str:
+        """RAG-style Q&A bound to the lecture transcript."""
+        system = (
+            "You are LectureMind, a study assistant. Answer the student's question using "
+            "ONLY the lecture transcript below. If the transcript doesn't contain the "
+            "answer, say so honestly. Be concise, accurate, and student-friendly. "
+            "Use markdown formatting for lists and emphasis when helpful."
+        )
+        messages: list[dict] = [
+            {"role": "system", "content": system + f"\n\n--- LECTURE TRANSCRIPT ---\n{transcript[:80_000]}\n--- END TRANSCRIPT ---"},
+        ]
+        for m in history[-10:]:
+            messages.append({"role": m.get("role", "user"), "content": m.get("content", "").strip()})
+        messages.append({"role": "user", "content": question.strip()})
+        response = await self._client.chat.completions.create(
+            model=self._chat_model,
+            messages=messages,
+            max_tokens=1024,
+        )
+        return (response.choices[0].message.content or "").strip()
+
+    async def translate_pack(self, pack: dict, target_language: str) -> dict:
+        prompt = (
+            f"Translate the following JSON object into {target_language}. "
+            "Preserve technical terminology, mathematical formulas, code, and proper "
+            "nouns. Keep the JSON structure identical — only translate string VALUES, "
+            "never keys. Output ONLY the translated JSON with no commentary.\n\n"
+            f"{json.dumps(pack, ensure_ascii=False)}"
+        )
+        raw = await self._chat_completion(prompt, json_mode=True, max_tokens=4096)
+        return _parse_json_lenient(raw)
+
+    async def embed(self, text: str) -> list[float]:
+        """Text embedding via NIM embedding model."""
+        response = await self._client.embeddings.create(
+            model=self._embed_model,
+            input=text[:8_000],
+        )
+        return list(response.data[0].embedding)
+
+    # ── Phase 9: Lazy-generated content ─────────────────────────────────────────
+
+    async def generate_cheatsheet(self, transcript: str) -> dict:
+        raw = await self._chat_completion(
+            CHEATSHEET_PROMPT + transcript[:100_000], json_mode=True, max_tokens=4096
+        )
+        return _parse_json_lenient(raw)
+
+    async def generate_podcast_script(self, transcript: str) -> dict:
+        raw = await self._chat_completion(
+            PODCAST_SCRIPT_PROMPT + transcript[:100_000], json_mode=True, max_tokens=2048
+        )
+        return _parse_json_lenient(raw)
+
+    async def generate_quiz_v2(self, transcript: str) -> list[dict]:
+        raw = await self._chat_completion(
+            QUIZ_V2_PROMPT + transcript[:120_000], json_mode=True, max_tokens=4096
+        )
+        data = _parse_json_lenient(raw)
+        return data.get("questions", [])
+
+    async def generate_concepts_v2(self, transcript: str) -> list[dict]:
+        raw = await self._chat_completion(
+            CONCEPTS_V2_PROMPT + transcript[:100_000], json_mode=True, max_tokens=4096
+        )
+        data = _parse_json_lenient(raw)
+        return data.get("concepts", [])
+
+
+# ── Shared helpers ─────────────────────────────────────────────────────────────
 
 def _parse_json_lenient(raw: str) -> dict:
     """Parse JSON even if the model wraps it in code fences or trailing text."""
@@ -238,21 +563,52 @@ def _valid_card(c: dict) -> bool:
     return isinstance(c, dict) and isinstance(c.get("front"), str) and isinstance(c.get("back"), str)
 
 
+# ── Factory ────────────────────────────────────────────────────────────────────
+
 _provider: Optional[AIProvider] = None
 
 
 def get_ai_service() -> AIProvider:
-    """Lazy singleton so the app can boot before a key is provided."""
+    """Lazy singleton — selects provider based on AI_PROVIDER env var.
+
+    - "nim"  → NIMProvider (requires NIM_API_KEY; GEMINI_API_KEY for transcription fallback)
+    - "gemini" (default) → GeminiProvider (requires GEMINI_API_KEY)
+    """
     global _provider
     if _provider is None:
-        if not settings.GEMINI_API_KEY:
-            raise RuntimeError(
-                "GEMINI_API_KEY is not set. Set it in backend/.env to enable AI processing."
+        provider_name = settings.AI_PROVIDER.lower()
+
+        if provider_name == "nim":
+            if not settings.NIM_API_KEY:
+                raise RuntimeError(
+                    "AI_PROVIDER=nim but NIM_API_KEY is not set. "
+                    "Set it in backend/.env or switch to AI_PROVIDER=gemini."
+                )
+            _provider = NIMProvider(
+                api_key=settings.NIM_API_KEY,
+                base_url=settings.NIM_BASE_URL,
+                chat_model=settings.NIM_CHAT_MODEL,
+                embed_model=settings.NIM_EMBED_MODEL,
             )
-        _provider = GeminiProvider(settings.GEMINI_API_KEY, settings.GEMINI_MODEL)
+            logger.info("AI provider: NVIDIA NIM (chat=%s, embed=%s)", settings.NIM_CHAT_MODEL, settings.NIM_EMBED_MODEL)
+
+        elif provider_name == "gemini":
+            if not settings.GEMINI_API_KEY:
+                raise RuntimeError(
+                    "AI_PROVIDER=gemini but GEMINI_API_KEY is not set. "
+                    "Set it in backend/.env to enable AI processing."
+                )
+            _provider = GeminiProvider(settings.GEMINI_API_KEY, settings.GEMINI_MODEL)
+            logger.info("AI provider: Gemini (%s)", settings.GEMINI_MODEL)
+
+        else:
+            raise RuntimeError(
+                f"Unknown AI_PROVIDER '{provider_name}'. Must be 'nim' or 'gemini'."
+            )
     return _provider
 
 
 def reset_ai_service() -> None:
+    """Reset the singleton (useful for tests or hot-reload)."""
     global _provider
     _provider = None

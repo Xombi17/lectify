@@ -1,4 +1,6 @@
-import { Link } from "react-router-dom";
+"use client";
+
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import {
     GraduationCap,
@@ -18,7 +20,7 @@ export default function LandingPage() {
             {/* Nav */}
             <header className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur">
                 <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
-                    <Link to="/" className="flex items-center gap-2" data-testid="landing-brand">
+                    <Link href="/" className="flex items-center gap-2" data-testid="landing-brand">
                         <div className="flex h-8 w-8 items-center justify-center bg-primary text-primary-foreground">
                             <GraduationCap size={20} weight="duotone" />
                         </div>
@@ -28,10 +30,10 @@ export default function LandingPage() {
                         </div>
                     </Link>
                     <div className="flex items-center gap-2">
-                        <Link to="/login" data-testid="landing-login-link">
+                        <Link href="/login" data-testid="landing-login-link">
                             <Button variant="ghost" size="sm">Sign in</Button>
                         </Link>
-                        <Link to="/signup" data-testid="landing-signup-link">
+                        <Link href="/signup" data-testid="landing-signup-link">
                             <Button size="sm" className="transition-transform hover:scale-[1.02]">
                                 Get started <ArrowRight size={14} className="ml-1" />
                             </Button>
@@ -61,7 +63,7 @@ export default function LandingPage() {
                             institutions, beloved by students.
                         </p>
                         <div className="mt-10 flex flex-wrap gap-3">
-                            <Link to="/signup" data-testid="hero-cta-signup">
+                            <Link href="/signup" data-testid="hero-cta-signup">
                                 <Button
                                     size="lg"
                                     className="transition-transform hover:scale-[1.02] active:scale-[0.98]"
@@ -70,7 +72,7 @@ export default function LandingPage() {
                                     Start free
                                 </Button>
                             </Link>
-                            <Link to="/login" data-testid="hero-cta-login">
+                            <Link href="/login" data-testid="hero-cta-login">
                                 <Button variant="outline" size="lg">
                                     I already have an account
                                 </Button>
@@ -149,7 +151,7 @@ export default function LandingPage() {
                         </span>
                     </h2>
                     <div className="mt-10 flex justify-center">
-                        <Link to="/signup" data-testid="footer-cta">
+                        <Link href="/signup" data-testid="footer-cta">
                             <Button
                                 size="lg"
                                 variant="secondary"

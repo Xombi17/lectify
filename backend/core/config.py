@@ -8,12 +8,20 @@ from functools import lru_cache
 from pathlib import Path
 
 from dotenv import load_dotenv
+import sys
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
-load_dotenv(ROOT_DIR / ".env", override=True)
+is_testing = "pytest" in sys.modules or (len(sys.argv) > 0 and "pytest" in sys.argv[0])
+load_dotenv(ROOT_DIR / ".env", override=not is_testing)
+if is_testing:
+    os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///:memory:"
+
 
 
 class Settings:
+    # Service identity (microservices split)
+    SERVICE_NAME: str = os.environ.get("SERVICE_NAME", "monolith")
+
     # Database
     DATABASE_BACKEND: str = os.environ.get("DATABASE_BACKEND", "postgres")
     DATABASE_URL: str = os.environ.get("DATABASE_URL", "")  # postgres:// or sqlite+aiosqlite://
@@ -28,9 +36,18 @@ class Settings:
     JWT_ALGORITHM: str = os.environ.get("JWT_ALGORITHM", "HS256")
     JWT_EXPIRE_MINUTES: int = int(os.environ.get("JWT_EXPIRE_MINUTES", "10080"))
 
-    # Gemini
+    # AI Provider selection
+    AI_PROVIDER: str = os.environ.get("AI_PROVIDER", "gemini")  # "nim" | "gemini"
+
+    # Gemini (used when AI_PROVIDER=gemini, or as transcription fallback)
     GEMINI_API_KEY: str = os.environ.get("GEMINI_API_KEY", "")
     GEMINI_MODEL: str = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+
+    # NVIDIA NIM (used when AI_PROVIDER=nim)
+    NIM_API_KEY: str = os.environ.get("NIM_API_KEY", "")
+    NIM_BASE_URL: str = os.environ.get("NIM_BASE_URL", "https://integrate.api.nvidia.com/v1")
+    NIM_CHAT_MODEL: str = os.environ.get("NIM_CHAT_MODEL", "meta/llama-3.1-405b-instruct")
+    NIM_EMBED_MODEL: str = os.environ.get("NIM_EMBED_MODEL", "nvidia/nv-embed-v1")
 
     # Groq Whisper
     GROQ_API_KEY: str = os.environ.get("GROQ_API_KEY", "")

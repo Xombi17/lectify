@@ -132,11 +132,211 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        REACT_APP_BACKEND_URL: ${REACT_APP_BACKEND_URL:-http://localhost:8001}
+        REACT_APP_BACKEND_URL: ${REACT_APP_BACKEND_URL:-http://localhost:8000} # Point frontend to Gateway (port 8000)
     depends_on:
       - backend
+      - gateway
     ports:
       - "3000:80"
+
+  auth-service:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: uvicorn server:app --host 0.0.0.0 --port 8001
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SERVICE_NAME: auth
+      DATABASE_BACKEND: postgres
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-lecturemind}:${POSTGRES_PASSWORD:-lecturemind}@postgres:5432/${POSTGRES_DB:-lecturemind}
+      JWT_SECRET: ${JWT_SECRET:?set a strong JWT_SECRET}
+      JWT_ALGORITHM: HS256
+      JWT_EXPIRE_MINUTES: 10080
+      CORS_ORIGINS: "http://localhost:3000"
+
+  academic-service:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: uvicorn server:app --host 0.0.0.0 --port 8002
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SERVICE_NAME: academic
+      DATABASE_BACKEND: postgres
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-lecturemind}:${POSTGRES_PASSWORD:-lecturemind}@postgres:5432/${POSTGRES_DB:-lecturemind}
+      JWT_SECRET: ${JWT_SECRET:?set a strong JWT_SECRET}
+      JWT_ALGORITHM: HS256
+      JWT_EXPIRE_MINUTES: 10080
+      CORS_ORIGINS: "http://localhost:3000"
+
+  interaction-service:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: uvicorn server:app --host 0.0.0.0 --port 8004
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+    environment:
+      SERVICE_NAME: interaction
+      DATABASE_BACKEND: postgres
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-lecturemind}:${POSTGRES_PASSWORD:-lecturemind}@postgres:5432/${POSTGRES_DB:-lecturemind}
+      JWT_SECRET: ${JWT_SECRET:?set a strong JWT_SECRET}
+      JWT_ALGORITHM: HS256
+      JWT_EXPIRE_MINUTES: 10080
+      REDIS_URL: redis://redis:6379/0
+      CORS_ORIGINS: "http://localhost:3000"
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USERNAME: neo4j
+      NEO4J_PASSWORD: lecturemind
+      STORAGE_BACKEND: s3
+      OBJECT_STORAGE_ENDPOINT: http://minio:9000
+      OBJECT_STORAGE_REGION: us-east-1
+      OBJECT_STORAGE_BUCKET: ${OBJECT_STORAGE_BUCKET:-lecture-audio}
+      OBJECT_STORAGE_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      OBJECT_STORAGE_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+
+  ingestion-service:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: uvicorn server:app --host 0.0.0.0 --port 8003
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    environment:
+      SERVICE_NAME: ingestion
+      DATABASE_BACKEND: postgres
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-lecturemind}:${POSTGRES_PASSWORD:-lecturemind}@postgres:5432/${POSTGRES_DB:-lecturemind}
+      JWT_SECRET: ${JWT_SECRET:?set a strong JWT_SECRET}
+      JWT_ALGORITHM: HS256
+      JWT_EXPIRE_MINUTES: 10080
+      REDIS_URL: redis://redis:6379/0
+      CORS_ORIGINS: "http://localhost:3000"
+      STORAGE_BACKEND: s3
+      OBJECT_STORAGE_ENDPOINT: http://minio:9000
+      OBJECT_STORAGE_REGION: us-east-1
+      OBJECT_STORAGE_BUCKET: ${OBJECT_STORAGE_BUCKET:-lecture-audio}
+      OBJECT_STORAGE_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      OBJECT_STORAGE_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+
+  search-service:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: uvicorn server:app --host 0.0.0.0 --port 8005
+    depends_on:
+      postgres:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+    environment:
+      SERVICE_NAME: search
+      DATABASE_BACKEND: postgres
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-lecturemind}:${POSTGRES_PASSWORD:-lecturemind}@postgres:5432/${POSTGRES_DB:-lecturemind}
+      JWT_SECRET: ${JWT_SECRET:?set a strong JWT_SECRET}
+      JWT_ALGORITHM: HS256
+      JWT_EXPIRE_MINUTES: 10080
+      CORS_ORIGINS: "http://localhost:3000"
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USERNAME: neo4j
+      NEO4J_PASSWORD: lecturemind
+
+  worker-transcription:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: python -c "import asyncio; from workers.base import worker_main; from workers.transcription import TranscriptionWorker; asyncio.run(worker_main(TranscriptionWorker))"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    environment:
+      DATABASE_BACKEND: postgres
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-lecturemind}:${POSTGRES_PASSWORD:-lecturemind}@postgres:5432/${POSTGRES_DB:-lecturemind}
+      REDIS_URL: redis://redis:6379/0
+      STORAGE_BACKEND: s3
+      OBJECT_STORAGE_ENDPOINT: http://minio:9000
+      OBJECT_STORAGE_REGION: us-east-1
+      OBJECT_STORAGE_BUCKET: ${OBJECT_STORAGE_BUCKET:-lecture-audio}
+      OBJECT_STORAGE_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      OBJECT_STORAGE_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      GROQ_API_KEY: ${GROQ_API_KEY}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+
+  worker-ai:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: python -c "import asyncio; from workers.base import worker_main; from workers.ai import AIWorker; asyncio.run(worker_main(AIWorker))"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+    environment:
+      DATABASE_BACKEND: postgres
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-lecturemind}:${POSTGRES_PASSWORD:-lecturemind}@postgres:5432/${POSTGRES_DB:-lecturemind}
+      REDIS_URL: redis://redis:6379/0
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USERNAME: neo4j
+      NEO4J_PASSWORD: lecturemind
+
+  worker-embedding:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: python -c "import asyncio; from workers.base import worker_main; from workers.embedding import EmbeddingWorker; asyncio.run(worker_main(EmbeddingWorker))"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+    environment:
+      DATABASE_BACKEND: postgres
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-lecturemind}:${POSTGRES_PASSWORD:-lecturemind}@postgres:5432/${POSTGRES_DB:-lecturemind}
+      REDIS_URL: redis://redis:6379/0
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USERNAME: neo4j
+      NEO4J_PASSWORD: lecturemind
+
+  gateway:
+    image: nginx:alpine
+    volumes:
+      - ./gateway/nginx.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "8000:8000"
+    depends_on:
+      - backend
+      - auth-service
+      - academic-service
+      - interaction-service
+      - ingestion-service
+      - search-service
+
+
 
   prometheus:
     image: prom/prometheus:latest

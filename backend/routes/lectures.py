@@ -1,4 +1,5 @@
-"""Lecture routes — upload, list, detail, publish, quiz attempt."""
+"""Lecture routes — upload, list, detail, publish, quiz attempt, Phase 9 content."""
+import logging
 import os
 from datetime import datetime, timezone
 from pathlib import Path
@@ -16,15 +17,23 @@ from fastapi.responses import StreamingResponse
 
 from core.deps import get_current_user, require_teacher
 from core.queue_config import compute_priority_score
+from models.chat import QuizAnswer, QuizAttemptRecord, QuizQuestionV2
 from models.job import JobCreate, JobPublic
 from models.lecture import (
+    CheatsheetResponse,
     LectureDB,
     LectureSummary,
+    PodcastScriptResponse,
     QuizAttempt,
     QuizResult,
+    QuizV2Answer,
+    QuizV2Attempt,
+    QuizV2Result,
 )
 from models.user import UserPublic
+from repositories.attempt_repository import AttemptRepository
 from repositories.lecture_repository import LectureRepository
+from services.ai_service import get_ai_service
 from services.lecture_service import (
     ALLOWED_AUDIO_MIME,
     normalize_mime,
@@ -32,6 +41,7 @@ from services.lecture_service import (
 from services.queue_client import enqueue_job
 from services.storage_service import get_storage
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/lectures", tags=["lectures"])
 
 

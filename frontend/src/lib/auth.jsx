@@ -5,6 +5,7 @@ const AuthCtx = createContext(null);
 
 export function AuthProvider({ children }) {
     const [user, setUser] = useState(() => {
+        if (typeof window === "undefined") return null;
         const raw = localStorage.getItem("lm_user");
         return raw ? JSON.parse(raw) : null;
     });

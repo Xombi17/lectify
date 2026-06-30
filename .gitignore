@@ -132,3 +132,6 @@ credentials.json
 
 # Prisma dev artifacts (generated client lives in node_modules)
 prisma/generated/
+
+*.mp3
+*.wav

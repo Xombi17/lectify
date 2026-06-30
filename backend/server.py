@@ -149,7 +149,7 @@ api_router = APIRouter(prefix="/api")
 
 @api_router.get("/")
 async def root():
-    return {"service": "lecturemind-api", "status": "ok"}
+    return {"service": f"{settings.SERVICE_NAME}-service" if settings.SERVICE_NAME != "monolith" else "lecturemind-api", "status": "ok"}
 
 
 @api_router.get("/health")
@@ -162,7 +162,7 @@ async def health():
 
     checks = {}
 
-    # Database check
+    # Database check (all services need this)
     try:
         async with session_maker()() as s:
             from sqlalchemy import text
@@ -171,39 +171,57 @@ async def health():
     except Exception as e:
         checks["database"] = f"error: {e}"
 
-    # Storage check
-    try:
-        storage = get_storage()
-        await storage.list_objects(prefix="health_check/", max_keys=1)
-        checks["storage"] = "ok"
-    except AttributeError:
-        # Some storage backends may not have list_objects; assume ok
-        checks["storage"] = "ok"
-    except Exception as e:
-        checks["storage"] = f"error: {e}"
+    # Storage check (only monolith and ingestion/interaction need this)
+    if settings.SERVICE_NAME in ("monolith", "ingestion", "interaction"):
+        try:
+            storage = get_storage()
+            await storage.list_objects(prefix="health_check/", max_keys=1)
+            checks["storage"] = "ok"
+        except AttributeError:
+            checks["storage"] = "ok"
+        except Exception as e:
+            checks["storage"] = f"error: {e}"
 
-    # Redis check
-    try:
-        from core.queue import get_redis
-        redis = get_redis()
-        await redis.ping()
-        checks["redis"] = "ok"
-    except Exception as e:
-        checks["redis"] = f"error: {e}"
+    # Redis check (only monolith and ingestion/interaction need this)
+    if settings.SERVICE_NAME in ("monolith", "ingestion", "interaction"):
+        try:
+            from core.queue import get_redis
+            redis = get_redis()
+            await redis.ping()
+            checks["redis"] = "ok"
+        except Exception as e:
+            checks["redis"] = f"error: {e}"
 
     overall = "ok" if all(v == "ok" for v in checks.values()) else "degraded"
     return {"status": overall, "checks": checks, "timestamp": datetime.now(timezone.utc).isoformat()}
 
 
-api_router.include_router(auth_router)
-api_router.include_router(lectures_router)
-api_router.include_router(chat_router)
-api_router.include_router(enrollment_router)
-api_router.include_router(search_router)
-api_router.include_router(analytics_router)
-api_router.include_router(study_router)
-api_router.include_router(admin_router)
-api_router.include_router(qr_router)
+# Conditional routing based on SERVICE_NAME
+if settings.SERVICE_NAME == "auth":
+    api_router.include_router(auth_router)
+elif settings.SERVICE_NAME == "academic":
+    api_router.include_router(admin_router)
+    api_router.include_router(enrollment_router)
+    api_router.include_router(qr_router)
+elif settings.SERVICE_NAME == "interaction":
+    api_router.include_router(chat_router)
+    api_router.include_router(study_router)
+elif settings.SERVICE_NAME == "ingestion":
+    api_router.include_router(lectures_router)
+elif settings.SERVICE_NAME == "search":
+    api_router.include_router(search_router)
+else:
+    # default monolith behavior
+    api_router.include_router(auth_router)
+    api_router.include_router(lectures_router)
+    api_router.include_router(chat_router)
+    api_router.include_router(enrollment_router)
+    api_router.include_router(search_router)
+    api_router.include_router(analytics_router)
+    api_router.include_router(study_router)
+    api_router.include_router(admin_router)
+    api_router.include_router(qr_router)
+
 app.include_router(api_router)
 
 app.add_middleware(
