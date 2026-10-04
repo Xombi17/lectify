@@ -1,0 +1,7 @@
+{
+  "name": "lectify-cdk",
+  "private": true,
+  "devDependencies": {
+    "aws-cdk": "2.1144.0"
+  }
+}

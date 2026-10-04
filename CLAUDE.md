@@ -180,6 +180,7 @@ See [.planning/PROJECT.md](.planning/PROJECT.md) for full project context — re
 - **AI:** Google Gemini 2.5 Flash (transcription, summarization, quiz/flashcard gen)
 - **Auth:** Custom JWT with role-based access (admin, teacher, student)
 - **Search:** Lexical + cosine similarity
+- **IaC:** AWS CDK (Python 3.12 venv) in infra/cdk: BudgetStack + NetworkStack (Phase 12); see infra/cdk/README.md
 - **Dev tools:** Graphify (knowledge graph), Prisma (schema management), aiosqlite (in-process tests)
 <!-- GSD:stack-end -->
 
