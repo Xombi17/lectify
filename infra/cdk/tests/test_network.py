@@ -7,7 +7,7 @@ from lectify_cdk.network_stack import NetworkStack
 
 @pytest.fixture(scope="module")
 def tpl():
-    stack = NetworkStack(cdk.App(), "N", env=cdk.Environment(account="123456789012", region="ap-south-1"))
+    stack = NetworkStack(cdk.App(), "N", env=cdk.Environment(account="123456789012", region="ap-southeast-2"))
     cdk.Tags.of(stack).add("Project", "lectify")
     return stack, Template.from_stack(stack)
 

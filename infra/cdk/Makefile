@@ -3,12 +3,15 @@ PY := .venv/bin/python
 BUDGET_EMAIL ?=
 BUDGET_LIMIT_USD ?=
 REGION ?=
+APP_ORIGIN ?= http://localhost:3000
+READY_EMAILS ?= demo@example.com
 
 OPT := $(if $(BUDGET_LIMIT_USD),-c budget_limit_usd=$(BUDGET_LIMIT_USD)) $(if $(REGION),-c region=$(REGION))
-CTX := -c budget_email=$(BUDGET_EMAIL) $(OPT)
-PLACEHOLDER := -c budget_email=$(or $(BUDGET_EMAIL),test@example.com) $(OPT)
+APP := -c app_origin=$(APP_ORIGIN) -c ready_emails=$(READY_EMAILS)
+CTX := -c budget_email=$(BUDGET_EMAIL) $(APP) $(OPT)
+PLACEHOLDER := -c budget_email=$(or $(BUDGET_EMAIL),test@example.com) $(APP) $(OPT)
 
-.PHONY: install test synth deploy destroy destroy-all preflight orphans
+.PHONY: put-secrets install test synth deploy destroy destroy-all preflight orphans
 
 install:
 	uv venv --python 3.12 .venv
@@ -31,6 +34,9 @@ destroy:
 
 destroy-all:
 	$(CDK) destroy --all --force $(PLACEHOLDER)
+
+put-secrets:
+	bash scripts/put-secrets.sh
 
 preflight:
 	bash scripts/preflight.sh

@@ -3,6 +3,7 @@
 Separate from AI service (LLM tasks). Handles Whisper API integration,
 parallel chunk transcription, confidence scoring, and cost tracking.
 """
+
 import asyncio
 import logging
 from abc import ABC, abstractmethod
@@ -16,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 class TranscriptionSegment(BaseModel):
     """A single segment of a transcription."""
+
     start: float  # start time in seconds
     end: float  # end time in seconds
     text: str
@@ -24,6 +26,7 @@ class TranscriptionSegment(BaseModel):
 
 class TranscriptionResult(BaseModel):
     """Full transcription result with metadata."""
+
     text: str
     language: str  # detected language code (e.g., "en", "hi", "es")
     confidence: float  # 0.0-1.0 average confidence across segments
@@ -74,7 +77,9 @@ class WhisperProvider(TranscriptionProvider):
     _API_BASE = "https://api.groq.com/openai/v1"
     _WHISPER_ENDPOINT = f"{_API_BASE}/audio/transcriptions"
 
-    def __init__(self, api_key: str, model: str = "whisper-large-v3-turbo", language: str = "en"):
+    def __init__(
+        self, api_key: str, model: str = "whisper-large-v3-turbo", language: str = "en"
+    ):
         self._api_key = api_key
         self._model = model
         self._default_language = language
@@ -98,8 +103,13 @@ class WhisperProvider(TranscriptionProvider):
                 "Use chunked transcription for files >25 MB."
             )
 
-        logger.info("Transcribing %s with Groq Whisper (%.1f MB, lang=%s, model=%s)",
-                    audio_path.name, file_size / 1024 / 1024, lang, self._model)
+        logger.info(
+            "Transcribing %s with Groq Whisper (%.1f MB, lang=%s, model=%s)",
+            audio_path.name,
+            file_size / 1024 / 1024,
+            lang,
+            self._model,
+        )
 
         async with httpx.AsyncClient(
             timeout=300.0,
@@ -118,9 +128,19 @@ class WhisperProvider(TranscriptionProvider):
                     },
                 )
 
+            if response.status_code == 429:
+                from services.ai_service import ProviderRateLimited, parse_retry_after
+
+                raise ProviderRateLimited(
+                    f"Groq Whisper rate limited: {response.text[:200]}",
+                    retry_after=parse_retry_after(response.headers.get("retry-after")),
+                )
+
             if response.status_code != 200:
                 error_detail = response.text[:500]
-                raise RuntimeError(f"Groq Whisper API error {response.status_code}: {error_detail}")
+                raise RuntimeError(
+                    f"Groq Whisper API error {response.status_code}: {error_detail}"
+                )
 
             result = response.json()
 
@@ -129,18 +149,18 @@ class WhisperProvider(TranscriptionProvider):
         for seg in result.get("segments", []):
             # Whisper returns no_speech_prob, invert for confidence
             confidence = 1.0 - seg.get("no_speech_prob", 0.0)
-            segments.append(TranscriptionSegment(
-                start=seg.get("start", 0.0),
-                end=seg.get("end", 0.0),
-                text=seg.get("text", "").strip(),
-                confidence=round(confidence, 4),
-            ))
+            segments.append(
+                TranscriptionSegment(
+                    start=seg.get("start", 0.0),
+                    end=seg.get("end", 0.0),
+                    text=seg.get("text", "").strip(),
+                    confidence=round(confidence, 4),
+                )
+            )
 
         # Calculate average confidence
         avg_confidence = (
-            sum(s.confidence for s in segments) / len(segments)
-            if segments
-            else 0.0
+            sum(s.confidence for s in segments) / len(segments) if segments else 0.0
         )
 
         # Estimate cost
@@ -183,6 +203,7 @@ class WhisperProvider(TranscriptionProvider):
         - whisper-large-v3: $0.111/hour = $0.00185/minute
         """
         from core.config import get_settings
+
         settings = get_settings()
         minutes = duration_seconds / 60.0
         return minutes * settings.WHISPER_COST_PER_MINUTE
@@ -203,14 +224,16 @@ def flag_low_confidence_segments(
     flagged = []
     for i, seg in enumerate(result.segments):
         if seg.confidence < threshold:
-            flagged.append({
-                "index": i,
-                "start": seg.start,
-                "end": seg.end,
-                "text": seg.text,
-                "confidence": seg.confidence,
-                "threshold": threshold,
-            })
+            flagged.append(
+                {
+                    "index": i,
+                    "start": seg.start,
+                    "end": seg.end,
+                    "text": seg.text,
+                    "confidence": seg.confidence,
+                    "threshold": threshold,
+                }
+            )
     return flagged
 
 

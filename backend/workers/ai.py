@@ -1,18 +1,19 @@
 """AI worker — generates study materials from transcripts."""
+
 import logging
 from datetime import datetime, timezone
 
 from core.config import get_settings
-from core.queue_config import queue_for_stage
 from models.job import JobCreate, JobDB
 from repositories.lecture_repository import LectureRepository
 from services.ai_service import get_ai_service
 from services.lecture_service import (
-    _extract_and_store_knowledge_graph,
     CHUNK_LENGTH_SECONDS,
     CHUNK_THRESHOLD_SECONDS,
+    _extract_and_store_knowledge_graph,
 )
 from services.notification_service import publish_lecture_ready
+
 from workers.base import BaseWorker, JobContext
 
 logger = logging.getLogger(__name__)
@@ -29,7 +30,8 @@ class AIWorker(BaseWorker):
     """
 
     stage = "generate_materials"
-    queue_name = queue_for_stage("generate_materials")
+    # Backends resolve the stage key (SqsQueueBackend._resolve -> queue URL), matching enqueue_job.
+    queue_name = "generate_materials"
 
     def __init__(self, max_jobs: int | None = None):
         if max_jobs is None:
@@ -48,11 +50,14 @@ class AIWorker(BaseWorker):
         if not lecture.transcript:
             raise ValueError(f"Lecture {lecture_id} has no transcript")
 
-        await repo.update_fields(lecture_id, {
-            "progress_label": "Generating study materials",
-            "progress_step": 2,
-            "progress_total": 4,
-        })
+        await repo.update_fields(
+            lecture_id,
+            {
+                "progress_label": "Generating study materials",
+                "progress_step": 2,
+                "progress_total": 4,
+            },
+        )
 
         # ── Materials Generation ──────────────────────────────────────
         duration = lecture.duration_seconds or 0
@@ -67,54 +72,72 @@ class AIWorker(BaseWorker):
         if not materials.summary:
             logger.warning("Study materials for %s missing summary", lecture_id)
 
-        await repo.update_fields(lecture_id, {
-            "progress_label": "Creating embeddings",
-            "progress_step": 3,
-        })
+        await repo.update_fields(
+            lecture_id,
+            {
+                "progress_label": "Creating embeddings",
+                "progress_step": 3,
+            },
+        )
 
         # ── Embeddings ───────────────────────────────────────────────
         embedding = await self._safe_embedding(ai, materials)
         if embedding:
-            await repo.update_fields(lecture_id, {
-                "embedding": embedding,
-            })
+            await repo.update_fields(
+                lecture_id,
+                {
+                    "embedding": embedding,
+                },
+            )
 
         # ── Knowledge Graph Sync ─────────────────────────────────────
-        await repo.update_fields(lecture_id, {
-            "progress_label": "Syncing knowledge graph",
-        })
+        await repo.update_fields(
+            lecture_id,
+            {
+                "progress_label": "Syncing knowledge graph",
+            },
+        )
         await _extract_and_store_knowledge_graph(lecture_id, lecture, materials, repo)
 
         # ── Store Materials ──────────────────────────────────────────
-        await repo.update_fields(lecture_id, {
-            "materials": materials,
-            "status": "ready",
-            "error_message": None,
-            "progress_step": 4,
-            "progress_total": 4,
-            "progress_label": "Done",
-        })
+        await repo.update_fields(
+            lecture_id,
+            {
+                "materials": materials,
+                "status": "ready",
+                "error_message": None,
+                "progress_step": 4,
+                "progress_total": 4,
+                "progress_label": "Done",
+            },
+        )
 
         # ── Notify ───────────────────────────────────────────────────
         try:
             await publish_lecture_ready(lecture_id, getattr(lecture, "class_id", None))
         except Exception:
-            logger.warning("Unexpected error calling publish_lecture_ready", exc_info=False)
+            logger.warning(
+                "Unexpected error calling publish_lecture_ready", exc_info=False
+            )
 
         logger.info("Study materials generated for lecture %s", lecture_id)
-        
-        return [JobCreate(
-            lecture_id=lecture_id,
-            version=1,
-            stage="embed",
-        )]
+
+        return [
+            JobCreate(
+                lecture_id=lecture_id,
+                version=1,
+                stage="embed",
+            )
+        ]
 
     async def _generate_from_chunks(self, lecture, ai, repo) -> dict:
         """Generate materials from chunked transcript by digesting each chunk then merging."""
         import re
 
         # Parse transcripts with chunk markers
-        chunk_pattern = re.compile(r"\[Chunk (\d+) · (.*?)\]\n(.*?)(?=\n\n\[Chunk|\Z)", re.DOTALL)
+        chunk_pattern = re.compile(
+            r"\[Chunk (\d+) · (.*?)\]\n(.*?)(?=\n\n\[Chunk|\Z)", re.DOTALL
+        )
         matches = list(chunk_pattern.finditer(lecture.transcript or ""))
 
         if not matches:
@@ -129,7 +152,9 @@ class AIWorker(BaseWorker):
 
             digest = await ai.digest_chunk(chunk_text)
             digest["chunk_index"] = chunk_index
-            digest["start_seconds"] = start_seconds or (chunk_index * CHUNK_LENGTH_SECONDS)
+            digest["start_seconds"] = start_seconds or (
+                chunk_index * CHUNK_LENGTH_SECONDS
+            )
             chunk_digests.append(digest)
 
         return await ai.merge_chunk_digests(chunk_digests)
@@ -150,10 +175,15 @@ class AIWorker(BaseWorker):
     @staticmethod
     async def _safe_embedding(ai, materials) -> list[float] | None:
         """Generate embedding from study materials with graceful fallback."""
-        seed = " ".join(filter(None, [
-            materials.summary or "",
-            " ".join(materials.key_concepts or []),
-        ]))
+        seed = " ".join(
+            filter(
+                None,
+                [
+                    materials.summary or "",
+                    " ".join(materials.key_concepts or []),
+                ],
+            )
+        )
         if not seed.strip():
             return None
         try:

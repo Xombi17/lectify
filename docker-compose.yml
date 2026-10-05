@@ -260,6 +260,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     command: python -m workers transcribe
+    stop_grace_period: 100s
     depends_on:
       postgres:
         condition: service_healthy
@@ -285,6 +286,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     command: python -m workers generate_materials
+    stop_grace_period: 100s
     depends_on:
       postgres:
         condition: service_healthy
@@ -306,6 +308,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     command: python -m workers embed
+    stop_grace_period: 100s
     depends_on:
       postgres:
         condition: service_healthy
@@ -335,8 +338,6 @@ services:
       - interaction-service
       - ingestion-service
       - search-service
-
-
 
   prometheus:
     image: prom/prometheus:latest

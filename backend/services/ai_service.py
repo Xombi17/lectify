@@ -7,10 +7,14 @@ and changing one line in `get_ai_service()`.
 Also supports NVIDIA NIM (OpenAI-compatible) for text generation and embeddings.
 Select provider via AI_PROVIDER env var ("nim" | "gemini").
 """
+
+import email.utils
+import functools
 import json
 import logging
 import re
 from abc import ABC, abstractmethod
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -194,31 +198,79 @@ TRANSCRIPT:
 
 # ── ABC ─────────────────────────────────────────────────────────────────────────
 
+
 class ProviderRateLimited(Exception):
     """Raised when an AI provider returns a 429 Too Many Requests response.
-    
-    The worker loop intercepts this to apply in-process backoff (sleep) without
-    consuming a queue receive/delivery attempt, as 429s are transient capacity issues
-    rather than job failures.
-    """
-    pass
 
-import functools
+    Carries retry_after (in seconds) when provided by the upstream Retry-After header.
+    The worker loop intercepts this to apply in-process backoff (sleep) without
+    consuming a queue receive/delivery attempt, honoring Retry-After (D-09).
+    """
+
+    def __init__(
+        self, message: str = "Provider rate limited", retry_after: float | None = None
+    ):
+        super().__init__(message)
+        self.retry_after = retry_after
+
+
+def parse_retry_after(value: str | None) -> float | None:
+    """Parse a Retry-After header value into seconds (float).
+
+    None/empty -> None; numeric string -> float(max(0, value));
+    otherwise tries email.utils.parsedate_to_datetime and returns max(0, seconds until that time)
+    using timezone-aware UTC now. On any parse failure returns None.
+    """
+    if not value or not isinstance(value, str):
+        return None
+    val = value.strip()
+    if not val:
+        return None
+    try:
+        sec = float(val)
+        return max(0.0, sec)
+    except ValueError:
+        pass
+    try:
+        dt = email.utils.parsedate_to_datetime(val)
+        if dt is not None:
+            now = datetime.now(timezone.utc)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            delta = (dt - now).total_seconds()
+            return max(0.0, delta)
+    except Exception:
+        pass
+    return None
+
 
 def handle_rate_limit(func):
     @functools.wraps(func)
     async def wrapper(*args, **kwargs):
         try:
             return await func(*args, **kwargs)
-        except Exception as e:
-            # Check for Gemini / OpenAI rate limits
-            err_str = str(e)
-            # OpenAI raises RateLimitError, or openai.APIStatusError with status_code 429
-            # google-genai raises APIError with code 429
-            if "429" in err_str or "RateLimitError" in type(e).__name__ or "Too Many Requests" in err_str:
-                raise ProviderRateLimited(f"Provider rate limited: {err_str}") from e
+        except ProviderRateLimited:
             raise
+        except Exception as e:
+            status = getattr(e, "status_code", None) or getattr(e, "code", None)
+            if status == 429 or type(e).__name__ == "RateLimitError":
+                raw_headers = getattr(getattr(e, "response", None), "headers", None)
+                retry_header = None
+                if raw_headers is not None:
+                    try:
+                        retry_header = raw_headers.get(
+                            "retry-after"
+                        ) or raw_headers.get("Retry-After")
+                    except Exception:
+                        pass
+                retry_after = parse_retry_after(retry_header)
+                raise ProviderRateLimited(
+                    f"Provider rate limited: {e}", retry_after=retry_after
+                ) from e
+            raise
+
     return wrapper
+
 
 class AIProvider(ABC):
     @abstractmethod
@@ -234,7 +286,9 @@ class AIProvider(ABC):
     async def merge_chunk_digests(self, digests: list[dict]) -> StudyMaterials: ...
 
     @abstractmethod
-    async def chat(self, transcript: str, history: list[dict], question: str) -> str: ...
+    async def chat(
+        self, transcript: str, history: list[dict], question: str
+    ) -> str: ...
 
     @abstractmethod
     async def translate_pack(self, pack: dict, target_language: str) -> dict: ...
@@ -245,11 +299,15 @@ class AIProvider(ABC):
     # Phase 9: lazy-generated content methods (not abstract — default raises)
     async def generate_cheatsheet(self, transcript: str) -> dict:
         """Lazy-generated cheatsheet. Override in provider subclasses."""
-        raise NotImplementedError("Cheatsheet generation not supported by this provider")
+        raise NotImplementedError(
+            "Cheatsheet generation not supported by this provider"
+        )
 
     async def generate_podcast_script(self, transcript: str) -> dict:
         """Lazy-generated podcast narration script. Override in provider subclasses."""
-        raise NotImplementedError("Podcast script generation not supported by this provider")
+        raise NotImplementedError(
+            "Podcast script generation not supported by this provider"
+        )
 
     async def generate_quiz_v2(self, transcript: str) -> list[dict]:
         """Lazy-generated v2 quiz questions (MC/TF/fill-blank). Override in provider subclasses."""
@@ -257,20 +315,25 @@ class AIProvider(ABC):
 
     async def generate_concepts_v2(self, transcript: str) -> list[dict]:
         """Lazy-generated v2 concept deep-dives. Override in provider subclasses."""
-        raise NotImplementedError("Concepts v2 generation not supported by this provider")
+        raise NotImplementedError(
+            "Concepts v2 generation not supported by this provider"
+        )
 
 
 # ── Gemini Provider ────────────────────────────────────────────────────────────
 
+
 class GeminiProvider(AIProvider):
     def __init__(self, api_key: str, model: str):
         from google import genai  # imported lazily so the app boots without a key
+
         self._client = genai.Client(api_key=api_key)
         self._model = model
 
     @handle_rate_limit
     async def transcribe_audio(self, audio_path: Path, mime_type: str) -> str:
         from google.genai import types
+
         logger.info("Uploading audio to Gemini: %s (%s)", audio_path, mime_type)
         uploaded = self._client.files.upload(
             file=str(audio_path),
@@ -289,6 +352,7 @@ class GeminiProvider(AIProvider):
     @handle_rate_limit
     async def generate_study_materials(self, transcript: str) -> StudyMaterials:
         from google.genai import types
+
         prompt = STUDY_PROMPT + transcript[:120_000]  # safety guard
         response = self._client.models.generate_content(
             model=self._model,
@@ -301,13 +365,18 @@ class GeminiProvider(AIProvider):
             summary=data.get("summary"),
             smart_notes=list(data.get("smart_notes") or []),
             key_concepts=list(data.get("key_concepts") or []),
-            quiz=[QuizQuestion(**q) for q in (data.get("quiz") or []) if _valid_quiz(q)],
-            flashcards=[Flashcard(**c) for c in (data.get("flashcards") or []) if _valid_card(c)],
+            quiz=[
+                QuizQuestion(**q) for q in (data.get("quiz") or []) if _valid_quiz(q)
+            ],
+            flashcards=[
+                Flashcard(**c) for c in (data.get("flashcards") or []) if _valid_card(c)
+            ],
         )
 
     @handle_rate_limit
     async def digest_chunk(self, chunk_transcript: str) -> dict:
         from google.genai import types
+
         prompt = CHUNK_DIGEST_PROMPT + chunk_transcript[:60_000]
         response = self._client.models.generate_content(
             model=self._model,
@@ -319,6 +388,7 @@ class GeminiProvider(AIProvider):
     @handle_rate_limit
     async def merge_chunk_digests(self, digests: list[dict]) -> StudyMaterials:
         from google.genai import types
+
         prompt = HIERARCHICAL_MERGE_PROMPT + json.dumps(digests, ensure_ascii=False)
         response = self._client.models.generate_content(
             model=self._model,
@@ -331,8 +401,12 @@ class GeminiProvider(AIProvider):
             summary=data.get("summary"),
             smart_notes=list(data.get("smart_notes") or []),
             key_concepts=list(data.get("key_concepts") or []),
-            quiz=[QuizQuestion(**q) for q in (data.get("quiz") or []) if _valid_quiz(q)],
-            flashcards=[Flashcard(**c) for c in (data.get("flashcards") or []) if _valid_card(c)],
+            quiz=[
+                QuizQuestion(**q) for q in (data.get("quiz") or []) if _valid_quiz(q)
+            ],
+            flashcards=[
+                Flashcard(**c) for c in (data.get("flashcards") or []) if _valid_card(c)
+            ],
         )
 
     @handle_rate_limit
@@ -353,7 +427,9 @@ class GeminiProvider(AIProvider):
         convo_lines.append(f"Student: {question.strip()}")
         convo_lines.append("Assistant:")
         prompt = "\n".join(convo_lines)
-        response = self._client.models.generate_content(model=self._model, contents=prompt)
+        response = self._client.models.generate_content(
+            model=self._model, contents=prompt
+        )
         return (response.text or "").strip()
 
     @handle_rate_limit
@@ -364,6 +440,7 @@ class GeminiProvider(AIProvider):
         Returns dict matching `pack` shape.
         """
         from google.genai import types
+
         prompt = (
             f"Translate the following JSON object into {target_language}. "
             "Preserve technical terminology, mathematical formulas, code, and proper "
@@ -394,6 +471,7 @@ class GeminiProvider(AIProvider):
     async def _generate_json(self, prompt: str, max_tokens: int = 4096) -> dict:
         """Shared helper: call Gemini with JSON mode."""
         from google.genai import types
+
         response = self._client.models.generate_content(
             model=self._model,
             contents=prompt,
@@ -418,6 +496,7 @@ class GeminiProvider(AIProvider):
 
 # ── NVIDIA NIM Provider ─────────────────────────────────────────────────────────
 
+
 class NIMProvider(AIProvider):
     """OpenAI-compatible provider using NVIDIA NIM API.
 
@@ -427,6 +506,7 @@ class NIMProvider(AIProvider):
 
     def __init__(self, api_key: str, base_url: str, chat_model: str, embed_model: str):
         from openai import AsyncOpenAI  # lazy import
+
         self._client = AsyncOpenAI(api_key=api_key, base_url=base_url)
         self._chat_model = chat_model
         self._embed_model = embed_model
@@ -440,7 +520,9 @@ class NIMProvider(AIProvider):
                     "NIM provider requires GEMINI_API_KEY as transcription fallback. "
                     "Set GEMINI_API_KEY in backend/.env."
                 )
-            self._gemini = GeminiProvider(settings.GEMINI_API_KEY, settings.GEMINI_MODEL)
+            self._gemini = GeminiProvider(
+                settings.GEMINI_API_KEY, settings.GEMINI_MODEL
+            )
         return self._gemini
 
     # ── Transcription (delegated to Gemini) ────────────────────────────────────
@@ -453,8 +535,9 @@ class NIMProvider(AIProvider):
     # ── Core AI methods ────────────────────────────────────────────────────────
 
     @handle_rate_limit
-    @handle_rate_limit
-    async def _chat_completion(self, prompt: str, json_mode: bool = False, max_tokens: int = 4096) -> str:
+    async def _chat_completion(
+        self, prompt: str, json_mode: bool = False, max_tokens: int = 4096
+    ) -> str:
         """Shared helper: call NIM chat completion."""
         kwargs: dict = {
             "model": self._chat_model,
@@ -474,8 +557,12 @@ class NIMProvider(AIProvider):
             summary=data.get("summary"),
             smart_notes=list(data.get("smart_notes") or []),
             key_concepts=list(data.get("key_concepts") or []),
-            quiz=[QuizQuestion(**q) for q in (data.get("quiz") or []) if _valid_quiz(q)],
-            flashcards=[Flashcard(**c) for c in (data.get("flashcards") or []) if _valid_card(c)],
+            quiz=[
+                QuizQuestion(**q) for q in (data.get("quiz") or []) if _valid_quiz(q)
+            ],
+            flashcards=[
+                Flashcard(**c) for c in (data.get("flashcards") or []) if _valid_card(c)
+            ],
         )
 
     async def digest_chunk(self, chunk_transcript: str) -> dict:
@@ -491,8 +578,12 @@ class NIMProvider(AIProvider):
             summary=data.get("summary"),
             smart_notes=list(data.get("smart_notes") or []),
             key_concepts=list(data.get("key_concepts") or []),
-            quiz=[QuizQuestion(**q) for q in (data.get("quiz") or []) if _valid_quiz(q)],
-            flashcards=[Flashcard(**c) for c in (data.get("flashcards") or []) if _valid_card(c)],
+            quiz=[
+                QuizQuestion(**q) for q in (data.get("quiz") or []) if _valid_quiz(q)
+            ],
+            flashcards=[
+                Flashcard(**c) for c in (data.get("flashcards") or []) if _valid_card(c)
+            ],
         )
 
     async def chat(self, transcript: str, history: list[dict], question: str) -> str:
@@ -504,10 +595,16 @@ class NIMProvider(AIProvider):
             "Use markdown formatting for lists and emphasis when helpful."
         )
         messages: list[dict] = [
-            {"role": "system", "content": system + f"\n\n--- LECTURE TRANSCRIPT ---\n{transcript[:80_000]}\n--- END TRANSCRIPT ---"},
+            {
+                "role": "system",
+                "content": system
+                + f"\n\n--- LECTURE TRANSCRIPT ---\n{transcript[:80_000]}\n--- END TRANSCRIPT ---",
+            },
         ]
         for m in history[-10:]:
-            messages.append({"role": m.get("role", "user"), "content": m.get("content", "").strip()})
+            messages.append(
+                {"role": m.get("role", "user"), "content": m.get("content", "").strip()}
+            )
         messages.append({"role": "user", "content": question.strip()})
         response = await self._client.chat.completions.create(
             model=self._chat_model,
@@ -546,7 +643,9 @@ class NIMProvider(AIProvider):
 
     async def generate_podcast_script(self, transcript: str) -> dict:
         raw = await self._chat_completion(
-            PODCAST_SCRIPT_PROMPT + transcript[:100_000], json_mode=True, max_tokens=2048
+            PODCAST_SCRIPT_PROMPT + transcript[:100_000],
+            json_mode=True,
+            max_tokens=2048,
         )
         return _parse_json_lenient(raw)
 
@@ -566,6 +665,7 @@ class NIMProvider(AIProvider):
 
 
 # ── Shared helpers ─────────────────────────────────────────────────────────────
+
 
 def _parse_json_lenient(raw: str) -> dict:
     """Parse JSON even if the model wraps it in code fences or trailing text."""
@@ -597,7 +697,11 @@ def _valid_quiz(q: dict) -> bool:
 
 
 def _valid_card(c: dict) -> bool:
-    return isinstance(c, dict) and isinstance(c.get("front"), str) and isinstance(c.get("back"), str)
+    return (
+        isinstance(c, dict)
+        and isinstance(c.get("front"), str)
+        and isinstance(c.get("back"), str)
+    )
 
 
 # ── Factory ────────────────────────────────────────────────────────────────────
@@ -627,7 +731,11 @@ def get_ai_service() -> AIProvider:
                 chat_model=settings.NIM_CHAT_MODEL,
                 embed_model=settings.NIM_EMBED_MODEL,
             )
-            logger.info("AI provider: NVIDIA NIM (chat=%s, embed=%s)", settings.NIM_CHAT_MODEL, settings.NIM_EMBED_MODEL)
+            logger.info(
+                "AI provider: NVIDIA NIM (chat=%s, embed=%s)",
+                settings.NIM_CHAT_MODEL,
+                settings.NIM_EMBED_MODEL,
+            )
 
         elif provider_name == "gemini":
             if not settings.GEMINI_API_KEY:

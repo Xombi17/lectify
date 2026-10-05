@@ -3,7 +3,7 @@ from aws_cdk.assertions import Match, Template
 
 from lectify_cdk.budget_stack import BudgetStack
 
-ENV = cdk.Environment(account="123456789012", region="ap-south-1")
+ENV = cdk.Environment(account="123456789012", region="ap-southeast-2")
 
 
 def _tpl(limit=50):

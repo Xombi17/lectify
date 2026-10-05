@@ -1,4 +1,5 @@
 """Academic hierarchy repository tests against in-memory SQLite."""
+
 import asyncio
 import sys
 import uuid
@@ -15,13 +16,17 @@ def _sql_env(monkeypatch):
     monkeypatch.setenv("DATABASE_BACKEND", "postgres")
     monkeypatch.setenv("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
     import importlib
+
     from core import config as cfg
+
     cfg.get_settings.cache_clear()
     importlib.reload(cfg)
     import core.sql_db as sdb
+
     importlib.reload(sdb)
     # Reload _sql academic_repository module
     import repositories._sql.academic_repository as ar
+
     importlib.reload(ar)
     yield
     cfg.get_settings.cache_clear()
@@ -37,9 +42,9 @@ def _arun(coro):
 class TestSqlInstitutionRepository:
     def test_create_and_get_by_id(self):
         async def go():
-            from core.sql_db import init_models, close_sql
-            from repositories._sql.academic_repository import InstitutionRepository
+            from core.sql_db import close_sql, init_models
             from models.academic import InstitutionDB
+            from repositories._sql.academic_repository import InstitutionRepository
 
             await init_models()
             repo = InstitutionRepository()
@@ -58,13 +63,14 @@ class TestSqlInstitutionRepository:
             assert got.code == "TU001"
             assert got.address == "123 Main St"
             await close_sql()
+
         _arun(go())
 
     def test_get_by_code(self):
         async def go():
-            from core.sql_db import init_models, close_sql
-            from repositories._sql.academic_repository import InstitutionRepository
+            from core.sql_db import close_sql, init_models
             from models.academic import InstitutionDB
+            from repositories._sql.academic_repository import InstitutionRepository
 
             await init_models()
             repo = InstitutionRepository()
@@ -80,6 +86,7 @@ class TestSqlInstitutionRepository:
             assert got is not None
             assert got.name == "Code Test Uni"
             await close_sql()
+
         _arun(go())
 
 
@@ -89,9 +96,12 @@ class TestSqlInstitutionRepository:
 class TestSqlYearRepository:
     def test_create_and_get_by_id(self):
         async def go():
-            from core.sql_db import init_models, close_sql
-            from repositories._sql.academic_repository import InstitutionRepository, YearRepository
+            from core.sql_db import close_sql, init_models
             from models.academic import InstitutionDB, YearDB
+            from repositories._sql.academic_repository import (
+                InstitutionRepository,
+                YearRepository,
+            )
 
             await init_models()
             inst_repo = InstitutionRepository()
@@ -119,22 +129,43 @@ class TestSqlYearRepository:
             assert got.name == "First Year"
             assert got.institution_id == inst.id
             await close_sql()
+
         _arun(go())
 
     def test_list_by_institution(self):
         async def go():
-            from core.sql_db import init_models, close_sql
-            from repositories._sql.academic_repository import InstitutionRepository, YearRepository
+            from core.sql_db import close_sql, init_models
             from models.academic import InstitutionDB, YearDB
+            from repositories._sql.academic_repository import (
+                InstitutionRepository,
+                YearRepository,
+            )
 
             await init_models()
             inst_repo = InstitutionRepository()
-            inst = InstitutionDB(id=str(uuid.uuid4()), name="I", code="I", created_at=datetime.now(timezone.utc))
+            inst = InstitutionDB(
+                id=str(uuid.uuid4()),
+                name="I",
+                code="I",
+                created_at=datetime.now(timezone.utc),
+            )
             await inst_repo.create(inst)
 
             year_repo = YearRepository()
-            y1 = YearDB(id=str(uuid.uuid4()), institution_id=inst.id, number=1, name="Y1", created_at=datetime.now(timezone.utc))
-            y2 = YearDB(id=str(uuid.uuid4()), institution_id=inst.id, number=2, name="Y2", created_at=datetime.now(timezone.utc))
+            y1 = YearDB(
+                id=str(uuid.uuid4()),
+                institution_id=inst.id,
+                number=1,
+                name="Y1",
+                created_at=datetime.now(timezone.utc),
+            )
+            y2 = YearDB(
+                id=str(uuid.uuid4()),
+                institution_id=inst.id,
+                number=2,
+                name="Y2",
+                created_at=datetime.now(timezone.utc),
+            )
             await year_repo.create(y1)
             await year_repo.create(y2)
 
@@ -142,6 +173,7 @@ class TestSqlYearRepository:
             assert len(years) == 2
             assert {y.number for y in years} == {1, 2}
             await close_sql()
+
         _arun(go())
 
 
@@ -151,13 +183,21 @@ class TestSqlYearRepository:
 class TestSqlBranchRepository:
     def test_create_and_get_by_id(self):
         async def go():
-            from core.sql_db import init_models, close_sql
-            from repositories._sql.academic_repository import InstitutionRepository, BranchRepository
-            from models.academic import InstitutionDB, BranchDB
+            from core.sql_db import close_sql, init_models
+            from models.academic import BranchDB, InstitutionDB
+            from repositories._sql.academic_repository import (
+                BranchRepository,
+                InstitutionRepository,
+            )
 
             await init_models()
             inst_repo = InstitutionRepository()
-            inst = InstitutionDB(id=str(uuid.uuid4()), name="I", code="I", created_at=datetime.now(timezone.utc))
+            inst = InstitutionDB(
+                id=str(uuid.uuid4()),
+                name="I",
+                code="I",
+                created_at=datetime.now(timezone.utc),
+            )
             await inst_repo.create(inst)
 
             branch_repo = BranchRepository()
@@ -175,22 +215,43 @@ class TestSqlBranchRepository:
             assert got.code == "CS"
             assert got.name == "Computer Science"
             await close_sql()
+
         _arun(go())
 
     def test_list_by_institution(self):
         async def go():
-            from core.sql_db import init_models, close_sql
-            from repositories._sql.academic_repository import InstitutionRepository, BranchRepository
-            from models.academic import InstitutionDB, BranchDB
+            from core.sql_db import close_sql, init_models
+            from models.academic import BranchDB, InstitutionDB
+            from repositories._sql.academic_repository import (
+                BranchRepository,
+                InstitutionRepository,
+            )
 
             await init_models()
             inst_repo = InstitutionRepository()
-            inst = InstitutionDB(id=str(uuid.uuid4()), name="I", code="I", created_at=datetime.now(timezone.utc))
+            inst = InstitutionDB(
+                id=str(uuid.uuid4()),
+                name="I",
+                code="I",
+                created_at=datetime.now(timezone.utc),
+            )
             await inst_repo.create(inst)
 
             branch_repo = BranchRepository()
-            b1 = BranchDB(id=str(uuid.uuid4()), institution_id=inst.id, code="CS", name="CS", created_at=datetime.now(timezone.utc))
-            b2 = BranchDB(id=str(uuid.uuid4()), institution_id=inst.id, code="EE", name="EE", created_at=datetime.now(timezone.utc))
+            b1 = BranchDB(
+                id=str(uuid.uuid4()),
+                institution_id=inst.id,
+                code="CS",
+                name="CS",
+                created_at=datetime.now(timezone.utc),
+            )
+            b2 = BranchDB(
+                id=str(uuid.uuid4()),
+                institution_id=inst.id,
+                code="EE",
+                name="EE",
+                created_at=datetime.now(timezone.utc),
+            )
             await branch_repo.create(b1)
             await branch_repo.create(b2)
 
@@ -198,6 +259,7 @@ class TestSqlBranchRepository:
             assert len(branches) == 2
             assert {b.code for b in branches} == {"CS", "EE"}
             await close_sql()
+
         _arun(go())
 
 
@@ -207,17 +269,32 @@ class TestSqlBranchRepository:
 class TestSqlSemesterRepository:
     def test_create_and_get_by_id(self):
         async def go():
-            from core.sql_db import init_models, close_sql
-            from repositories._sql.academic_repository import InstitutionRepository, YearRepository, SemesterRepository
-            from models.academic import InstitutionDB, YearDB, SemesterDB
+            from core.sql_db import close_sql, init_models
+            from models.academic import InstitutionDB, SemesterDB, YearDB
+            from repositories._sql.academic_repository import (
+                InstitutionRepository,
+                SemesterRepository,
+                YearRepository,
+            )
 
             await init_models()
             inst_repo = InstitutionRepository()
-            inst = InstitutionDB(id=str(uuid.uuid4()), name="I", code="I", created_at=datetime.now(timezone.utc))
+            inst = InstitutionDB(
+                id=str(uuid.uuid4()),
+                name="I",
+                code="I",
+                created_at=datetime.now(timezone.utc),
+            )
             await inst_repo.create(inst)
 
             year_repo = YearRepository()
-            year = YearDB(id=str(uuid.uuid4()), institution_id=inst.id, number=1, name="Y1", created_at=datetime.now(timezone.utc))
+            year = YearDB(
+                id=str(uuid.uuid4()),
+                institution_id=inst.id,
+                number=1,
+                name="Y1",
+                created_at=datetime.now(timezone.utc),
+            )
             await year_repo.create(year)
 
             sem_repo = SemesterRepository()
@@ -235,26 +312,54 @@ class TestSqlSemesterRepository:
             assert got.number == 1
             assert got.label == "Fall 2025"
             await close_sql()
+
         _arun(go())
 
     def test_list_by_year(self):
         async def go():
-            from core.sql_db import init_models, close_sql
-            from repositories._sql.academic_repository import InstitutionRepository, YearRepository, SemesterRepository
-            from models.academic import InstitutionDB, YearDB, SemesterDB
+            from core.sql_db import close_sql, init_models
+            from models.academic import InstitutionDB, SemesterDB, YearDB
+            from repositories._sql.academic_repository import (
+                InstitutionRepository,
+                SemesterRepository,
+                YearRepository,
+            )
 
             await init_models()
             inst_repo = InstitutionRepository()
-            inst = InstitutionDB(id=str(uuid.uuid4()), name="I", code="I", created_at=datetime.now(timezone.utc))
+            inst = InstitutionDB(
+                id=str(uuid.uuid4()),
+                name="I",
+                code="I",
+                created_at=datetime.now(timezone.utc),
+            )
             await inst_repo.create(inst)
 
             year_repo = YearRepository()
-            year = YearDB(id=str(uuid.uuid4()), institution_id=inst.id, number=1, name="Y1", created_at=datetime.now(timezone.utc))
+            year = YearDB(
+                id=str(uuid.uuid4()),
+                institution_id=inst.id,
+                number=1,
+                name="Y1",
+                created_at=datetime.now(timezone.utc),
+            )
             await year_repo.create(year)
 
             sem_repo = SemesterRepository()
-            s1 = SemesterDB(id=str(uuid.uuid4()), year_id=year.id, number=1, label="S1", created_at=datetime.now(timezone.utc))
-            s2 = SemesterDB(id=str(uuid.uuid4()), year_id=year.id, number=2, label="S2", created_at=datetime.now(timezone.utc))
+            s1 = SemesterDB(
+                id=str(uuid.uuid4()),
+                year_id=year.id,
+                number=1,
+                label="S1",
+                created_at=datetime.now(timezone.utc),
+            )
+            s2 = SemesterDB(
+                id=str(uuid.uuid4()),
+                year_id=year.id,
+                number=2,
+                label="S2",
+                created_at=datetime.now(timezone.utc),
+            )
             await sem_repo.create(s1)
             await sem_repo.create(s2)
 
@@ -262,6 +367,7 @@ class TestSqlSemesterRepository:
             assert len(sems) == 2
             assert {s.number for s in sems} == {1, 2}
             await close_sql()
+
         _arun(go())
 
 
@@ -271,18 +377,38 @@ class TestSqlSemesterRepository:
 class TestSqlSubjectRepository:
     def test_create_and_get_by_id(self):
         async def go():
-            from core.sql_db import init_models, close_sql
+            from core.sql_db import close_sql, init_models
+            from models.academic import InstitutionDB, SemesterDB, SubjectDB, YearDB
             from repositories._sql.academic_repository import (
-                InstitutionRepository, YearRepository, SemesterRepository, SubjectRepository
+                InstitutionRepository,
+                SemesterRepository,
+                SubjectRepository,
+                YearRepository,
             )
-            from models.academic import InstitutionDB, YearDB, SemesterDB, SubjectDB
 
             await init_models()
-            inst = InstitutionDB(id=str(uuid.uuid4()), name="I", code="I", created_at=datetime.now(timezone.utc))
+            inst = InstitutionDB(
+                id=str(uuid.uuid4()),
+                name="I",
+                code="I",
+                created_at=datetime.now(timezone.utc),
+            )
             await InstitutionRepository().create(inst)
-            year = YearDB(id=str(uuid.uuid4()), institution_id=inst.id, number=1, name="Y1", created_at=datetime.now(timezone.utc))
+            year = YearDB(
+                id=str(uuid.uuid4()),
+                institution_id=inst.id,
+                number=1,
+                name="Y1",
+                created_at=datetime.now(timezone.utc),
+            )
             await YearRepository().create(year)
-            sem = SemesterDB(id=str(uuid.uuid4()), year_id=year.id, number=1, label="S1", created_at=datetime.now(timezone.utc))
+            sem = SemesterDB(
+                id=str(uuid.uuid4()),
+                year_id=year.id,
+                number=1,
+                label="S1",
+                created_at=datetime.now(timezone.utc),
+            )
             await SemesterRepository().create(sem)
 
             subj_repo = SubjectRepository()
@@ -302,27 +428,62 @@ class TestSqlSubjectRepository:
             assert got.name == "Data Structures"
             assert got.credits == 3
             await close_sql()
+
         _arun(go())
 
     def test_list_by_semester(self):
         async def go():
-            from core.sql_db import init_models, close_sql
+            from core.sql_db import close_sql, init_models
+            from models.academic import InstitutionDB, SemesterDB, SubjectDB, YearDB
             from repositories._sql.academic_repository import (
-                InstitutionRepository, YearRepository, SemesterRepository, SubjectRepository
+                InstitutionRepository,
+                SemesterRepository,
+                SubjectRepository,
+                YearRepository,
             )
-            from models.academic import InstitutionDB, YearDB, SemesterDB, SubjectDB
 
             await init_models()
-            inst = InstitutionDB(id=str(uuid.uuid4()), name="I", code="I", created_at=datetime.now(timezone.utc))
+            inst = InstitutionDB(
+                id=str(uuid.uuid4()),
+                name="I",
+                code="I",
+                created_at=datetime.now(timezone.utc),
+            )
             await InstitutionRepository().create(inst)
-            year = YearDB(id=str(uuid.uuid4()), institution_id=inst.id, number=1, name="Y1", created_at=datetime.now(timezone.utc))
+            year = YearDB(
+                id=str(uuid.uuid4()),
+                institution_id=inst.id,
+                number=1,
+                name="Y1",
+                created_at=datetime.now(timezone.utc),
+            )
             await YearRepository().create(year)
-            sem = SemesterDB(id=str(uuid.uuid4()), year_id=year.id, number=1, label="S1", created_at=datetime.now(timezone.utc))
+            sem = SemesterDB(
+                id=str(uuid.uuid4()),
+                year_id=year.id,
+                number=1,
+                label="S1",
+                created_at=datetime.now(timezone.utc),
+            )
             await SemesterRepository().create(sem)
 
             subj_repo = SubjectRepository()
-            s1 = SubjectDB(id=str(uuid.uuid4()), semester_id=sem.id, code="CS301", name="DS", credits=3, created_at=datetime.now(timezone.utc))
-            s2 = SubjectDB(id=str(uuid.uuid4()), semester_id=sem.id, code="CS302", name="Algo", credits=4, created_at=datetime.now(timezone.utc))
+            s1 = SubjectDB(
+                id=str(uuid.uuid4()),
+                semester_id=sem.id,
+                code="CS301",
+                name="DS",
+                credits=3,
+                created_at=datetime.now(timezone.utc),
+            )
+            s2 = SubjectDB(
+                id=str(uuid.uuid4()),
+                semester_id=sem.id,
+                code="CS302",
+                name="Algo",
+                credits=4,
+                created_at=datetime.now(timezone.utc),
+            )
             await subj_repo.create(s1)
             await subj_repo.create(s2)
 
@@ -330,6 +491,7 @@ class TestSqlSubjectRepository:
             assert len(subjs) == 2
             assert {s.code for s in subjs} == {"CS301", "CS302"}
             await close_sql()
+
         _arun(go())
 
 
@@ -339,18 +501,38 @@ class TestSqlSubjectRepository:
 class TestSqlDivisionRepository:
     def test_create_and_get_by_id(self):
         async def go():
-            from core.sql_db import init_models, close_sql
+            from core.sql_db import close_sql, init_models
+            from models.academic import DivisionDB, InstitutionDB, SemesterDB, YearDB
             from repositories._sql.academic_repository import (
-                InstitutionRepository, YearRepository, SemesterRepository, DivisionRepository
+                DivisionRepository,
+                InstitutionRepository,
+                SemesterRepository,
+                YearRepository,
             )
-            from models.academic import InstitutionDB, YearDB, SemesterDB, DivisionDB
 
             await init_models()
-            inst = InstitutionDB(id=str(uuid.uuid4()), name="I", code="I", created_at=datetime.now(timezone.utc))
+            inst = InstitutionDB(
+                id=str(uuid.uuid4()),
+                name="I",
+                code="I",
+                created_at=datetime.now(timezone.utc),
+            )
             await InstitutionRepository().create(inst)
-            year = YearDB(id=str(uuid.uuid4()), institution_id=inst.id, number=1, name="Y1", created_at=datetime.now(timezone.utc))
+            year = YearDB(
+                id=str(uuid.uuid4()),
+                institution_id=inst.id,
+                number=1,
+                name="Y1",
+                created_at=datetime.now(timezone.utc),
+            )
             await YearRepository().create(year)
-            sem = SemesterDB(id=str(uuid.uuid4()), year_id=year.id, number=1, label="S1", created_at=datetime.now(timezone.utc))
+            sem = SemesterDB(
+                id=str(uuid.uuid4()),
+                year_id=year.id,
+                number=1,
+                label="S1",
+                created_at=datetime.now(timezone.utc),
+            )
             await SemesterRepository().create(sem)
 
             div_repo = DivisionRepository()
@@ -368,27 +550,60 @@ class TestSqlDivisionRepository:
             assert got.name == "Division A"
             assert got.capacity == 60
             await close_sql()
+
         _arun(go())
 
     def test_list_by_semester(self):
         async def go():
-            from core.sql_db import init_models, close_sql
+            from core.sql_db import close_sql, init_models
+            from models.academic import DivisionDB, InstitutionDB, SemesterDB, YearDB
             from repositories._sql.academic_repository import (
-                InstitutionRepository, YearRepository, SemesterRepository, DivisionRepository
+                DivisionRepository,
+                InstitutionRepository,
+                SemesterRepository,
+                YearRepository,
             )
-            from models.academic import InstitutionDB, YearDB, SemesterDB, DivisionDB
 
             await init_models()
-            inst = InstitutionDB(id=str(uuid.uuid4()), name="I", code="I", created_at=datetime.now(timezone.utc))
+            inst = InstitutionDB(
+                id=str(uuid.uuid4()),
+                name="I",
+                code="I",
+                created_at=datetime.now(timezone.utc),
+            )
             await InstitutionRepository().create(inst)
-            year = YearDB(id=str(uuid.uuid4()), institution_id=inst.id, number=1, name="Y1", created_at=datetime.now(timezone.utc))
+            year = YearDB(
+                id=str(uuid.uuid4()),
+                institution_id=inst.id,
+                number=1,
+                name="Y1",
+                created_at=datetime.now(timezone.utc),
+            )
             await YearRepository().create(year)
-            sem = SemesterDB(id=str(uuid.uuid4()), year_id=year.id, number=1, label="S1", created_at=datetime.now(timezone.utc))
+            sem = SemesterDB(
+                id=str(uuid.uuid4()),
+                year_id=year.id,
+                number=1,
+                label="S1",
+                created_at=datetime.now(timezone.utc),
+            )
             await SemesterRepository().create(sem)
 
             div_repo = DivisionRepository()
-            d1 = DivisionDB(id=str(uuid.uuid4()), semester_id=sem.id, name="A", capacity=60, created_at=datetime.now(timezone.utc))
-            d2 = DivisionDB(id=str(uuid.uuid4()), semester_id=sem.id, name="B", capacity=60, created_at=datetime.now(timezone.utc))
+            d1 = DivisionDB(
+                id=str(uuid.uuid4()),
+                semester_id=sem.id,
+                name="A",
+                capacity=60,
+                created_at=datetime.now(timezone.utc),
+            )
+            d2 = DivisionDB(
+                id=str(uuid.uuid4()),
+                semester_id=sem.id,
+                name="B",
+                capacity=60,
+                created_at=datetime.now(timezone.utc),
+            )
             await div_repo.create(d1)
             await div_repo.create(d2)
 
@@ -396,6 +611,7 @@ class TestSqlDivisionRepository:
             assert len(divs) == 2
             assert {d.name for d in divs} == {"A", "B"}
             await close_sql()
+
         _arun(go())
 
 
@@ -405,23 +621,62 @@ class TestSqlDivisionRepository:
 class TestSqlClassRepository:
     def test_create_and_get_by_id(self):
         async def go():
-            from core.sql_db import init_models, close_sql
-            from repositories._sql.academic_repository import (
-                InstitutionRepository, YearRepository, SemesterRepository,
-                SubjectRepository, DivisionRepository, ClassRepository
+            from core.sql_db import close_sql, init_models
+            from models.academic import (
+                ClassDB,
+                DivisionDB,
+                InstitutionDB,
+                SemesterDB,
+                SubjectDB,
+                YearDB,
             )
-            from models.academic import InstitutionDB, YearDB, SemesterDB, SubjectDB, DivisionDB, ClassDB
+            from repositories._sql.academic_repository import (
+                ClassRepository,
+                DivisionRepository,
+                InstitutionRepository,
+                SemesterRepository,
+                SubjectRepository,
+                YearRepository,
+            )
 
             await init_models()
-            inst = InstitutionDB(id=str(uuid.uuid4()), name="I", code="I", created_at=datetime.now(timezone.utc))
+            inst = InstitutionDB(
+                id=str(uuid.uuid4()),
+                name="I",
+                code="I",
+                created_at=datetime.now(timezone.utc),
+            )
             await InstitutionRepository().create(inst)
-            year = YearDB(id=str(uuid.uuid4()), institution_id=inst.id, number=1, name="Y1", created_at=datetime.now(timezone.utc))
+            year = YearDB(
+                id=str(uuid.uuid4()),
+                institution_id=inst.id,
+                number=1,
+                name="Y1",
+                created_at=datetime.now(timezone.utc),
+            )
             await YearRepository().create(year)
-            sem = SemesterDB(id=str(uuid.uuid4()), year_id=year.id, number=1, label="S1", created_at=datetime.now(timezone.utc))
+            sem = SemesterDB(
+                id=str(uuid.uuid4()),
+                year_id=year.id,
+                number=1,
+                label="S1",
+                created_at=datetime.now(timezone.utc),
+            )
             await SemesterRepository().create(sem)
-            subj = SubjectDB(id=str(uuid.uuid4()), semester_id=sem.id, code="CS301", name="DS", created_at=datetime.now(timezone.utc))
+            subj = SubjectDB(
+                id=str(uuid.uuid4()),
+                semester_id=sem.id,
+                code="CS301",
+                name="DS",
+                created_at=datetime.now(timezone.utc),
+            )
             await SubjectRepository().create(subj)
-            div = DivisionDB(id=str(uuid.uuid4()), semester_id=sem.id, name="A", created_at=datetime.now(timezone.utc))
+            div = DivisionDB(
+                id=str(uuid.uuid4()),
+                semester_id=sem.id,
+                name="A",
+                created_at=datetime.now(timezone.utc),
+            )
             await DivisionRepository().create(div)
 
             cls_repo = ClassRepository()
@@ -438,34 +693,90 @@ class TestSqlClassRepository:
             assert got.division_id == div.id
             assert got.subject_id == subj.id
             await close_sql()
+
         _arun(go())
 
     def test_list_by_division(self):
         async def go():
-            from core.sql_db import init_models, close_sql
-            from repositories._sql.academic_repository import (
-                InstitutionRepository, YearRepository, SemesterRepository,
-                SubjectRepository, DivisionRepository, ClassRepository
+            from core.sql_db import close_sql, init_models
+            from models.academic import (
+                ClassDB,
+                DivisionDB,
+                InstitutionDB,
+                SemesterDB,
+                SubjectDB,
+                YearDB,
             )
-            from models.academic import InstitutionDB, YearDB, SemesterDB, SubjectDB, DivisionDB, ClassDB
+            from repositories._sql.academic_repository import (
+                ClassRepository,
+                DivisionRepository,
+                InstitutionRepository,
+                SemesterRepository,
+                SubjectRepository,
+                YearRepository,
+            )
 
             await init_models()
-            inst = InstitutionDB(id=str(uuid.uuid4()), name="I", code="I", created_at=datetime.now(timezone.utc))
+            inst = InstitutionDB(
+                id=str(uuid.uuid4()),
+                name="I",
+                code="I",
+                created_at=datetime.now(timezone.utc),
+            )
             await InstitutionRepository().create(inst)
-            year = YearDB(id=str(uuid.uuid4()), institution_id=inst.id, number=1, name="Y1", created_at=datetime.now(timezone.utc))
+            year = YearDB(
+                id=str(uuid.uuid4()),
+                institution_id=inst.id,
+                number=1,
+                name="Y1",
+                created_at=datetime.now(timezone.utc),
+            )
             await YearRepository().create(year)
-            sem = SemesterDB(id=str(uuid.uuid4()), year_id=year.id, number=1, label="S1", created_at=datetime.now(timezone.utc))
+            sem = SemesterDB(
+                id=str(uuid.uuid4()),
+                year_id=year.id,
+                number=1,
+                label="S1",
+                created_at=datetime.now(timezone.utc),
+            )
             await SemesterRepository().create(sem)
-            s1 = SubjectDB(id=str(uuid.uuid4()), semester_id=sem.id, code="CS301", name="DS", created_at=datetime.now(timezone.utc))
-            s2 = SubjectDB(id=str(uuid.uuid4()), semester_id=sem.id, code="CS302", name="Algo", created_at=datetime.now(timezone.utc))
+            s1 = SubjectDB(
+                id=str(uuid.uuid4()),
+                semester_id=sem.id,
+                code="CS301",
+                name="DS",
+                created_at=datetime.now(timezone.utc),
+            )
+            s2 = SubjectDB(
+                id=str(uuid.uuid4()),
+                semester_id=sem.id,
+                code="CS302",
+                name="Algo",
+                created_at=datetime.now(timezone.utc),
+            )
             await SubjectRepository().create(s1)
             await SubjectRepository().create(s2)
-            div = DivisionDB(id=str(uuid.uuid4()), semester_id=sem.id, name="A", created_at=datetime.now(timezone.utc))
+            div = DivisionDB(
+                id=str(uuid.uuid4()),
+                semester_id=sem.id,
+                name="A",
+                created_at=datetime.now(timezone.utc),
+            )
             await DivisionRepository().create(div)
 
             cls_repo = ClassRepository()
-            c1 = ClassDB(id=str(uuid.uuid4()), division_id=div.id, subject_id=s1.id, created_at=datetime.now(timezone.utc))
-            c2 = ClassDB(id=str(uuid.uuid4()), division_id=div.id, subject_id=s2.id, created_at=datetime.now(timezone.utc))
+            c1 = ClassDB(
+                id=str(uuid.uuid4()),
+                division_id=div.id,
+                subject_id=s1.id,
+                created_at=datetime.now(timezone.utc),
+            )
+            c2 = ClassDB(
+                id=str(uuid.uuid4()),
+                division_id=div.id,
+                subject_id=s2.id,
+                created_at=datetime.now(timezone.utc),
+            )
             await cls_repo.create(c1)
             await cls_repo.create(c2)
 
@@ -473,6 +784,7 @@ class TestSqlClassRepository:
             assert len(classes) == 2
             assert {c.subject_id for c in classes} == {s1.id, s2.id}
             await close_sql()
+
         _arun(go())
 
 
@@ -482,29 +794,71 @@ class TestSqlClassRepository:
 class TestSqlTeacherAssignmentRepository:
     def test_create_and_get_by_id(self):
         async def go():
-            from core.sql_db import init_models, close_sql
-            from repositories._sql.academic_repository import (
-                InstitutionRepository, YearRepository, SemesterRepository,
-                SubjectRepository, DivisionRepository, ClassRepository,
-                TeacherAssignmentRepository,
-            )
+            from core.sql_db import close_sql, init_models
             from models.academic import (
-                InstitutionDB, YearDB, SemesterDB, SubjectDB, DivisionDB,
-                ClassDB, TeacherAssignmentDB,
+                ClassDB,
+                DivisionDB,
+                InstitutionDB,
+                SemesterDB,
+                SubjectDB,
+                TeacherAssignmentDB,
+                YearDB,
+            )
+            from repositories._sql.academic_repository import (
+                ClassRepository,
+                DivisionRepository,
+                InstitutionRepository,
+                SemesterRepository,
+                SubjectRepository,
+                TeacherAssignmentRepository,
+                YearRepository,
             )
 
             await init_models()
-            inst = InstitutionDB(id=str(uuid.uuid4()), name="I", code="I", created_at=datetime.now(timezone.utc))
+            inst = InstitutionDB(
+                id=str(uuid.uuid4()),
+                name="I",
+                code="I",
+                created_at=datetime.now(timezone.utc),
+            )
             await InstitutionRepository().create(inst)
-            year = YearDB(id=str(uuid.uuid4()), institution_id=inst.id, number=1, name="Y1", created_at=datetime.now(timezone.utc))
+            year = YearDB(
+                id=str(uuid.uuid4()),
+                institution_id=inst.id,
+                number=1,
+                name="Y1",
+                created_at=datetime.now(timezone.utc),
+            )
             await YearRepository().create(year)
-            sem = SemesterDB(id=str(uuid.uuid4()), year_id=year.id, number=1, label="S1", created_at=datetime.now(timezone.utc))
+            sem = SemesterDB(
+                id=str(uuid.uuid4()),
+                year_id=year.id,
+                number=1,
+                label="S1",
+                created_at=datetime.now(timezone.utc),
+            )
             await SemesterRepository().create(sem)
-            subj = SubjectDB(id=str(uuid.uuid4()), semester_id=sem.id, code="CS301", name="DS", created_at=datetime.now(timezone.utc))
+            subj = SubjectDB(
+                id=str(uuid.uuid4()),
+                semester_id=sem.id,
+                code="CS301",
+                name="DS",
+                created_at=datetime.now(timezone.utc),
+            )
             await SubjectRepository().create(subj)
-            div = DivisionDB(id=str(uuid.uuid4()), semester_id=sem.id, name="A", created_at=datetime.now(timezone.utc))
+            div = DivisionDB(
+                id=str(uuid.uuid4()),
+                semester_id=sem.id,
+                name="A",
+                created_at=datetime.now(timezone.utc),
+            )
             await DivisionRepository().create(div)
-            cls = ClassDB(id=str(uuid.uuid4()), division_id=div.id, subject_id=subj.id, created_at=datetime.now(timezone.utc))
+            cls = ClassDB(
+                id=str(uuid.uuid4()),
+                division_id=div.id,
+                subject_id=subj.id,
+                created_at=datetime.now(timezone.utc),
+            )
             await ClassRepository().create(cls)
 
             ta_repo = TeacherAssignmentRepository()
@@ -523,46 +877,132 @@ class TestSqlTeacherAssignmentRepository:
             assert got.teacher_id == "teacher-uuid-1"
             assert got.active is True
             await close_sql()
+
         _arun(go())
 
     def test_list_for_class_and_for_teacher(self):
         async def go():
-            from core.sql_db import init_models, close_sql
-            from repositories._sql.academic_repository import (
-                InstitutionRepository, YearRepository, SemesterRepository,
-                SubjectRepository, DivisionRepository, ClassRepository,
-                TeacherAssignmentRepository,
-            )
+            from core.sql_db import close_sql, init_models
             from models.academic import (
-                InstitutionDB, YearDB, SemesterDB, SubjectDB, DivisionDB,
-                ClassDB, TeacherAssignmentDB,
+                ClassDB,
+                DivisionDB,
+                InstitutionDB,
+                SemesterDB,
+                SubjectDB,
+                TeacherAssignmentDB,
+                YearDB,
+            )
+            from repositories._sql.academic_repository import (
+                ClassRepository,
+                DivisionRepository,
+                InstitutionRepository,
+                SemesterRepository,
+                SubjectRepository,
+                TeacherAssignmentRepository,
+                YearRepository,
             )
 
             await init_models()
-            inst = InstitutionDB(id=str(uuid.uuid4()), name="I", code="I2", created_at=datetime.now(timezone.utc))
+            inst = InstitutionDB(
+                id=str(uuid.uuid4()),
+                name="I",
+                code="I2",
+                created_at=datetime.now(timezone.utc),
+            )
             await InstitutionRepository().create(inst)
-            year = YearDB(id=str(uuid.uuid4()), institution_id=inst.id, number=1, name="Y1", created_at=datetime.now(timezone.utc))
+            year = YearDB(
+                id=str(uuid.uuid4()),
+                institution_id=inst.id,
+                number=1,
+                name="Y1",
+                created_at=datetime.now(timezone.utc),
+            )
             await YearRepository().create(year)
-            sem = SemesterDB(id=str(uuid.uuid4()), year_id=year.id, number=1, label="S1", created_at=datetime.now(timezone.utc))
+            sem = SemesterDB(
+                id=str(uuid.uuid4()),
+                year_id=year.id,
+                number=1,
+                label="S1",
+                created_at=datetime.now(timezone.utc),
+            )
             await SemesterRepository().create(sem)
-            s1 = SubjectDB(id=str(uuid.uuid4()), semester_id=sem.id, code="S1", name="DS", created_at=datetime.now(timezone.utc))
-            s2 = SubjectDB(id=str(uuid.uuid4()), semester_id=sem.id, code="S2", name="Algo", created_at=datetime.now(timezone.utc))
+            s1 = SubjectDB(
+                id=str(uuid.uuid4()),
+                semester_id=sem.id,
+                code="S1",
+                name="DS",
+                created_at=datetime.now(timezone.utc),
+            )
+            s2 = SubjectDB(
+                id=str(uuid.uuid4()),
+                semester_id=sem.id,
+                code="S2",
+                name="Algo",
+                created_at=datetime.now(timezone.utc),
+            )
             await SubjectRepository().create(s1)
             await SubjectRepository().create(s2)
-            div = DivisionDB(id=str(uuid.uuid4()), semester_id=sem.id, name="A", created_at=datetime.now(timezone.utc))
+            div = DivisionDB(
+                id=str(uuid.uuid4()),
+                semester_id=sem.id,
+                name="A",
+                created_at=datetime.now(timezone.utc),
+            )
             await DivisionRepository().create(div)
-            c1 = ClassDB(id=str(uuid.uuid4()), division_id=div.id, subject_id=s1.id, created_at=datetime.now(timezone.utc))
-            c2 = ClassDB(id=str(uuid.uuid4()), division_id=div.id, subject_id=s2.id, created_at=datetime.now(timezone.utc))
+            c1 = ClassDB(
+                id=str(uuid.uuid4()),
+                division_id=div.id,
+                subject_id=s1.id,
+                created_at=datetime.now(timezone.utc),
+            )
+            c2 = ClassDB(
+                id=str(uuid.uuid4()),
+                division_id=div.id,
+                subject_id=s2.id,
+                created_at=datetime.now(timezone.utc),
+            )
             await ClassRepository().create(c1)
             await ClassRepository().create(c2)
 
             ta_repo = TeacherAssignmentRepository()
             now = datetime.now(timezone.utc)
             # Two teachers on c1, one teacher on c2; one inactive row to verify filter
-            await ta_repo.create(TeacherAssignmentDB(id=str(uuid.uuid4()), class_id=c1.id, teacher_id="T1", active=True, assigned_at=now))
-            await ta_repo.create(TeacherAssignmentDB(id=str(uuid.uuid4()), class_id=c1.id, teacher_id="T2", active=True, assigned_at=now))
-            await ta_repo.create(TeacherAssignmentDB(id=str(uuid.uuid4()), class_id=c1.id, teacher_id="T3", active=False, assigned_at=now))
-            await ta_repo.create(TeacherAssignmentDB(id=str(uuid.uuid4()), class_id=c2.id, teacher_id="T1", active=True, assigned_at=now))
+            await ta_repo.create(
+                TeacherAssignmentDB(
+                    id=str(uuid.uuid4()),
+                    class_id=c1.id,
+                    teacher_id="T1",
+                    active=True,
+                    assigned_at=now,
+                )
+            )
+            await ta_repo.create(
+                TeacherAssignmentDB(
+                    id=str(uuid.uuid4()),
+                    class_id=c1.id,
+                    teacher_id="T2",
+                    active=True,
+                    assigned_at=now,
+                )
+            )
+            await ta_repo.create(
+                TeacherAssignmentDB(
+                    id=str(uuid.uuid4()),
+                    class_id=c1.id,
+                    teacher_id="T3",
+                    active=False,
+                    assigned_at=now,
+                )
+            )
+            await ta_repo.create(
+                TeacherAssignmentDB(
+                    id=str(uuid.uuid4()),
+                    class_id=c2.id,
+                    teacher_id="T1",
+                    active=True,
+                    assigned_at=now,
+                )
+            )
 
             c1_list = await ta_repo.list_for_class(c1.id)
             assert len(c1_list) == 2  # active only
@@ -579,6 +1019,7 @@ class TestSqlTeacherAssignmentRepository:
             t3_list = await ta_repo.list_for_teacher("T3")
             assert t3_list == []  # inactive excluded
             await close_sql()
+
         _arun(go())
 
 
@@ -588,34 +1029,86 @@ class TestSqlTeacherAssignmentRepository:
 class TestSqlStudentEnrollmentRepository:
     def test_create_and_list_for_class_and_student(self):
         async def go():
-            from core.sql_db import init_models, close_sql
-            from repositories._sql.academic_repository import (
-                InstitutionRepository, YearRepository, SemesterRepository,
-                SubjectRepository, DivisionRepository, ClassRepository,
-                StudentEnrollmentRepository,
-            )
+            from core.sql_db import close_sql, init_models
             from models.academic import (
-                InstitutionDB, YearDB, SemesterDB, SubjectDB, DivisionDB,
-                ClassDB, StudentEnrollmentDB,
+                ClassDB,
+                DivisionDB,
+                InstitutionDB,
+                SemesterDB,
+                StudentEnrollmentDB,
+                SubjectDB,
+                YearDB,
+            )
+            from repositories._sql.academic_repository import (
+                ClassRepository,
+                DivisionRepository,
+                InstitutionRepository,
+                SemesterRepository,
+                StudentEnrollmentRepository,
+                SubjectRepository,
+                YearRepository,
             )
 
             await init_models()
-            inst = InstitutionDB(id=str(uuid.uuid4()), name="I", code="I3", created_at=datetime.now(timezone.utc))
+            inst = InstitutionDB(
+                id=str(uuid.uuid4()),
+                name="I",
+                code="I3",
+                created_at=datetime.now(timezone.utc),
+            )
             await InstitutionRepository().create(inst)
-            year = YearDB(id=str(uuid.uuid4()), institution_id=inst.id, number=1, name="Y1", created_at=datetime.now(timezone.utc))
+            year = YearDB(
+                id=str(uuid.uuid4()),
+                institution_id=inst.id,
+                number=1,
+                name="Y1",
+                created_at=datetime.now(timezone.utc),
+            )
             await YearRepository().create(year)
-            sem = SemesterDB(id=str(uuid.uuid4()), year_id=year.id, number=1, label="S1", created_at=datetime.now(timezone.utc))
+            sem = SemesterDB(
+                id=str(uuid.uuid4()),
+                year_id=year.id,
+                number=1,
+                label="S1",
+                created_at=datetime.now(timezone.utc),
+            )
             await SemesterRepository().create(sem)
-            subj = SubjectDB(id=str(uuid.uuid4()), semester_id=sem.id, code="S1", name="DS", created_at=datetime.now(timezone.utc))
+            subj = SubjectDB(
+                id=str(uuid.uuid4()),
+                semester_id=sem.id,
+                code="S1",
+                name="DS",
+                created_at=datetime.now(timezone.utc),
+            )
             await SubjectRepository().create(subj)
-            div = DivisionDB(id=str(uuid.uuid4()), semester_id=sem.id, name="A", created_at=datetime.now(timezone.utc))
+            div = DivisionDB(
+                id=str(uuid.uuid4()),
+                semester_id=sem.id,
+                name="A",
+                created_at=datetime.now(timezone.utc),
+            )
             await DivisionRepository().create(div)
-            cls = ClassDB(id=str(uuid.uuid4()), division_id=div.id, subject_id=subj.id, created_at=datetime.now(timezone.utc))
+            cls = ClassDB(
+                id=str(uuid.uuid4()),
+                division_id=div.id,
+                subject_id=subj.id,
+                created_at=datetime.now(timezone.utc),
+            )
             await ClassRepository().create(cls)
 
             se_repo = StudentEnrollmentRepository()
-            e1 = StudentEnrollmentDB(id=str(uuid.uuid4()), class_id=cls.id, student_id="S-A", enrolled_at=datetime.now(timezone.utc))
-            e2 = StudentEnrollmentDB(id=str(uuid.uuid4()), class_id=cls.id, student_id="S-B", enrolled_at=datetime.now(timezone.utc))
+            e1 = StudentEnrollmentDB(
+                id=str(uuid.uuid4()),
+                class_id=cls.id,
+                student_id="S-A",
+                enrolled_at=datetime.now(timezone.utc),
+            )
+            e2 = StudentEnrollmentDB(
+                id=str(uuid.uuid4()),
+                class_id=cls.id,
+                student_id="S-B",
+                enrolled_at=datetime.now(timezone.utc),
+            )
             await se_repo.create(e1)
             await se_repo.create(e2)
 
@@ -632,33 +1125,76 @@ class TestSqlStudentEnrollmentRepository:
             assert len(student_list) == 1
             assert student_list[0].class_id == cls.id
             await close_sql()
+
         _arun(go())
 
     def test_find_existing_for_idempotency(self):
         async def go():
-            from core.sql_db import init_models, close_sql
-            from repositories._sql.academic_repository import (
-                InstitutionRepository, YearRepository, SemesterRepository,
-                SubjectRepository, DivisionRepository, ClassRepository,
-                StudentEnrollmentRepository,
-            )
+            from core.sql_db import close_sql, init_models
             from models.academic import (
-                InstitutionDB, YearDB, SemesterDB, SubjectDB, DivisionDB,
-                ClassDB, StudentEnrollmentDB,
+                ClassDB,
+                DivisionDB,
+                InstitutionDB,
+                SemesterDB,
+                StudentEnrollmentDB,
+                SubjectDB,
+                YearDB,
+            )
+            from repositories._sql.academic_repository import (
+                ClassRepository,
+                DivisionRepository,
+                InstitutionRepository,
+                SemesterRepository,
+                StudentEnrollmentRepository,
+                SubjectRepository,
+                YearRepository,
             )
 
             await init_models()
-            inst = InstitutionDB(id=str(uuid.uuid4()), name="I", code="I4", created_at=datetime.now(timezone.utc))
+            inst = InstitutionDB(
+                id=str(uuid.uuid4()),
+                name="I",
+                code="I4",
+                created_at=datetime.now(timezone.utc),
+            )
             await InstitutionRepository().create(inst)
-            year = YearDB(id=str(uuid.uuid4()), institution_id=inst.id, number=1, name="Y1", created_at=datetime.now(timezone.utc))
+            year = YearDB(
+                id=str(uuid.uuid4()),
+                institution_id=inst.id,
+                number=1,
+                name="Y1",
+                created_at=datetime.now(timezone.utc),
+            )
             await YearRepository().create(year)
-            sem = SemesterDB(id=str(uuid.uuid4()), year_id=year.id, number=1, label="S1", created_at=datetime.now(timezone.utc))
+            sem = SemesterDB(
+                id=str(uuid.uuid4()),
+                year_id=year.id,
+                number=1,
+                label="S1",
+                created_at=datetime.now(timezone.utc),
+            )
             await SemesterRepository().create(sem)
-            subj = SubjectDB(id=str(uuid.uuid4()), semester_id=sem.id, code="S1", name="DS", created_at=datetime.now(timezone.utc))
+            subj = SubjectDB(
+                id=str(uuid.uuid4()),
+                semester_id=sem.id,
+                code="S1",
+                name="DS",
+                created_at=datetime.now(timezone.utc),
+            )
             await SubjectRepository().create(subj)
-            div = DivisionDB(id=str(uuid.uuid4()), semester_id=sem.id, name="A", created_at=datetime.now(timezone.utc))
+            div = DivisionDB(
+                id=str(uuid.uuid4()),
+                semester_id=sem.id,
+                name="A",
+                created_at=datetime.now(timezone.utc),
+            )
             await DivisionRepository().create(div)
-            cls = ClassDB(id=str(uuid.uuid4()), division_id=div.id, subject_id=subj.id, created_at=datetime.now(timezone.utc))
+            cls = ClassDB(
+                id=str(uuid.uuid4()),
+                division_id=div.id,
+                subject_id=subj.id,
+                created_at=datetime.now(timezone.utc),
+            )
             await ClassRepository().create(cls)
 
             se_repo = StudentEnrollmentRepository()
@@ -667,7 +1203,12 @@ class TestSqlStudentEnrollmentRepository:
             assert await se_repo.find_existing(cls.id, "S-X") is None
 
             # Create first enrollment
-            e = StudentEnrollmentDB(id=str(uuid.uuid4()), class_id=cls.id, student_id="S-X", enrolled_at=datetime.now(timezone.utc))
+            e = StudentEnrollmentDB(
+                id=str(uuid.uuid4()),
+                class_id=cls.id,
+                student_id="S-X",
+                enrolled_at=datetime.now(timezone.utc),
+            )
             await se_repo.create(e)
 
             # find_existing now returns the enrollment
@@ -678,14 +1219,23 @@ class TestSqlStudentEnrollmentRepository:
 
             # Attempting to create a duplicate enrollment should raise IntegrityError
             # (unique constraint on class_id + student_id)
-            e2 = StudentEnrollmentDB(id=str(uuid.uuid4()), class_id=cls.id, student_id="S-X", enrolled_at=datetime.now(timezone.utc))
+            e2 = StudentEnrollmentDB(
+                id=str(uuid.uuid4()),
+                class_id=cls.id,
+                student_id="S-X",
+                enrolled_at=datetime.now(timezone.utc),
+            )
             try:
                 await se_repo.create(e2)
                 assert False, "Expected IntegrityError for duplicate enrollment"
             except Exception as ex:
-                assert "UNIQUE constraint failed" in str(ex) or "IntegrityError" in type(ex).__name__
+                assert (
+                    "UNIQUE constraint failed" in str(ex)
+                    or "IntegrityError" in type(ex).__name__
+                )
 
             await close_sql()
+
         _arun(go())
 
 
@@ -697,21 +1247,56 @@ class TestDispatcher:
         # Settings is already monkeypatched to DATABASE_BACKEND=postgres by
         # the _sql_env autouse fixture, and the SQL branch is imported lazily
         # at module load time. Re-import fresh to pick up the patched env.
+        import importlib
+
         from repositories import (
-            institution_repository, year_repository, branch_repository,
-            semester_repository, subject_repository, division_repository,
-            class_repository, teacher_assignment_repository, student_enrollment_repository,
+            branch_repository,
+            class_repository,
+            division_repository,
+            institution_repository,
+            semester_repository,
+            student_enrollment_repository,
+            subject_repository,
+            teacher_assignment_repository,
+            year_repository,
+        )
+
+        importlib.reload(institution_repository)
+        importlib.reload(year_repository)
+        importlib.reload(branch_repository)
+        importlib.reload(semester_repository)
+        importlib.reload(subject_repository)
+        importlib.reload(division_repository)
+        importlib.reload(class_repository)
+        importlib.reload(teacher_assignment_repository)
+        importlib.reload(student_enrollment_repository)
+
+        from repositories._sql.academic_repository import (
+            BranchRepository as SqlBranch,
+        )
+        from repositories._sql.academic_repository import (
+            ClassRepository as SqlClass,
+        )
+        from repositories._sql.academic_repository import (
+            DivisionRepository as SqlDiv,
         )
         from repositories._sql.academic_repository import (
             InstitutionRepository as SqlInst,
-            YearRepository as SqlYear,
-            BranchRepository as SqlBranch,
+        )
+        from repositories._sql.academic_repository import (
             SemesterRepository as SqlSem,
-            SubjectRepository as SqlSubj,
-            DivisionRepository as SqlDiv,
-            ClassRepository as SqlClass,
-            TeacherAssignmentRepository as SqlTA,
+        )
+        from repositories._sql.academic_repository import (
             StudentEnrollmentRepository as SqlSE,
+        )
+        from repositories._sql.academic_repository import (
+            SubjectRepository as SqlSubj,
+        )
+        from repositories._sql.academic_repository import (
+            TeacherAssignmentRepository as SqlTA,
+        )
+        from repositories._sql.academic_repository import (
+            YearRepository as SqlYear,
         )
 
         # Each dispatcher module exposes exactly one *Repository class with the

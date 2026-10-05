@@ -1,10 +1,10 @@
 """Transcription worker — handles the 'transcribe' stage of lecture processing."""
+
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
 
 from core.config import get_settings
-from core.queue_config import queue_for_stage
 from models.job import JobCreate, JobDB, JobStage
 from repositories.lecture_repository import LectureRepository
 from services.ai_service import get_ai_service
@@ -15,11 +15,12 @@ from services.audio_chunker import (
     split_into_chunks,
 )
 from services.lecture_service import (
-    CHUNK_THRESHOLD_SECONDS,
     CHUNK_LENGTH_SECONDS,
     CHUNK_MIME,
+    CHUNK_THRESHOLD_SECONDS,
 )
 from services.storage_service import get_storage
+
 from workers.base import BaseWorker, JobContext
 
 logger = logging.getLogger(__name__)
@@ -36,7 +37,8 @@ class TranscriptionWorker(BaseWorker):
     """
 
     stage = "transcribe"
-    queue_name = queue_for_stage("transcribe")
+    # Backends resolve the stage key (SqsQueueBackend._resolve -> queue URL), matching enqueue_job.
+    queue_name = "transcribe"
 
     def __init__(self, max_jobs: int | None = None):
         if max_jobs is None:
@@ -52,12 +54,15 @@ class TranscriptionWorker(BaseWorker):
 
         try:
             # Update status to processing
-            await repo.update_fields(lecture_id, {
-                "status": "processing",
-                "progress_step": 1,
-                "progress_total": 3,
-                "progress_label": "Transcribing audio",
-            })
+            await repo.update_fields(
+                lecture_id,
+                {
+                    "status": "processing",
+                    "progress_step": 1,
+                    "progress_total": 3,
+                    "progress_label": "Transcribing audio",
+                },
+            )
 
             lecture = await repo.get_by_id(lecture_id)
             if not lecture:
@@ -71,45 +76,67 @@ class TranscriptionWorker(BaseWorker):
                 try:
                     duration = await get_duration_seconds(audio_path)
                 except Exception:
-                    logger.exception("Could not probe duration; falling back to single-shot")
+                    logger.exception(
+                        "Could not probe duration; falling back to single-shot"
+                    )
                     duration = 0.0
 
                 await repo.update_fields(lecture_id, {"duration_seconds": duration})
 
                 if duration and duration > CHUNK_THRESHOLD_SECONDS:
                     transcript = await self._transcribe_chunked(
-                        lecture_id, audio_path, duration, ai, repo, chunks_made, job.version,
+                        lecture_id,
+                        audio_path,
+                        duration,
+                        ai,
+                        repo,
+                        chunks_made,
+                        job.version,
                     )
                 else:
                     transcript = await self._transcribe_single(
-                        lecture_id, audio_path, lecture.audio_mime, ai, repo,
+                        lecture_id,
+                        audio_path,
+                        lecture.audio_mime,
+                        ai,
+                        repo,
                     )
 
             if not transcript:
                 raise RuntimeError("Empty transcript from AI provider")
 
             # Store transcript on lecture
-            await repo.update_fields(lecture_id, {
-                "transcript": transcript,
-                "progress_step": 2,
-                "progress_label": "Transcription complete",
-            })
+            await repo.update_fields(
+                lecture_id,
+                {
+                    "transcript": transcript,
+                    "progress_step": 2,
+                    "progress_label": "Transcription complete",
+                },
+            )
 
             logger.info("Transcription complete for lecture %s", lecture_id)
-            
+
             # Return next stage to enqueue
-            return [JobCreate(
-                lecture_id=lecture_id,
-                version=1,
-                stage="generate_materials",
-            )]
+            return [
+                JobCreate(
+                    lecture_id=lecture_id,
+                    version=1,
+                    stage="generate_materials",
+                )
+            ]
 
         finally:
             if chunks_made:
                 cleanup_chunks(chunks_made)
 
     async def _transcribe_single(
-        self, lecture_id: str, audio_path: Path, mime: str, ai, repo,
+        self,
+        lecture_id: str,
+        audio_path: Path,
+        mime: str,
+        ai,
+        repo,
     ) -> str:
         """Transcribe a short lecture in a single pass."""
         logger.info("Single-shot transcription for lecture %s", lecture_id)
@@ -117,25 +144,37 @@ class TranscriptionWorker(BaseWorker):
         return transcript
 
     async def _transcribe_chunked(
-        self, lecture_id: str, audio_path: Path, duration: float, ai, repo,
-        chunks_sink: list[Path], version: int,
+        self,
+        lecture_id: str,
+        audio_path: Path,
+        duration: float,
+        ai,
+        repo,
+        chunks_sink: list[Path],
+        version: int,
     ) -> str:
         """Split a long lecture into chunks, transcribe each, stitch."""
-        logger.info("Chunked transcription for lecture %s (%.1fs)", lecture_id, duration)
+        logger.info(
+            "Chunked transcription for lecture %s (%.1fs)", lecture_id, duration
+        )
 
         # Split
         chunk_paths = await split_into_chunks(audio_path, CHUNK_LENGTH_SECONDS)
         chunks_sink.extend(chunk_paths)
         chunk_count = len(chunk_paths)
 
-        await repo.update_fields(lecture_id, {
-            "chunk_count": chunk_count,
-            "progress_label": f"Transcribing {chunk_count} chunks",
-        })
+        await repo.update_fields(
+            lecture_id,
+            {
+                "chunk_count": chunk_count,
+                "progress_label": f"Transcribing {chunk_count} chunks",
+            },
+        )
 
         from repositories.job_chunk_repository import JobChunkRepository
+
         chunk_repo = JobChunkRepository()
-        
+
         await chunk_repo.ensure(lecture_id, version, chunk_count)
         pending = await chunk_repo.pending(lecture_id, version)
 
@@ -143,10 +182,13 @@ class TranscriptionWorker(BaseWorker):
         for idx in pending:
             chunk_path = chunk_paths[idx]
             offset = idx * CHUNK_LENGTH_SECONDS
-            await repo.update_fields(lecture_id, {
-                "progress_label": f"Transcribing chunk {idx + 1}/{chunk_count} ({format_timestamp(offset)})",
-            })
-            
+            await repo.update_fields(
+                lecture_id,
+                {
+                    "progress_label": f"Transcribing chunk {idx + 1}/{chunk_count} ({format_timestamp(offset)})",
+                },
+            )
+
             try:
                 chunk_text = await ai.transcribe_audio(chunk_path, CHUNK_MIME)
                 formatted_text = f"[Chunk {idx + 1} · {format_timestamp(offset)}]\n{chunk_text.strip()}"

@@ -33,15 +33,23 @@ Rules:
 ## Status
 
 Living project status, updated after every feature lands.
-**Last updated:** 2026-10-05 (after Phase 12 — Account Gate, Budget, CDK Skeleton & Network)
+**Last updated:** 2026-10-05 (after Phase 13 — Code Seams, Plans 01-13)
 
-### What was added (Phase 13 — Code Seams, Plans 01-09)
+### What was added (Phase 13 — Code Seams, Plans 01-13)
 
-- **SQL Queue Backend (Plans 13-01 to 13-05)** — Created `core/queue_backend.py`, `repositories/job_repository.py`, `job_chunk_repository.py`, `workers/base.py`, `workers/__main__.py`, `services/notification_service.py`, `core/ssm_overlay.py` to completely replace Redis and ARQ. Workers now run as pure Python processes on `asyncio` loops polling SQS/SQLite.
+- **SQL Queue Backend (Plans 13-01 to 13-05)** — Created `core/queue_backend.py`, `repositories/job_repository.py`, `job_chunk_repository.py`, `workers/base.py`, `services/notification_service.py`, `core/ssm_overlay.py` to completely replace Redis and ARQ. Workers now run as pure Python processes on `asyncio` loops polling SQS/SQLite.
 - **Security & Infrastructure** — Implemented SSM overlay for secure runtime config, instance profile S3 auth (removing static keys), and added robust HTTP rate limiting for AI API calls.
 - **Cleanup (Plan 13-09)** — Purged `redis` and `arq` dependencies from the codebase.
-- **Test counts:** All 3 tests passed in the new runtime dependency check; 98+ tests green overall on memory backend.
-- **New graph nodes:** (Graph update skipped)
+- **Gap closure (Plans 13-10 to 13-13)**:
+  - Retry-After-carrying `ProviderRateLimited` (`ai_service` + Groq transcription).
+  - Crash-safe enqueue-before-complete ordering with `enqueue_job(..., resend_if_queued=...)`.
+  - Bounded SIGTERM drain (`DRAIN_TIMEOUT_SECONDS`, default 90) with visibility-0 release.
+  - `backend/workers/__main__.py` entrypoint (created in 13-13; mapping CLI stage args to worker classes and exit 2 on invalid stages).
+  - Workers poll stage-keyed queues (`transcribe`, `generate_materials`, `embed`) matching what `enqueue_job` sends to.
+  - `ENV` now defaults to `production` (set `ENV=dev` for local runs; `DEV_ENVS = dev/test/local`).
+  - Live-HTTP test files ignored at collection unless `REACT_APP_BACKEND_URL` is set.
+- **Test counts:** 142 passed, 3 skipped in backend offline suite (all tests green on memory backend).
+- **New graph nodes:** (Graph update skipped; graphify not installed)
 - **Next card in queue:** Phase 13.1 — Class-Scoped Access & Timetable
 
 ### What was added (Phase 12 — Account Gate, Budget, CDK Skeleton & Network)
