@@ -92,6 +92,9 @@ export const lectureApi = {
                 onUploadProgress,
             })
             .then((r) => r.data),
+    uploadUrl: (payload) => api.post("/lectures/upload-url", payload).then((r) => r.data),
+    uploadComplete: (id) => api.post(`/lectures/${id}/upload-complete`).then((r) => r.data),
+    audioPresignedUrl: (id) => api.get(`/lectures/${id}/audio-url`).then((r) => r.data),
     mine: () => api.get("/lectures/mine").then((r) => r.data),
     published: () => api.get("/lectures/published").then((r) => r.data),
     get: (id) => api.get(`/lectures/${id}`).then((r) => r.data),
@@ -277,4 +280,39 @@ export const academicApi = {
     getMyAssignedClasses: () => api.get("/enrollment/teacher-assignments/mine").then((r) => r.data),
     getMyClasses: () => api.get("/enrollment/my-classes").then((r) => r.data),
 };
+
+/**
+ * Browser-direct S3 upload: POSTs policy fields first and the file last
+ * via XMLHttpRequest so upload progress is observable (fetch has no
+ * upload-progress events). Resolves on 2xx, rejects with {status, body}
+ * otherwise.
+ */
+export function uploadToS3(presigned, file, onProgress) {
+    const { url, fields } = presigned || {};
+    return new Promise((resolve, reject) => {
+        if (!url) {
+            reject({ status: 0, body: "Missing presigned upload URL" });
+            return;
+        }
+        const form = new FormData();
+        for (const [key, value] of Object.entries(fields || {})) {
+            form.append(key, value);
+        }
+        form.append("file", file);
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", url, true);
+        if (xhr.upload && typeof onProgress === "function") {
+            xhr.upload.onprogress = (evt) => {
+                if (evt.lengthComputable) onProgress(evt.loaded, evt.total);
+                else onProgress(evt.loaded, evt.total);
+            };
+        }
+        xhr.onload = () => {
+            if (xhr.status >= 200 && xhr.status < 300) resolve({ status: xhr.status });
+            else reject({ status: xhr.status, body: xhr.responseText });
+        };
+        xhr.onerror = () => reject({ status: xhr.status || 0, body: xhr.responseText });
+        xhr.send(form);
+    });
+}
 

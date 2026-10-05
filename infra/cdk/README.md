@@ -143,3 +143,38 @@ Once deployed:
     `7 × (1 + 3) = 28` connections, well within the 112 limit.
 - **In-Memory Rate Limiting**: SlowAPI rate limiting operates per-instance in Phase 15. Shared Redis-backed rate limiting is deferred to future multi-AZ production scale.
 - **Public Subnet Instances**: Web and worker instances reside in public subnets with public IPs to allow direct outbound egress to S3 and public package repositories without incurring NAT Gateway costs ($32+/month). Inbound traffic is strictly restricted to ALB security group forwarding (:3000, :8000) with all other inbound ports blocked.
+
+## 10. Phase 16 — Redrive the DLQ
+
+After `maxReceiveCount=5`, poison messages land in the shared `lectify-dlq`
+(14-day retention) and the lecture/job rows are marked `dead_letter`.
+Redrive is operator-run, never automatic.
+
+### Prerequisites
+- Operator IAM needs `sqs:ReceiveMessage/DeleteMessage/GetQueueAttributes` on the
+  DLQ ARN plus `sqs:SendMessage` on the destination stage queue.
+  The worker role lacks DLQ read access by design.
+- The browser upload POST needs S3 CORS `app_origin` set to the ALB DNS.
+  This is the same two-step `APP_ORIGIN` deploy from §9: first deploy with a
+  placeholder, read the ALB DNS, then redeploy with
+  `APP_ORIGIN=http://<AlbDnsName>` so the presigned browser POST is allowed.
+
+### Redrive
+```bash
+bash scripts/redrive-dlq.sh --source lectify-dlq --dest lectify-transcribe
+bash scripts/redrive-dlq.sh --source <dlq-arn> --dest <stage-queue-arn> --max 50 --force
+```
+
+### Lecture reset
+Moving the message does not reset the lecture row. For each affected lecture,
+as an admin:
+```bash
+curl -X POST "$API/api/lectures/{lecture_id}/retry" -H "Authorization: Bearer $ADMIN_JWT"
+```
+(`POST /lectures/{id}/retry` is admin-only; non-`dead_letter` rows get 409.)
+
+### Confirm recovery
+- DLQ depth is zero:
+  `aws sqs get-queue-attributes --queue-url <dlq-url> --attribute-names ApproximateNumberOfMessages`
+- The lecture left `dead_letter` (`GET /api/lectures/{id}` shows `queued`).
+- A fresh `transcribe` job row exists for the lecture.

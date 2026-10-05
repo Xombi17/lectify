@@ -18,6 +18,7 @@ from fastapi.responses import StreamingResponse
 from core.deps import (
     get_current_user,
     get_user_accessible_class_ids,
+    require_admin,
     require_teacher,
     require_teacher_or_admin,
     verify_lecture_access,
@@ -37,6 +38,7 @@ from models.lecture import (
     QuizV2Result,
 )
 from models.user import UserPublic
+from pydantic import BaseModel
 from repositories.attempt_repository import AttemptRepository
 from repositories.lecture_repository import LectureRepository
 from repositories.teacher_assignment_repository import TeacherAssignmentRepository
@@ -50,6 +52,20 @@ from services.storage_service import get_storage
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/lectures", tags=["lectures"])
+
+MAX_UPLOAD_BYTES = 200 * 1024 * 1024
+PRESIGN_EXPIRES_SECONDS = 900
+
+
+class UploadUrlRequest(BaseModel):
+    title: str
+    class_id: str
+    timetable_slot_id: str | None = None
+    subject: str | None = None
+    semester: str | None = None
+    filename: str
+    content_type: str
+    size: int
 
 
 @router.post("", response_model=LectureDB, status_code=status.HTTP_202_ACCEPTED)
@@ -157,6 +173,193 @@ async def get_lecture_job_status(
         created_at=lecture.created_at,
         updated_at=lecture.updated_at,
     )
+
+
+@router.post("/upload-url", status_code=status.HTTP_200_OK)
+async def create_upload_url(
+    payload: UploadUrlRequest,
+    user: UserPublic = Depends(require_teacher_or_admin),
+):
+    """Mint a browser-direct S3 presigned POST for lecture audio.
+
+    Creates the LectureDB row with status=uploading and returns
+    {lecture_id, url, fields, key, expires_in} for a direct browser POST.
+    Returns 501 on LocalStorage so the frontend falls back to multipart.
+    """
+    if user.role != "admin":
+        assignment_repo = TeacherAssignmentRepository()
+        assignment = await assignment_repo.find_existing(
+            class_id=payload.class_id, teacher_id=user.id, active_only=True
+        )
+        if not assignment:
+            raise HTTPException(status_code=403, detail="Not assigned to teach this class")
+
+    if payload.size > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="File too large (max 200 MB)")
+
+    mime = normalize_mime(payload.content_type or "", payload.filename or "")
+    if not mime or mime not in ALLOWED_AUDIO_MIME:
+        raise HTTPException(
+            status_code=400, detail=f"Unsupported audio type: {payload.content_type}"
+        )
+
+    repo = LectureRepository()
+    storage = get_storage()
+
+    lecture_id = repo.new_id()
+    safe_filename = (payload.filename or "lecture.mp3").replace("/", "_")
+    key = f"classes/{payload.class_id}/lectures/{lecture_id}/recording/{safe_filename}"
+
+    lecture = LectureDB(
+        id=lecture_id,
+        teacher_id=user.id,
+        title=payload.title.strip(),
+        subject=(payload.subject or "").strip() or None,
+        semester=(payload.semester or "").strip() or None,
+        class_id=payload.class_id,
+        timetable_slot_id=payload.timetable_slot_id,
+        audio_object_key=key,
+        audio_filename=safe_filename,
+        audio_mime=mime,
+        status="uploading",
+    )
+    await repo.create(lecture)
+
+    try:
+        presigned = await storage.presign_post(
+            key,
+            content_type=mime,
+            max_bytes=MAX_UPLOAD_BYTES,
+            expires=PRESIGN_EXPIRES_SECONDS,
+        )
+    except NotImplementedError:
+        raise HTTPException(
+            status_code=501, detail="Presigned upload not supported by storage backend"
+        )
+
+    return {
+        "lecture_id": lecture_id,
+        "url": presigned["url"],
+        "fields": presigned["fields"],
+        "key": key,
+        "expires_in": PRESIGN_EXPIRES_SECONDS,
+    }
+
+
+@router.post("/{lecture_id}/upload-complete", response_model=LectureDB, status_code=status.HTTP_202_ACCEPTED)
+async def complete_upload(
+    lecture_id: str,
+    user: UserPublic = Depends(require_teacher_or_admin),
+):
+    """Verify a browser-direct upload via head_object and enqueue transcribe once."""
+    repo = LectureRepository()
+    lecture = await repo.get_by_id(lecture_id)
+    if not lecture:
+        raise HTTPException(status_code=404, detail="Lecture not found")
+    if lecture.teacher_id != user.id and user.role != "admin":
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    if lecture.status in ("queued", "processing", "ready"):
+        return lecture
+
+    storage = get_storage()
+    try:
+        meta = await storage.head_object(lecture.audio_object_key)
+    except FileNotFoundError:
+        raise HTTPException(status_code=409, detail="Object not uploaded")
+
+    size = meta.get("size", 0)
+    if size == 0 or size > MAX_UPLOAD_BYTES:
+        try:
+            await storage.delete(lecture.audio_object_key)
+        except Exception:
+            pass
+        raise HTTPException(status_code=413, detail="File too large (max 200 MB)")
+
+    actual_mime = normalize_mime(meta.get("content_type", ""), lecture.audio_filename)
+    if actual_mime != lecture.audio_mime:
+        raise HTTPException(status_code=400, detail="Content-Type mismatch")
+
+    await repo.update_fields(lecture_id, {"status": "queued"})
+
+    from services.metrics_service import record_lecture_uploaded
+    record_lecture_uploaded(source="presigned_upload")
+
+    score = compute_priority_score()
+    await enqueue_job(
+        JobCreate(
+            lecture_id=lecture_id,
+            version=1,
+            priority_score=score,
+            stage="transcribe",
+        )
+    )
+
+    updated = await repo.get_by_id(lecture_id)
+    return updated or lecture
+
+
+@router.post("/{lecture_id}/retry", response_model=LectureDB)
+async def retry_lecture(
+    lecture_id: str,
+    user: UserPublic = Depends(require_admin),
+):
+    """Reset a dead_letter lecture to queued and enqueue a fresh transcribe job (admin-only)."""
+    from sqlalchemy import func, select
+
+    from core.sql_db import session_maker
+    from models.orm import JobORM
+
+    repo = LectureRepository()
+    lecture = await repo.get_by_id(lecture_id)
+    if not lecture:
+        raise HTTPException(status_code=404, detail="Lecture not found")
+    if lecture.status != "dead_letter":
+        raise HTTPException(status_code=409, detail="Lecture is not in dead_letter")
+
+    async with session_maker()() as session:
+        result = await session.execute(
+            select(func.max(JobORM.version)).where(
+                JobORM.lecture_id == lecture_id, JobORM.stage == "transcribe"
+            )
+        )
+        max_version = result.scalar()
+    new_version = (max_version or 0) + 1
+
+    await repo.update_fields(lecture_id, {"status": "queued", "error_message": None})
+
+    score = compute_priority_score()
+    await enqueue_job(
+        JobCreate(
+            lecture_id=lecture_id,
+            version=new_version,
+            priority_score=score,
+            stage="transcribe",
+        )
+    )
+
+    updated = await repo.get_by_id(lecture_id)
+    return updated or lecture
+
+
+@router.get("/{lecture_id}/audio-url")
+async def get_audio_url(
+    lecture_id: str,
+    user: UserPublic = Depends(get_current_user),
+):
+    """Return a short-lived presigned GET for audio playback (class-gated)."""
+    lecture = await verify_lecture_access(lecture_id, user)
+
+    storage = get_storage()
+    try:
+        url = await storage.presign_get(
+            lecture.audio_object_key, expires=PRESIGN_EXPIRES_SECONDS
+        )
+    except NotImplementedError:
+        raise HTTPException(
+            status_code=501, detail="Presigned playback not supported by storage backend"
+        )
+    return {"url": url, "expires_in": PRESIGN_EXPIRES_SECONDS}
 
 
 @router.get("/{lecture_id}", response_model=LectureDB)
@@ -299,6 +502,7 @@ async def stream_audio(lecture_id: str, user: UserPublic = Depends(get_current_u
 def _status_from_lecture_status(lecture_status: str) -> str:
     """Map LectureDB status to JobPublic status."""
     mapping = {
+        "uploading": "queued",
         "queued": "queued",
         "uploaded": "queued",
         "processing": "processing",
@@ -312,7 +516,7 @@ def _status_from_lecture_status(lecture_status: str) -> str:
 
 def _stage_from_status(lecture) -> str:
     """Determine current processing stage from lecture state."""
-    if lecture.status == "queued":
+    if lecture.status in ("queued", "uploading", "uploaded"):
         return "transcribe"
     if lecture.transcript and not (lecture.materials and lecture.materials.summary):
         return "generate_materials"

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { lectureApi, API, bookmarkApi } from "@/lib/api";
+import { STATUS_LABEL, statusPillKind } from "@/lib/lectureStatus";
 import { useAuth } from "@/lib/auth";
 import FlashcardDeck from "@/components/FlashcardDeck";
 import QuizRunner from "@/components/QuizRunner";
@@ -29,7 +30,7 @@ import {
 } from "@phosphor-icons/react";
 import { toast } from "sonner";
 
-const STATUS_LABEL = {
+const STATUS_LABEL_FALLBACK = {
     uploaded: "Queued",
     processing: "AI is processing",
     ready: "Ready",
@@ -51,7 +52,7 @@ export default function LectureDetailPage() {
                 const data = await lectureApi.get(id);
                 if (cancelled) return;
                 setLecture(data);
-                if (data.status === "processing" || data.status === "uploaded") {
+                if (["processing", "uploaded", "uploading", "queued", "retrying"].includes(data.status)) {
                     timer = setTimeout(load, 4000);
                 }
             } catch (err) {
@@ -66,17 +67,40 @@ export default function LectureDetailPage() {
         };
     }, [id, navigate]);
 
-    // produce an authed audio url via blob since FastAPI auth is via header
+    // Prefer presigned audio-url (no auth header); fall back to authed blob stream.
     useEffect(() => {
-        if (!lecture) return;
-        const token = localStorage.getItem("lm_token");
-        fetch(`${API}/lectures/${lecture.id}/audio`, {
-            headers: { Authorization: `Bearer ${token}` },
-        })
-            .then((r) => (r.ok ? r.blob() : Promise.reject(r)))
-            .then((blob) => setAudioToken(URL.createObjectURL(blob)))
-            .catch(() => setAudioToken(null));
-    }, [lecture]);
+        if (!lecture?.id) return;
+        let cancelled = false;
+        let blobUrl = null;
+        const load = async () => {
+            try {
+                const data = await lectureApi.audioPresignedUrl(lecture.id);
+                if (!cancelled && data?.url) {
+                    setAudioToken(data.url);
+                    return;
+                }
+            } catch {
+                // fall through to blob on 501/403/404
+            }
+            try {
+                const token = localStorage.getItem("lm_token");
+                const r = await fetch(`${API}/lectures/${lecture.id}/audio`, {
+                    headers: { Authorization: `Bearer ${token}` },
+                });
+                if (!r.ok) throw r;
+                const blob = await r.blob();
+                blobUrl = URL.createObjectURL(blob);
+                if (!cancelled) setAudioToken(blobUrl);
+            } catch {
+                if (!cancelled) setAudioToken(null);
+            }
+        };
+        load();
+        return () => {
+            cancelled = true;
+            if (blobUrl) URL.revokeObjectURL(blobUrl);
+        };
+    }, [lecture?.id]);
 
     if (!lecture) {
         return (
@@ -86,6 +110,8 @@ export default function LectureDetailPage() {
 
     const isOwner = user?.role === "teacher" && user.id === lecture.teacher_id;
     const ready = lecture.status === "ready";
+    const pillKind = statusPillKind(lecture.status);
+    const pillLabel = STATUS_LABEL[lecture.status] ?? STATUS_LABEL_FALLBACK[lecture.status] ?? lecture.status;
 
     const togglePublish = async () => {
         try {
@@ -123,22 +149,23 @@ export default function LectureDetailPage() {
                             {lecture.semester && <Badge variant="outline">{lecture.semester}</Badge>}
                             <Badge
                                 data-testid="status-badge"
+                                data-kind={pillKind}
                                 className={
-                                    lecture.status === "ready"
+                                    pillKind === "ready"
                                         ? "bg-primary text-primary-foreground"
-                                        : lecture.status === "error"
+                                        : pillKind === "failed"
                                             ? "bg-destructive text-destructive-foreground"
                                             : "bg-accent/30 text-accent-foreground"
                                 }
                             >
-                                {lecture.status === "ready" ? (
+                                {pillKind === "ready" ? (
                                     <CheckCircle size={14} weight="duotone" className="mr-1" />
-                                ) : lecture.status === "error" ? (
+                                ) : pillKind === "failed" ? (
                                     <WarningCircle size={14} weight="duotone" className="mr-1" />
                                 ) : (
                                     <Lightning size={14} weight="duotone" className="mr-1" />
                                 )}
-                                {STATUS_LABEL[lecture.status]}
+                                {pillLabel}
                             </Badge>
                             {lecture.published && (
                                 <Badge className="bg-accent text-accent-foreground">Published</Badge>
@@ -194,10 +221,10 @@ export default function LectureDetailPage() {
                 </div>
             )}
 
-            {lecture.status === "processing" || lecture.status === "uploaded" ? (
+            {pillKind === "processing" ? (
                 <ProcessingState lecture={lecture} />
-            ) : lecture.status === "error" ? (
-                <ErrorState message={lecture.error_message} />
+            ) : pillKind === "failed" ? (
+                <ErrorState message={lecture.error_message} deadLetter={lecture.status === "dead_letter"} />
             ) : (
                 <ContentTabs lecture={lecture} isOwner={isOwner} onLectureUpdate={setLecture} />
             )}
@@ -259,7 +286,7 @@ function ProcessingState({ lecture }) {
     );
 }
 
-function ErrorState({ message }) {
+function ErrorState({ message, deadLetter }) {
     return (
         <div className="border-2 border-destructive bg-destructive/10 p-8">
             <div className="flex items-center gap-3">
@@ -269,8 +296,13 @@ function ErrorState({ message }) {
                 </h3>
             </div>
             <p className="mt-3 text-sm text-muted-foreground">
-                {message || "Something went wrong while processing this lecture."}
+                {message || "Processing failed — contact your teacher."}
             </p>
+            {deadLetter && (
+                <p className="mt-2 text-xs text-muted-foreground">
+                    This lecture exhausted all retries. Contact your teacher to re-queue it.
+                </p>
+            )}
             <p className="mt-2 text-xs text-muted-foreground">
                 Verify that <code className="font-mono">GEMINI_API_KEY</code> is set in
                 <code className="font-mono"> backend/.env</code> and try uploading again.

@@ -1,6 +1,7 @@
 """Transcription worker — handles the 'transcribe' stage of lecture processing."""
 
 import logging
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -26,6 +27,19 @@ from workers.base import BaseWorker, JobContext
 logger = logging.getLogger(__name__)
 
 
+def is_forced_failure(lecture_id: str) -> bool:
+    """Deterministic DLQ-demo hook (Phase 16 D-10/D-11).
+
+    Honored only when FORCE_FAIL_LECTURE_ID matches and ENV is a
+    non-prod deploy env (aws/demo/staging). Inert in prod and when unset.
+    """
+    target = os.environ.get("FORCE_FAIL_LECTURE_ID", "")
+    if not target or target != lecture_id:
+        return False
+    env = os.environ.get("ENV", "production").lower()
+    return env in ("aws", "demo", "staging")
+
+
 class TranscriptionWorker(BaseWorker):
     """Worker that handles the transcription stage of lecture processing.
 
@@ -48,6 +62,8 @@ class TranscriptionWorker(BaseWorker):
     async def process_job(self, job: JobDB, ctx: JobContext) -> list[JobCreate]:
         """Transcribe a lecture."""
         lecture_id = job.lecture_id
+        if is_forced_failure(lecture_id):
+            raise RuntimeError("forced-failure-proof")
         repo = LectureRepository()
         storage = get_storage()
         chunks_made: list[Path] = []

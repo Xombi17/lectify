@@ -5,7 +5,7 @@ from typing import List, Literal, Optional
 from pydantic import BaseModel, Field
 
 LectureStatus = Literal[
-    "uploaded", "queued", "processing", "retrying",
+    "uploaded", "uploading", "queued", "processing", "retrying",
     "ready", "error", "dead_letter",
 ]
 

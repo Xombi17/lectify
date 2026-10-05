@@ -191,7 +191,17 @@ Plans:
   4. A forced failure lands in the DLQ with the lecture marked `dead_letter`, and the documented redrive procedure recovers it
   5. A student can play back lecture audio via a presigned GET (cut first if time slips)
 
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+**Wave 1**
+
+- 16-01-PLAN.md — Backend presigned trio tracer: upload-url + uploading status, upload-complete head_object idempotent enqueue, audio-url class-gated (wave 1)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- 16-02-PLAN.md — Frontend browser-direct uploadToS3 with XHR progress + 501 fallback, ready/failed pills, presigned audio with blob fallback (wave 2)
+- 16-03-PLAN.md — Forced-failure DLQ proof, redrive-dlq.sh + README runbook, SPEC docs + VER-01/VER-02 operator record (wave 2)
+
 **UI hint**: yes
 
 ### Phase 17: Observability & Scaling

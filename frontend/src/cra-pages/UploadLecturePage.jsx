@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { academicApi, lectureApi, timetableApi } from "@/lib/api";
+import { academicApi, lectureApi, timetableApi, uploadToS3 } from "@/lib/api";
+import { FALLBACK_NOTICE, isPresignedUnavailable, uploadErrorCopy } from "@/lib/uploadTransport";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,6 +19,9 @@ export default function UploadLecturePage() {
     const [file, setFile] = useState(null);
     const [progress, setProgress] = useState(0);
     const [submitting, setSubmitting] = useState(false);
+    const [verifying, setVerifying] = useState(false);
+    const [fallbackNotice, setFallbackNotice] = useState("");
+    const [uploadError, setUploadError] = useState("");
 
     // Class scoping & timetable slot state
     const [assignedClasses, setAssignedClasses] = useState([]);
@@ -84,25 +88,72 @@ export default function UploadLecturePage() {
         if (!selectedClassId) return toast.error("Please select an assigned class first");
         if (!file) return toast.error("Pick an audio file first");
 
-        const fd = new FormData();
-        fd.append("title", title);
-        fd.append("file", file);
-        fd.append("class_id", selectedClassId);
-        if (selectedSlotId) fd.append("timetable_slot_id", selectedSlotId);
-        if (subject) fd.append("subject", subject);
-        if (semester) fd.append("semester", semester);
-
         setSubmitting(true);
         setProgress(0);
+        setVerifying(false);
+        setFallbackNotice("");
+        setUploadError("");
+        const onProgress = (evt) => {
+            if (evt.total) setProgress(Math.round((evt.loaded * 100) / evt.total));
+        };
+
+        const showError = (message) => {
+            setUploadError(message);
+            toast.error(message);
+            setSubmitting(false);
+            setVerifying(false);
+        };
+
+        // Prefer browser-direct S3 upload; fall back to multipart on 501.
+        let presigned = null;
         try {
-            const lec = await lectureApi.upload(fd, (evt) => {
-                if (evt.total) setProgress(Math.round((evt.loaded * 100) / evt.total));
+            presigned = await lectureApi.uploadUrl({
+                title,
+                class_id: selectedClassId,
+                timetable_slot_id: selectedSlotId || undefined,
+                subject: subject || undefined,
+                semester: semester || undefined,
+                filename: file.name,
+                content_type: file.type || "audio/mpeg",
+                size: file.size,
             });
-            toast.success("Uploaded — AI is processing your lecture");
+        } catch (err) {
+            if (isPresignedUnavailable(err)) {
+                setFallbackNotice(FALLBACK_NOTICE);
+            } else {
+                return showError(uploadErrorCopy(err));
+            }
+        }
+
+        if (!presigned) {
+            // Multipart fallback path (LocalStorage / dev).
+            const fd = new FormData();
+            fd.append("title", title);
+            fd.append("file", file);
+            fd.append("class_id", selectedClassId);
+            if (selectedSlotId) fd.append("timetable_slot_id", selectedSlotId);
+            if (subject) fd.append("subject", subject);
+            if (semester) fd.append("semester", semester);
+            try {
+                const lec = await lectureApi.upload(fd, onProgress);
+                toast.success("Uploaded — AI is processing your lecture");
+                navigate(`/teacher/lectures/${lec.id}`);
+            } catch (err) {
+                showError(err?.response?.data?.detail || "Upload failed");
+            }
+            return;
+        }
+
+        try {
+            await uploadToS3(presigned, file, (loaded, total) => {
+                if (total) setProgress(Math.round((loaded * 100) / total));
+            });
+            setVerifying(true);
+            const lec = await lectureApi.uploadComplete(presigned.lecture_id);
+            toast.success("Upload complete — processing started");
             navigate(`/teacher/lectures/${lec.id}`);
         } catch (err) {
-            toast.error(err?.response?.data?.detail || "Upload failed");
-            setSubmitting(false);
+            showError(uploadErrorCopy(err));
         }
     };
 
@@ -220,12 +271,26 @@ export default function UploadLecturePage() {
                 {submitting && (
                     <div className="border border-border bg-card p-4">
                         <div className="text-overline mb-2 text-muted-foreground">
-                            Uploading audio
+                            {verifying ? "Verifying upload…" : "Uploading to storage…"}
                         </div>
                         <Progress value={progress} className="h-2" />
                         <div className="mt-2 text-xs text-muted-foreground">
-                            {progress}% — once upload finishes, processing begins automatically.
+                            {verifying
+                                ? "Verifying upload…"
+                                : `${progress}% — once upload finishes, processing begins automatically.`}
                         </div>
+                    </div>
+                )}
+
+                {fallbackNotice && (
+                    <div data-testid="fallback-notice" className="border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
+                        {fallbackNotice}
+                    </div>
+                )}
+
+                {uploadError && (
+                    <div data-testid="upload-error" role="alert" className="border border-destructive bg-destructive/10 p-3 text-sm text-destructive">
+                        {uploadError}
                     </div>
                 )}
 
