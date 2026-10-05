@@ -24,6 +24,7 @@ from routes.search import router as search_router
 from routes.study import router as study_router
 from routes.admin import router as admin_router
 from routes.qr import router as qr_router
+from routes.timetable import router as timetable_router
 
 logging.basicConfig(
     level=logging.INFO,
@@ -188,6 +189,7 @@ elif settings.SERVICE_NAME == "academic":
     api_router.include_router(admin_router)
     api_router.include_router(enrollment_router)
     api_router.include_router(qr_router)
+    api_router.include_router(timetable_router)
 elif settings.SERVICE_NAME == "interaction":
     api_router.include_router(chat_router)
     api_router.include_router(study_router)
@@ -206,6 +208,7 @@ else:
     api_router.include_router(study_router)
     api_router.include_router(admin_router)
     api_router.include_router(qr_router)
+    api_router.include_router(timetable_router)
 
 app.include_router(api_router)
 
