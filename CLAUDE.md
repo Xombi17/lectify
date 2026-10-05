@@ -33,7 +33,7 @@ Rules:
 ## Status
 
 Living project status, updated after every feature lands.
-**Last updated:** 2026-10-05 (Phase 13.1 Plan 03 completed)
+**Last updated:** 2026-10-05 (Phase 13.1 Plan 04 completed)
 
 ### What was added (Phase 13.1 — Class-Scoped Access & Timetable)
 
@@ -41,7 +41,8 @@ Living project status, updated after every feature lands.
 - **Plan 13.1-02 (Lecture Upload & Teacher Assignment Verification)** — Enforced mandatory `class_id` on `POST /api/lectures` upload, validated active teacher assignments with HTTP 403 rejection (and admin bypass), hydrated and persisted `class_id` in `LectureRepository`, and added `backend/tests/test_lectures.py` (4/4 tests green).
 - **Plan 13.1-05 (Timetable Slot CRUD, Overlap Detection & Access Control)** — Built `TimetableRepository` with `find_overlap` interval disjunction, implemented `/api/timetable` endpoints rejecting conflicts with HTTP 409, mounted in `backend/server.py`, and added `backend/tests/test_timetable.py` (4/4 tests green).
 - **Plan 13.1-03 (Student Fail-Closed Direct Item Retrieval)** — Implemented `verify_lecture_access(lecture_id, user)` in `backend/core/deps.py` raising fail-closed HTTP 404 for un-enrolled students and unassigned teachers to prevent resource enumeration. Refactored lecture detail, audio streaming, PDF export, bookmarking, reviews, chat/doubts, and quiz submission endpoints. Added `backend/tests/test_lecture_access.py` (6/6 tests green).
-- **Next card in queue:** Wave 3 plans — Plan 13.1-04 (Scoped list & search filtering) and Plan 13.1-06 (Frontend integration).
+- **Plan 13.1-04 (Scoped List & Search Filtering)** — Extended `list_published` and `list_published_embeddings` in `LectureRepository` to accept `class_ids`, added `get_user_accessible_class_ids` in `backend/core/deps.py`, scoped `GET /api/lectures/published` and `GET /api/search` with zero cross-class leakage, and added `backend/tests/test_scoped_search.py` (3/3 tests green).
+- **Next card in queue:** Wave 3 plan — Plan 13.1-06 (Frontend integration: class picker & timetable view).
 
 ### What was added (Phase 13 — Code Seams, Plans 01-13)
 
