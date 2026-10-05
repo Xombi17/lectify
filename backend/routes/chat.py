@@ -4,7 +4,7 @@ from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from core.deps import get_current_user
+from core.deps import get_current_user, verify_lecture_access
 from models.chat import (
     ChatAskRequest,
     ChatAskResponse,
@@ -19,28 +19,17 @@ from services.ai_service import get_ai_service
 router = APIRouter(tags=["chat"])
 
 
-def _can_view(lecture, user: UserPublic) -> bool:
-    if user.role == "teacher" and lecture.teacher_id == user.id:
-        return True
-    return bool(lecture.published)
-
-
 @router.post("/lectures/{lecture_id}/chat", response_model=ChatAskResponse)
 async def ask_doubt(
     lecture_id: str,
     payload: ChatAskRequest,
     user: UserPublic = Depends(get_current_user),
 ):
-    lec_repo = LectureRepository()
-    chat_repo = ChatRepository()
-    lecture = await lec_repo.get_by_id(lecture_id)
-    if not lecture:
-        raise HTTPException(status_code=404, detail="Lecture not found")
-    if not _can_view(lecture, user):
-        raise HTTPException(status_code=403, detail="Forbidden")
+    lecture = await verify_lecture_access(lecture_id, user)
     if not lecture.transcript:
         raise HTTPException(status_code=400, detail="Lecture transcript not ready yet")
 
+    chat_repo = ChatRepository()
     history = await chat_repo.list_for(lecture_id, user.id, limit=20)
     ai = get_ai_service()
     answer = await ai.chat(
@@ -76,12 +65,7 @@ async def chat_history(
     lecture_id: str,
     user: UserPublic = Depends(get_current_user),
 ):
-    lec_repo = LectureRepository()
-    lecture = await lec_repo.get_by_id(lecture_id)
-    if not lecture:
-        raise HTTPException(status_code=404, detail="Lecture not found")
-    if not _can_view(lecture, user):
-        raise HTTPException(status_code=403, detail="Forbidden")
+    await verify_lecture_access(lecture_id, user)
     return await ChatRepository().list_for(lecture_id, user.id, limit=100)
 
 
@@ -96,12 +80,8 @@ async def translate_lecture(
     Result is cached on the lecture doc under `translations[lang_lower]` so subsequent
     requests are instant and don't burn tokens.
     """
+    lecture = await verify_lecture_access(lecture_id, user)
     lec_repo = LectureRepository()
-    lecture = await lec_repo.get_by_id(lecture_id)
-    if not lecture:
-        raise HTTPException(status_code=404, detail="Lecture not found")
-    if not _can_view(lecture, user):
-        raise HTTPException(status_code=403, detail="Forbidden")
     if lecture.status != "ready":
         raise HTTPException(status_code=400, detail="Lecture is not ready")
 

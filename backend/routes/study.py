@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from io import BytesIO
 
-from core.deps import get_current_user, require_teacher
+from core.deps import get_current_user, require_teacher, verify_lecture_access
 from models.bookmark import (
     BookmarkCreate,
     BookmarkDB,
@@ -30,12 +30,6 @@ from services.spaced_repetition import schedule_next
 router = APIRouter(tags=["study"])
 
 
-def _can_view(lecture, user: UserPublic) -> bool:
-    if user.role == "teacher" and lecture.teacher_id == user.id:
-        return True
-    return bool(lecture.published)
-
-
 # ---------------------------------------------------------------- Notes edit
 @router.patch("/lectures/{lecture_id}/materials", response_model=LectureDB)
 async def edit_materials(
@@ -48,13 +42,11 @@ async def edit_materials(
     Quiz and flashcards are NOT editable here — they're used for grading and
     spaced-repetition, so changing them mid-flight would break student state.
     """
-    repo = LectureRepository()
-    lecture = await repo.get_by_id(lecture_id)
-    if not lecture or lecture.teacher_id != user.id:
-        raise HTTPException(status_code=404, detail="Lecture not found")
+    lecture = await verify_lecture_access(lecture_id, user)
     if lecture.status != "ready":
         raise HTTPException(status_code=400, detail="Lecture is not ready")
 
+    repo = LectureRepository()
     updated = lecture.materials.model_copy()
     if payload.summary is not None:
         updated.summary = payload.summary.strip() or None
@@ -73,12 +65,7 @@ async def edit_materials(
 # ---------------------------------------------------------------- PDF export
 @router.get("/lectures/{lecture_id}/pdf")
 async def export_pdf(lecture_id: str, user: UserPublic = Depends(get_current_user)):
-    repo = LectureRepository()
-    lecture = await repo.get_by_id(lecture_id)
-    if not lecture:
-        raise HTTPException(status_code=404, detail="Lecture not found")
-    if not _can_view(lecture, user):
-        raise HTTPException(status_code=403, detail="Forbidden")
+    lecture = await verify_lecture_access(lecture_id, user)
     if lecture.status != "ready":
         raise HTTPException(status_code=400, detail="Lecture is not ready")
 
@@ -106,12 +93,7 @@ async def create_bookmark(
     payload: BookmarkCreate,
     user: UserPublic = Depends(get_current_user),
 ):
-    lec_repo = LectureRepository()
-    lecture = await lec_repo.get_by_id(payload.lecture_id)
-    if not lecture:
-        raise HTTPException(status_code=404, detail="Lecture not found")
-    if not _can_view(lecture, user):
-        raise HTTPException(status_code=403, detail="Forbidden")
+    await verify_lecture_access(payload.lecture_id, user)
 
     bm_repo = BookmarkRepository()
     existing = await bm_repo.find_existing(
@@ -155,6 +137,7 @@ async def list_lecture_bookmarks(
     lecture_id: str,
     user: UserPublic = Depends(get_current_user),
 ):
+    await verify_lecture_access(lecture_id, user)
     return await BookmarkRepository().list_for_user_lecture(user.id, lecture_id)
 
 
@@ -168,12 +151,7 @@ async def delete_bookmark(bookmark_id: str, user: UserPublic = Depends(get_curre
 # ----------------------------------------------------------- Flashcard reviews
 @router.post("/flashcards/review", response_model=FlashcardReviewDB)
 async def submit_review(payload: ReviewSubmit, user: UserPublic = Depends(get_current_user)):
-    lec_repo = LectureRepository()
-    lecture = await lec_repo.get_by_id(payload.lecture_id)
-    if not lecture:
-        raise HTTPException(status_code=404, detail="Lecture not found")
-    if not _can_view(lecture, user):
-        raise HTTPException(status_code=403, detail="Forbidden")
+    lecture = await verify_lecture_access(payload.lecture_id, user)
     if payload.card_index < 0 or payload.card_index >= len(lecture.materials.flashcards):
         raise HTTPException(status_code=400, detail="Invalid card_index")
 

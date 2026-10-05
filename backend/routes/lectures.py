@@ -15,7 +15,12 @@ from fastapi import (
 )
 from fastapi.responses import StreamingResponse
 
-from core.deps import get_current_user, require_teacher, require_teacher_or_admin
+from core.deps import (
+    get_current_user,
+    require_teacher,
+    require_teacher_or_admin,
+    verify_lecture_access,
+)
 from core.queue_config import compute_priority_score
 from models.chat import QuizAnswer, QuizAttemptRecord, QuizQuestionV2
 from models.job import JobCreate, JobPublic
@@ -154,16 +159,7 @@ async def get_lecture_job_status(
 
 @router.get("/{lecture_id}", response_model=LectureDB)
 async def get_lecture(lecture_id: str, user: UserPublic = Depends(get_current_user)):
-    repo = LectureRepository()
-    lecture = await repo.get_by_id(lecture_id)
-    if not lecture:
-        raise HTTPException(status_code=404, detail="Lecture not found")
-    # students can only view published; teachers can view their own
-    if user.role == "student" and not lecture.published:
-        raise HTTPException(status_code=403, detail="Lecture not available")
-    if user.role == "teacher" and lecture.teacher_id != user.id and not lecture.published:
-        raise HTTPException(status_code=403, detail="Forbidden")
-    return lecture
+    return await verify_lecture_access(lecture_id, user)
 
 
 @router.post("/{lecture_id}/publish", response_model=LectureDB)
@@ -242,15 +238,7 @@ async def submit_quiz(
     attempt: QuizAttempt,
     user: UserPublic = Depends(get_current_user),
 ):
-    repo = LectureRepository()
-    lecture = await repo.get_by_id(lecture_id)
-    if not lecture:
-        raise HTTPException(status_code=404, detail="Lecture not found")
-    # RBAC: students may only attempt published lectures; teachers may attempt their own
-    if user.role == "student" and not lecture.published:
-        raise HTTPException(status_code=403, detail="Lecture not available")
-    if user.role == "teacher" and lecture.teacher_id != user.id and not lecture.published:
-        raise HTTPException(status_code=403, detail="Forbidden")
+    lecture = await verify_lecture_access(lecture_id, user)
     quiz = lecture.materials.quiz
     if not quiz:
         raise HTTPException(status_code=400, detail="No quiz available")
@@ -287,12 +275,7 @@ async def submit_quiz(
 # --- Audio streaming (works for any storage backend) ---
 @router.get("/{lecture_id}/audio")
 async def stream_audio(lecture_id: str, user: UserPublic = Depends(get_current_user)):
-    repo = LectureRepository()
-    lecture = await repo.get_by_id(lecture_id)
-    if not lecture:
-        raise HTTPException(status_code=404, detail="Lecture not found")
-    if user.role == "student" and not lecture.published:
-        raise HTTPException(status_code=403, detail="Forbidden")
+    lecture = await verify_lecture_access(lecture_id, user)
 
     storage = get_storage()
     try:

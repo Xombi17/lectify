@@ -9,6 +9,9 @@ from jwt import PyJWTError
 
 from core.security import decode_access_token
 from models.user import UserPublic
+from repositories.lecture_repository import LectureRepository
+from repositories.student_enrollment_repository import StudentEnrollmentRepository
+from repositories.teacher_assignment_repository import TeacherAssignmentRepository
 from repositories.user_repository import UserRepository
 
 
@@ -188,19 +191,53 @@ async def get_admin_user(admin: UserPublic = Depends(require_admin)) -> UserPubl
     return admin
 
 
-async def can_access_lecture(
+async def verify_lecture_access(
     lecture_id: str,
     user: UserPublic = Depends(get_current_user),
-) -> dict:
-    """Verify user can access a lecture. Returns the lecture dict or raises."""
-    from repositories.lecture_repository import LectureRepository
+):
+    """Verify user can access a lecture with class-scoped fail-closed security.
+
+    - Admin: granted full access.
+    - Teacher: granted if owner or has active assignment to lecture.class_id. Else 403 Forbidden.
+    - Student:
+      - If lecture is not published: 404 Not Found (fail-closed).
+      - If lecture.class_id is set: student must have active enrollment in that class;
+        if not enrolled: 404 Not Found (fail-closed, prevents resource enumeration).
+    """
     repo = LectureRepository()
     lecture = await repo.get_by_id(lecture_id)
     if not lecture:
-        raise HTTPException(status_code=404, detail="Lecture not found")
-    if user.role == "student" and not lecture.published:
-        raise HTTPException(status_code=403, detail="Lecture not available")
-    if user.role == "teacher" and lecture.teacher_id != user.id and not lecture.published:
-        raise HTTPException(status_code=403, detail="Forbidden")
-    return lecture
-    # Note: type annotation is intentionally loose — actual return type is LectureDB
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lecture not found")
+
+    if user.role == "admin":
+        return lecture
+
+    if user.role == "teacher":
+        if lecture.teacher_id == user.id:
+            return lecture
+        if lecture.class_id:
+            ta_repo = TeacherAssignmentRepository()
+            assignment = await ta_repo.find_existing(lecture.class_id, user.id, active_only=True)
+            if assignment:
+                return lecture
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+
+    if user.role == "student":
+        if not lecture.published:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lecture not found")
+        if lecture.class_id:
+            se_repo = StudentEnrollmentRepository()
+            enrollment = await se_repo.find_existing(lecture.class_id, user.id)
+            if not enrollment:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lecture not found")
+        return lecture
+
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+
+
+async def can_access_lecture(
+    lecture_id: str,
+    user: UserPublic = Depends(get_current_user),
+):
+    """Verify user can access a lecture. Delegates to verify_lecture_access."""
+    return await verify_lecture_access(lecture_id, user)
