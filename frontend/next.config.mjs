@@ -3,8 +3,17 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: "standalone",
-  env: {
-    NEXT_PUBLIC_BACKEND_URL: process.env.REACT_APP_BACKEND_URL || "http://localhost:8001",
+  async rewrites() {
+    if (process.env.NODE_ENV === "production") {
+      return [];
+    }
+    const backendUrl = process.env.DEV_BACKEND_URL || "http://localhost:8001";
+    return [
+      {
+        source: "/api/:path*",
+        destination: `${backendUrl}/api/:path*`,
+      },
+    ];
   },
   images: {
     unoptimized: false,

@@ -1,9 +1,8 @@
 import axios from "axios";
 
-const BACKEND_URL =
-    process.env.NEXT_PUBLIC_BACKEND_URL ||
-    process.env.REACT_APP_BACKEND_URL;
-export const API = `${BACKEND_URL}/api`;
+// Optional NEXT_PUBLIC_API_BASE override for local tooling only; defaults to relative /api
+const rawApiBase = process.env.NEXT_PUBLIC_API_BASE?.trim();
+export const API = rawApiBase || "/api";
 
 export const api = axios.create({ baseURL: API });
 

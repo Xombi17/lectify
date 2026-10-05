@@ -12,7 +12,7 @@ function decodeToken(token: string): { sub?: string; role?: string } | null {
   }
 }
 
-const PUBLIC_ROUTES = ["/", "/login", "/signup"];
+const PUBLIC_ROUTES = ["/", "/login", "/signup", "/healthz"];
 
 const ROLE_ROUTES: Record<string, string> = {
   "/teacher": "teacher",
