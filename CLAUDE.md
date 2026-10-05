@@ -35,6 +35,15 @@ Rules:
 Living project status, updated after every feature lands.
 **Last updated:** 2026-10-05 (after Phase 12 — Account Gate, Budget, CDK Skeleton & Network)
 
+### What was added (Phase 13 — Code Seams, Plans 01-09)
+
+- **SQL Queue Backend (Plans 13-01 to 13-05)** — Created `core/queue_backend.py`, `repositories/job_repository.py`, `job_chunk_repository.py`, `workers/base.py`, `workers/__main__.py`, `services/notification_service.py`, `core/ssm_overlay.py` to completely replace Redis and ARQ. Workers now run as pure Python processes on `asyncio` loops polling SQS/SQLite.
+- **Security & Infrastructure** — Implemented SSM overlay for secure runtime config, instance profile S3 auth (removing static keys), and added robust HTTP rate limiting for AI API calls.
+- **Cleanup (Plan 13-09)** — Purged `redis` and `arq` dependencies from the codebase.
+- **Test counts:** All 3 tests passed in the new runtime dependency check; 98+ tests green overall on memory backend.
+- **New graph nodes:** (Graph update skipped)
+- **Next card in queue:** Phase 13.1 — Class-Scoped Access & Timetable
+
 ### What was added (Phase 12 — Account Gate, Budget, CDK Skeleton & Network)
 
 - **CDK Infrastructure Foundation** — Self-contained AWS CDK app in `infra/cdk/` (`app.py`, `budget_stack.py`, `network_stack.py`) with zero-NAT VPC, 4 subnets, S3 gateway endpoint, 4 security groups, and cost budget alarms ($50 default with 4 threshold alerts excluding credits).

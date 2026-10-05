@@ -1,8 +1,7 @@
 """Simple load test: enqueue N jobs and verify they all get processed.
 
 Usage:
-  docker compose up -d redis
-  python -m tests.load_test_queue --count=10
+  QUEUE_BACKEND=memory python -m tests.load_test_queue --count=10
 """
 import asyncio
 import sys

@@ -259,7 +259,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    command: python -c "import asyncio; from workers.base import worker_main; from workers.transcription import TranscriptionWorker; asyncio.run(worker_main(TranscriptionWorker))"
+    command: python -m workers transcribe
     depends_on:
       postgres:
         condition: service_healthy
@@ -284,7 +284,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    command: python -c "import asyncio; from workers.base import worker_main; from workers.ai import AIWorker; asyncio.run(worker_main(AIWorker))"
+    command: python -m workers generate_materials
     depends_on:
       postgres:
         condition: service_healthy
@@ -305,7 +305,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    command: python -c "import asyncio; from workers.base import worker_main; from workers.embedding import EmbeddingWorker; asyncio.run(worker_main(EmbeddingWorker))"
+    command: python -m workers embed
     depends_on:
       postgres:
         condition: service_healthy

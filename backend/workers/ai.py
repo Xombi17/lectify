@@ -12,6 +12,7 @@ from services.lecture_service import (
     CHUNK_LENGTH_SECONDS,
     CHUNK_THRESHOLD_SECONDS,
 )
+from services.notification_service import publish_lecture_ready
 from workers.base import BaseWorker, JobContext
 
 logger = logging.getLogger(__name__)
@@ -93,6 +94,12 @@ class AIWorker(BaseWorker):
             "progress_total": 4,
             "progress_label": "Done",
         })
+
+        # ── Notify ───────────────────────────────────────────────────
+        try:
+            await publish_lecture_ready(lecture_id, getattr(lecture, "class_id", None))
+        except Exception:
+            logger.warning("Unexpected error calling publish_lecture_ready", exc_info=False)
 
         logger.info("Study materials generated for lecture %s", lecture_id)
         

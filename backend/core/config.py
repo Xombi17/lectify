@@ -65,9 +65,7 @@ class Settings:
         self.TRANSCRIPTION_PROVIDER: str = os.environ.get("TRANSCRIPTION_PROVIDER", "groq")
         self.TRANSCRIPTION_FALLBACK_PROVIDER: str = os.environ.get("TRANSCRIPTION_FALLBACK_PROVIDER", "gemini")
         
-        # Redis / Queue
-        self.REDIS_URL: str = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
-        self.REDIS_MAX_CONNECTIONS: int = int(os.environ.get("REDIS_MAX_CONNECTIONS", "20"))
+        # Queue
         self.QUEUE_BACKEND: str = os.environ.get("QUEUE_BACKEND", "memory")
         self.QUEUE_MAX_RECEIVES: int = int(os.environ.get("QUEUE_MAX_RECEIVES", "5"))
         self.QUEUE_URL_TRANSCRIBE: str = os.environ.get("QUEUE_URL_TRANSCRIBE", "")
@@ -101,6 +99,7 @@ class Settings:
         self.SLACK_WEBHOOK_URL: str = os.environ.get("SLACK_WEBHOOK_URL", "")
         self.DAILY_SUMMARY_ENABLED: bool = os.environ.get("DAILY_SUMMARY_ENABLED", "true") == "true"
         self.DAILY_SUMMARY_TIME: str = os.environ.get("DAILY_SUMMARY_TIME", "22:00")
+        self.LECTURE_READY_TOPIC_ARN: str = os.environ.get("LECTURE_READY_TOPIC_ARN", "")
         
         # Alerts
         self.ALERT_QUEUE_DEPTH_THRESHOLD: int = int(os.environ.get("ALERT_QUEUE_DEPTH_THRESHOLD", "50"))

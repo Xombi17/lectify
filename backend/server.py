@@ -48,14 +48,7 @@ async def lifespan(app: FastAPI):
     except Exception:
         logger.exception("Failed to ensure indexes/tables")
 
-    # Optional: verify Redis connectivity (non-fatal)
-    try:
-        from core.queue import get_redis
-        redis = get_redis()
-        await redis.ping()
-        logger.info("Redis connection OK")
-    except Exception as e:
-        logger.warning("Redis not available at startup: %s (workers connect independently)", e)
+
 
     # Token cleanup background task — every 6 hours
     _token_cleanup_task = None
@@ -182,15 +175,7 @@ async def health():
         except Exception as e:
             checks["storage"] = f"error: {e}"
 
-    # Redis check (only monolith and ingestion/interaction need this)
-    if settings.SERVICE_NAME in ("monolith", "ingestion", "interaction"):
-        try:
-            from core.queue import get_redis
-            redis = get_redis()
-            await redis.ping()
-            checks["redis"] = "ok"
-        except Exception as e:
-            checks["redis"] = f"error: {e}"
+
 
     overall = "ok" if all(v == "ok" for v in checks.values()) else "degraded"
     return {"status": overall, "checks": checks, "timestamp": datetime.now(timezone.utc).isoformat()}
