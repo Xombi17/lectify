@@ -29,6 +29,18 @@ def _loop_key() -> int:
         return 0
 
 
+def _engine_kwargs(url: str) -> dict:
+    is_postgres = url.startswith("postgres")
+    kwargs = dict(echo=False, future=True)
+    if is_postgres:
+        kwargs.update(
+            pool_size=_settings.DB_POOL_SIZE,
+            max_overflow=_settings.DB_MAX_OVERFLOW,
+            pool_pre_ping=True,
+            pool_recycle=3600,
+        )
+    return kwargs
+
 def _engine() -> AsyncEngine:
     if not _settings.DATABASE_URL:
         raise RuntimeError(
@@ -37,16 +49,7 @@ def _engine() -> AsyncEngine:
     key = _loop_key()
     eng = _engines.get(key)
     if eng is None:
-        # Pool settings only for PostgreSQL; SQLite/aiosqlite uses StaticPool
-        is_postgres = _settings.DATABASE_URL.startswith("postgres")
-        engine_kwargs = dict(echo=False, future=True)
-        if is_postgres:
-            engine_kwargs.update(
-                pool_size=20,
-                max_overflow=10,
-                pool_pre_ping=True,
-                pool_recycle=3600,
-            )
+        engine_kwargs = _engine_kwargs(_settings.DATABASE_URL)
         eng = create_async_engine(_settings.DATABASE_URL, **engine_kwargs)
         _engines[key] = eng
         _makers[key] = async_sessionmaker(eng, expire_on_commit=False, class_=AsyncSession)

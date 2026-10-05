@@ -13,6 +13,9 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 @router.post("/signup", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
 async def signup(payload: UserCreate):
+    if payload.role not in ("student", "teacher"):
+        raise HTTPException(status_code=403, detail="Role not permitted for public signup")
+        
     repo = UserRepository()
     existing = await repo.get_by_email(payload.email.lower())
     if existing:

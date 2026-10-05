@@ -30,3 +30,7 @@
 - Retry + dead-letter queue
 - Monitoring + SLA metrics
 
+### Connection budget & rate limiting
+- DB Budget = (5+2) per process × API/worker count must stay < ≈60.
+- Rate limiter is in-memory per instance (SEC-05 limitation).
+

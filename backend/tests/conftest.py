@@ -1,7 +1,11 @@
 """Shared pytest hooks for LectureMind backend tests."""
+import os
 import sys
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
+
+os.environ.setdefault("ENV", "test")
+os.environ.setdefault("JWT_SECRET", "test-secret-not-for-prod")
 
 import pytest
 

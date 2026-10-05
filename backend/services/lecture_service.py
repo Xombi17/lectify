@@ -82,6 +82,8 @@ def normalize_mime(mime: str, filename: str) -> str | None:
 
 async def _extract_and_store_knowledge_graph(lecture_id: str, lecture: LectureDB, materials: StudyMaterials, repo: LectureRepository) -> None:
     """Extract concepts and relationships from study materials and store in Neo4j."""
+    if not get_settings().NEO4J_SYNC_ENABLED:
+        return
     try:
         neo4j = get_neo4j_service()
         

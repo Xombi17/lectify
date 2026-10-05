@@ -31,7 +31,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-settings = get_settings()
+settings = get_settings().validate()
 
 
 @asynccontextmanager
@@ -78,7 +78,7 @@ async def lifespan(app: FastAPI):
 
     # Monitoring background loop — SLA checks + daily summary + alerts
     _monitor_task = None
-    if settings.DAILY_SUMMARY_ENABLED or settings.ALERT_QUEUE_DEPTH_THRESHOLD > 0:
+    if settings.SLACK_SUMMARY_ENABLED and (settings.DAILY_SUMMARY_ENABLED or settings.ALERT_QUEUE_DEPTH_THRESHOLD > 0):
 
         async def _run_monitoring_loop():
             """Periodic monitoring — daily summary + alert checks."""
@@ -226,7 +226,7 @@ app.include_router(api_router)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS.split(","),
+    allow_origins=[o.strip() for o in settings.CORS_ORIGINS.split(",") if o.strip()],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
