@@ -19,37 +19,37 @@
     "gsd-quick": {
       "source": "local",
       "sourceType": "project",
-      "skillPath": ".claude/skills/gsd-quick/SKILL.md",
+      "skillPath": ".agents/skills/gsd-quick/SKILL.md",
       "computedHash": "local-skill",
-      "installedAt": "2026-06-08",
+      "installedAt": "2026-10-05",
       "enabled": true
     },
     "gsd-execute-phase": {
       "source": "local",
       "sourceType": "project",
-      "skillPath": ".claude/skills/gsd-execute-phase/SKILL.md",
-      "installedAt": "2026-06-08",
+      "skillPath": ".agents/skills/gsd-execute-phase/SKILL.md",
+      "installedAt": "2026-10-05",
       "enabled": true
     },
     "gsd-debug": {
       "source": "local",
       "sourceType": "project",
-      "skillPath": ".claude/skills/gsd-debug/SKILL.md",
-      "installedAt": "2026-06-08",
+      "skillPath": ".agents/skills/gsd-debug/SKILL.md",
+      "installedAt": "2026-10-05",
       "enabled": true
     },
     "gsd-plan-phase": {
       "source": "local",
       "sourceType": "project",
-      "skillPath": ".claude/skills/gsd-plan-phase/SKILL.md",
-      "installedAt": "2026-06-08",
+      "skillPath": ".agents/skills/gsd-plan-phase/SKILL.md",
+      "installedAt": "2026-10-05",
       "enabled": true
     },
     "gsd-graphify": {
       "source": "local",
       "sourceType": "project",
-      "skillPath": ".claude/skills/gsd-graphify/SKILL.md",
-      "installedAt": "2026-06-08",
+      "skillPath": ".agents/skills/gsd-graphify/SKILL.md",
+      "installedAt": "2026-10-05",
       "enabled": true
     }
   }
