@@ -78,7 +78,7 @@ class TranscriptionWorker(BaseWorker):
 
                 if duration and duration > CHUNK_THRESHOLD_SECONDS:
                     transcript = await self._transcribe_chunked(
-                        lecture_id, audio_path, duration, ai, repo, chunks_made,
+                        lecture_id, audio_path, duration, ai, repo, chunks_made, job.version,
                     )
                 else:
                     transcript = await self._transcribe_single(
@@ -118,7 +118,7 @@ class TranscriptionWorker(BaseWorker):
 
     async def _transcribe_chunked(
         self, lecture_id: str, audio_path: Path, duration: float, ai, repo,
-        chunks_sink: list[Path],
+        chunks_sink: list[Path], version: int,
     ) -> str:
         """Split a long lecture into chunks, transcribe each, stitch."""
         logger.info("Chunked transcription for lecture %s (%.1fs)", lecture_id, duration)
@@ -133,18 +133,27 @@ class TranscriptionWorker(BaseWorker):
             "progress_label": f"Transcribing {chunk_count} chunks",
         })
 
-        # Transcribe each chunk sequentially (respects API rate limits)
-        chunk_texts: list[str] = []
-        for idx, chunk_path in enumerate(chunk_paths):
+        from repositories.job_chunk_repository import JobChunkRepository
+        chunk_repo = JobChunkRepository()
+        
+        await chunk_repo.ensure(lecture_id, version, chunk_count)
+        pending = await chunk_repo.pending(lecture_id, version)
+
+        # Transcribe each pending chunk sequentially (respects API rate limits)
+        for idx in pending:
+            chunk_path = chunk_paths[idx]
             offset = idx * CHUNK_LENGTH_SECONDS
             await repo.update_fields(lecture_id, {
                 "progress_label": f"Transcribing chunk {idx + 1}/{chunk_count} ({format_timestamp(offset)})",
             })
-            chunk_text = await ai.transcribe_audio(chunk_path, CHUNK_MIME)
-            chunk_texts.append(chunk_text)
+            
+            try:
+                chunk_text = await ai.transcribe_audio(chunk_path, CHUNK_MIME)
+                formatted_text = f"[Chunk {idx + 1} · {format_timestamp(offset)}]\n{chunk_text.strip()}"
+                await chunk_repo.mark_done(lecture_id, version, idx, formatted_text)
+            except Exception as e:
+                await chunk_repo.mark_failed(lecture_id, version, idx, str(e))
+                raise
 
-        # Stitch with timestamps
-        return "\n\n".join(
-            f"[Chunk {i + 1} · {format_timestamp(i * CHUNK_LENGTH_SECONDS)}]\n{t.strip()}"
-            for i, t in enumerate(chunk_texts)
-        )
+        # Stitch
+        return await chunk_repo.merged_text(lecture_id, version)

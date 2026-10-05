@@ -291,3 +291,19 @@ model Job {
   @@unique([lectureId, stage, version])
   @@map("jobs")
 }
+
+model JobChunk {
+  id            String   @id @default(cuid())
+  lectureId     String   @map("lecture_id")
+  version       Int      @default(1)
+  chunkIndex    Int      @map("chunk_index")
+  status        String   @default("pending")
+  text          String?
+  error         String?
+  attempts      Int      @default(0)
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @default(now()) @map("updated_at")
+
+  @@unique([lectureId, version, chunkIndex])
+  @@map("job_chunks")
+}
