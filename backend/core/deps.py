@@ -241,3 +241,23 @@ async def can_access_lecture(
 ):
     """Verify user can access a lecture. Delegates to verify_lecture_access."""
     return await verify_lecture_access(lecture_id, user)
+
+
+async def get_user_accessible_class_ids(user: UserPublic) -> Optional[List[str]]:
+    """Resolve accessible class IDs for user.
+
+    - admin: None (cross-class access permitted).
+    - teacher: class IDs for active teacher assignments.
+    - student: class IDs of active student enrollments.
+    - others: [] (no access).
+    """
+    if user.role == "admin":
+        return None
+    if user.role == "teacher":
+        assignments = await TeacherAssignmentRepository().list_for_teacher(user.id)
+        return [a.class_id for a in assignments]
+    if user.role == "student":
+        enrollments = await StudentEnrollmentRepository().list_for_student(user.id)
+        return [e.class_id for e in enrollments]
+    return []
+

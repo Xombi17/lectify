@@ -17,6 +17,7 @@ from fastapi.responses import StreamingResponse
 
 from core.deps import (
     get_current_user,
+    get_user_accessible_class_ids,
     require_teacher,
     require_teacher_or_admin,
     verify_lecture_access,
@@ -126,7 +127,8 @@ async def my_lectures(user: UserPublic = Depends(require_teacher)):
 
 @router.get("/published", response_model=list[LectureSummary])
 async def published_lectures(user: UserPublic = Depends(get_current_user)):
-    return await LectureRepository().list_published()
+    class_ids = await get_user_accessible_class_ids(user)
+    return await LectureRepository().list_published(class_ids=class_ids)
 
 
 @router.get("/{lecture_id}/job-status", response_model=JobPublic)

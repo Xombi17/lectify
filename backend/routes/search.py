@@ -5,7 +5,7 @@ from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from core.deps import get_current_user
+from core.deps import get_current_user, get_user_accessible_class_ids
 from models.chat import SearchResult
 from models.user import UserPublic
 from repositories.lecture_repository import LectureRepository
@@ -38,8 +38,9 @@ async def search(
     limit: int = Query(8, ge=1, le=25),
     user: UserPublic = Depends(get_current_user),
 ):
+    class_ids = await get_user_accessible_class_ids(user)
     lec_repo = LectureRepository()
-    docs = await lec_repo.list_published_embeddings()
+    docs = await lec_repo.list_published_embeddings(class_ids=class_ids)
     if not docs:
         return []
 

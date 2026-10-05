@@ -112,19 +112,27 @@ class LectureRepository:
             rows = (await s.execute(stmt)).scalars().all()
             return [_to_summary(r) for r in rows]
 
-    async def list_published(self) -> List[LectureSummary]:
+    async def list_published(self, class_ids: Optional[List[str]] = None) -> List[LectureSummary]:
+        if class_ids is not None and len(class_ids) == 0:
+            return []
         async with session_maker()() as s:
             stmt = (
                 select(LectureORM)
                 .where(LectureORM.published.is_(True))
-                .order_by(LectureORM.created_at.desc())
             )
+            if class_ids is not None:
+                stmt = stmt.where(LectureORM.class_id.in_(class_ids))
+            stmt = stmt.order_by(LectureORM.created_at.desc())
             rows = (await s.execute(stmt)).scalars().all()
             return [_to_summary(r) for r in rows]
 
-    async def list_published_embeddings(self) -> list[dict]:
+    async def list_published_embeddings(self, class_ids: Optional[List[str]] = None) -> list[dict]:
+        if class_ids is not None and len(class_ids) == 0:
+            return []
         async with session_maker()() as s:
             stmt = select(LectureORM).where(LectureORM.published.is_(True))
+            if class_ids is not None:
+                stmt = stmt.where(LectureORM.class_id.in_(class_ids))
             rows = (await s.execute(stmt)).scalars().all()
             return [
                 {
@@ -132,6 +140,7 @@ class LectureRepository:
                     "title": r.title,
                     "subject": r.subject,
                     "semester": r.semester,
+                    "class_id": r.class_id,
                     "embedding": r.embedding or [],
                     "materials": {
                         "summary": (r.materials or {}).get("summary"),
