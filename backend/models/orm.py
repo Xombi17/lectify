@@ -73,8 +73,31 @@ class LectureORM(Base):
     concepts_v2: Mapped[list | None] = mapped_column(JSON, nullable=True)
     error_message: Mapped[str | None] = mapped_column(String(500), nullable=True)
     published: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    # Phase 13.1: class-scoped access and timetable scheduling
+    class_id: Mapped[str | None] = mapped_column(
+        String(64), ForeignKey("classes.id", ondelete="SET NULL"), index=True, nullable=True
+    )
+    timetable_slot_id: Mapped[str | None] = mapped_column(
+        String(64), ForeignKey("timetable_slots.id", ondelete="SET NULL"), index=True, nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
+class TimetableSlotORM(Base):
+    __tablename__ = "timetable_slots"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    class_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("classes.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    teacher_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    day_of_week: Mapped[int] = mapped_column(Integer, nullable=False)
+    start_time: Mapped[str] = mapped_column(String(8), nullable=False)
+    end_time: Mapped[str] = mapped_column(String(8), nullable=False)
+    room: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
 
 class ChatMessageORM(Base):

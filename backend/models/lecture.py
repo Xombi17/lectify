@@ -66,6 +66,8 @@ class LectureDB(BaseModel):
     concepts_v2: Optional[list] = None  # list of concept dicts
     error_message: Optional[str] = None
     published: bool = False
+    class_id: Optional[str] = None
+    timetable_slot_id: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
@@ -79,6 +81,8 @@ class LectureSummary(BaseModel):
     semester: Optional[str]
     status: LectureStatus
     published: bool
+    class_id: Optional[str] = None
+    timetable_slot_id: Optional[str] = None
     created_at: datetime
 
 

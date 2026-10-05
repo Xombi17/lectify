@@ -23,6 +23,7 @@ model User {
   flashcardReviews FlashcardReview[]
   teacherAssignments TeacherAssignment[]
   studentEnrollments StudentEnrollment[]
+  timetableSlots     TimetableSlot[]
 
   @@index([email])
   @@map("users")
@@ -30,38 +31,52 @@ model User {
 
 // ── Lectures ───────────────────────────────────────────────────────────────────
 model Lecture {
-  id              String           @id @default(cuid())
-  teacherId       String           @map("teacher_id")
-  title           String
-  subject         String?
-  semester        String?
-  audioObjectKey  String           @map("audio_object_key")
-  audioFilename   String           @map("audio_filename")
-  audioMime       String           @map("audio_mime")
-  durationSeconds Float?           @map("duration_seconds")
-  chunkCount      Int?             @map("chunk_count")
-  progressStep    Int              @default(0) @map("progress_step")
-  progressTotal   Int              @default(0) @map("progress_total")
-  progressLabel   String?          @map("progress_label")
-  status          String           @default("uploaded")
-  transcript      String?
-  materials       Json             @default("{}")
-  embedding       Json?            // list of floats stored as JSON
-  translations    Json             @default("{}")
-  errorMessage    String?          @map("error_message")
-  published       Boolean          @default(false)
-  createdAt       DateTime         @default(now()) @map("created_at")
-  updatedAt       DateTime         @default(now()) @map("updated_at")
+  id                      String           @id @default(cuid())
+  teacherId               String           @map("teacher_id")
+  title                   String
+  subject                 String?
+  semester                String?
+  audioObjectKey          String           @map("audio_object_key")
+  audioFilename           String           @map("audio_filename")
+  audioMime               String           @map("audio_mime")
+  durationSeconds         Float?           @map("duration_seconds")
+  chunkCount              Int?             @map("chunk_count")
+  progressStep            Int              @default(0) @map("progress_step")
+  progressTotal           Int              @default(0) @map("progress_total")
+  progressLabel           String?          @map("progress_label")
+  status                  String           @default("uploaded")
+  transcript              String?
+  transcriptionConfidence Float?           @map("transcription_confidence")
+  transcriptionLanguage   String?          @map("transcription_language")
+  transcriptionCostUsd    Float?           @map("transcription_cost_usd")
+  lowConfidenceSegments   Json?            @map("low_confidence_segments")
+  materials               Json             @default("{}")
+  embedding               Json?            // list of floats stored as JSON
+  translations            Json             @default("{}")
+  cheatsheet              Json?
+  podcastScript           Json?            @map("podcast_script")
+  quizV2                  Json?            @map("quiz_v2")
+  conceptsV2              Json?            @map("concepts_v2")
+  errorMessage            String?          @map("error_message")
+  published               Boolean          @default(false)
+  classId                 String?          @map("class_id")
+  timetableSlotId         String?          @map("timetable_slot_id")
+  createdAt               DateTime         @default(now()) @map("created_at")
+  updatedAt               DateTime         @default(now()) @map("updated_at")
 
-  teacher         User             @relation(fields: [teacherId], references: [id], onDelete: Cascade)
-  chatMessages    ChatMessage[]
-  quizAttempts    QuizAttempt[]
-  bookmarks       Bookmark[]
-  flashcardReviews FlashcardReview[]
+  teacher                 User             @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  class                   Class?           @relation(fields: [classId], references: [id], onDelete: SetNull)
+  timetableSlot           TimetableSlot?   @relation(fields: [timetableSlotId], references: [id], onDelete: SetNull)
+  chatMessages            ChatMessage[]
+  quizAttempts            QuizAttempt[]
+  bookmarks               Bookmark[]
+  flashcardReviews        FlashcardReview[]
 
   @@index([teacherId])
   @@index([status])
   @@index([published])
+  @@index([classId])
+  @@index([timetableSlotId])
   @@map("lectures")
 }
 
@@ -237,6 +252,8 @@ model Class {
   subject      Subject               @relation(fields: [subjectId], references: [id], onDelete: Cascade)
   teacherAssignments TeacherAssignment[]
   studentEnrollments StudentEnrollment[]
+  lectures     Lecture[]
+  timetableSlots TimetableSlot[]
 
   @@index([divisionId])
   @@index([subjectId])
@@ -271,6 +288,26 @@ model StudentEnrollment {
   @@index([studentId])
   @@unique([classId, studentId])
   @@map("student_enrollments")
+}
+
+// ── Timetable Slots ───────────────────────────────────────────────────────────
+model TimetableSlot {
+  id         String   @id @default(cuid())
+  classId    String   @map("class_id")
+  teacherId  String   @map("teacher_id")
+  dayOfWeek  Int      @map("day_of_week")
+  startTime  String   @map("start_time")
+  endTime    String   @map("end_time")
+  room       String?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  class      Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
+  teacher    User     @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  lectures   Lecture[]
+
+  @@index([classId])
+  @@index([teacherId])
+  @@map("timetable_slots")
 }
 
 // ── Jobs ───────────────────────────────────────────────────────────────────────
