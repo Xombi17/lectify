@@ -194,6 +194,32 @@ TRANSCRIPT:
 
 # ── ABC ─────────────────────────────────────────────────────────────────────────
 
+class ProviderRateLimited(Exception):
+    """Raised when an AI provider returns a 429 Too Many Requests response.
+    
+    The worker loop intercepts this to apply in-process backoff (sleep) without
+    consuming a queue receive/delivery attempt, as 429s are transient capacity issues
+    rather than job failures.
+    """
+    pass
+
+import functools
+
+def handle_rate_limit(func):
+    @functools.wraps(func)
+    async def wrapper(*args, **kwargs):
+        try:
+            return await func(*args, **kwargs)
+        except Exception as e:
+            # Check for Gemini / OpenAI rate limits
+            err_str = str(e)
+            # OpenAI raises RateLimitError, or openai.APIStatusError with status_code 429
+            # google-genai raises APIError with code 429
+            if "429" in err_str or "RateLimitError" in type(e).__name__ or "Too Many Requests" in err_str:
+                raise ProviderRateLimited(f"Provider rate limited: {err_str}") from e
+            raise
+    return wrapper
+
 class AIProvider(ABC):
     @abstractmethod
     async def transcribe_audio(self, audio_path: Path, mime_type: str) -> str: ...
@@ -242,6 +268,7 @@ class GeminiProvider(AIProvider):
         self._client = genai.Client(api_key=api_key)
         self._model = model
 
+    @handle_rate_limit
     async def transcribe_audio(self, audio_path: Path, mime_type: str) -> str:
         from google.genai import types
         logger.info("Uploading audio to Gemini: %s (%s)", audio_path, mime_type)
@@ -259,6 +286,7 @@ class GeminiProvider(AIProvider):
         )
         return (response.text or "").strip()
 
+    @handle_rate_limit
     async def generate_study_materials(self, transcript: str) -> StudyMaterials:
         from google.genai import types
         prompt = STUDY_PROMPT + transcript[:120_000]  # safety guard
@@ -277,6 +305,7 @@ class GeminiProvider(AIProvider):
             flashcards=[Flashcard(**c) for c in (data.get("flashcards") or []) if _valid_card(c)],
         )
 
+    @handle_rate_limit
     async def digest_chunk(self, chunk_transcript: str) -> dict:
         from google.genai import types
         prompt = CHUNK_DIGEST_PROMPT + chunk_transcript[:60_000]
@@ -287,6 +316,7 @@ class GeminiProvider(AIProvider):
         )
         return _parse_json_lenient(response.text or "{}")
 
+    @handle_rate_limit
     async def merge_chunk_digests(self, digests: list[dict]) -> StudyMaterials:
         from google.genai import types
         prompt = HIERARCHICAL_MERGE_PROMPT + json.dumps(digests, ensure_ascii=False)
@@ -305,6 +335,7 @@ class GeminiProvider(AIProvider):
             flashcards=[Flashcard(**c) for c in (data.get("flashcards") or []) if _valid_card(c)],
         )
 
+    @handle_rate_limit
     async def chat(self, transcript: str, history: list[dict], question: str) -> str:
         """RAG-style Q&A bound to the lecture transcript."""
         system = (
@@ -325,6 +356,7 @@ class GeminiProvider(AIProvider):
         response = self._client.models.generate_content(model=self._model, contents=prompt)
         return (response.text or "").strip()
 
+    @handle_rate_limit
     async def translate_pack(self, pack: dict, target_language: str) -> dict:
         """Translate summary/notes/concepts/flashcards into `target_language`.
 
@@ -346,6 +378,7 @@ class GeminiProvider(AIProvider):
         )
         return _parse_json_lenient(response.text or "{}")
 
+    @handle_rate_limit
     async def embed(self, text: str) -> list[float]:
         """Lightweight text embedding for semantic search."""
         resp = self._client.models.embed_content(
@@ -357,6 +390,7 @@ class GeminiProvider(AIProvider):
         return list(emb.values)
 
     # Phase 9 overrides for Gemini
+    @handle_rate_limit
     async def _generate_json(self, prompt: str, max_tokens: int = 4096) -> dict:
         """Shared helper: call Gemini with JSON mode."""
         from google.genai import types
@@ -418,6 +452,8 @@ class NIMProvider(AIProvider):
 
     # ── Core AI methods ────────────────────────────────────────────────────────
 
+    @handle_rate_limit
+    @handle_rate_limit
     async def _chat_completion(self, prompt: str, json_mode: bool = False, max_tokens: int = 4096) -> str:
         """Shared helper: call NIM chat completion."""
         kwargs: dict = {
@@ -491,6 +527,7 @@ class NIMProvider(AIProvider):
         raw = await self._chat_completion(prompt, json_mode=True, max_tokens=4096)
         return _parse_json_lenient(raw)
 
+    @handle_rate_limit
     async def embed(self, text: str) -> list[float]:
         """Text embedding via NIM embedding model."""
         response = await self._client.embeddings.create(

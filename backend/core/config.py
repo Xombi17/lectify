@@ -112,6 +112,8 @@ class Settings:
         self.FEATURE_FLASHCARDS_ENABLED: bool = os.environ.get("FEATURE_FLASHCARDS_ENABLED", "true").lower() == "true"
         self.FEATURE_RATE_LIMIT: bool = os.environ.get("FEATURE_RATE_LIMIT", "false").lower() == "true"
         self.WORKER_POOL_SIZE: int = int(os.environ.get("WORKER_POOL_SIZE", "10"))
+        self.RATE_LIMIT_MAX_WAITS: int = int(os.environ.get("RATE_LIMIT_MAX_WAITS", "5"))
+        self.RATE_LIMIT_MAX_SLEEP_MARGIN_S: int = int(os.environ.get("RATE_LIMIT_MAX_SLEEP_MARGIN_S", "30"))
         
         # New configs
         self.DB_POOL_SIZE: int = int(os.environ.get("DB_POOL_SIZE", "5"))
