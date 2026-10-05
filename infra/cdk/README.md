@@ -1,6 +1,6 @@
-# Lectify CDK (Phase 12)
+# Lectify CDK
 
-BudgetStack + NetworkStack + DataStack. Region default ap-southeast-2.
+BudgetStack + NetworkStack + DataStack + ComputeStack. Region default ap-southeast-2.
 
 ## 1. Prerequisites
 node/npx, aws CLI v2, uv, make. Run `make install` to create a Python 3.12 venv.
@@ -50,3 +50,96 @@ Values come from env vars or a silent prompt, are never printed; existing params
 
 ## 8. Tests
 `make test` and `make synth` run offline, no AWS credentials needed.
+
+---
+
+## 9. Phase 15 — Compute Tier & Delivery
+
+The compute tier provisions an internet-facing Application Load Balancer (ALB), AutoScalingGroups for Web (Next.js standalone + FastAPI monolith) and Worker (background processing pipeline) tiers, systemd services, and S3-asset-based automated EC2 instance bootstrapping on Amazon Linux 2023.
+
+### Prerequisites
+Before synthesizing or deploying the compute tier, two build artifacts must exist:
+1. **Next.js Standalone Bundle**:
+   ```bash
+   make build-web
+   ```
+   Runs off-instance in `frontend/`, packaging the production Next.js standalone server into `infra/cdk/build/web/`.
+2. **Vendored ffmpeg Static Archive**:
+   ```bash
+   make vendor-ffmpeg
+   ```
+   Downloads the pinned AMD64 static ffmpeg build to `infra/cdk/bootstrap/vendor/`, computes its SHA-256 hash, and pins it in `infra/cdk/bootstrap/ffmpeg.sha256`.
+
+`make deploy` runs both prerequisites automatically.
+
+### Two-step deploy
+Because the public ALB DNS name is assigned dynamically during the initial CloudFormation deployment of `ComputeStack`, S3 presigned URL CORS origins on `DataStack` require a two-step deployment:
+1. **Step 1: Initial deployment with placeholder origin**:
+   ```bash
+   make deploy BUDGET_EMAIL=you@example.com READY_EMAILS=you@example.com
+   ```
+2. **Step 2: Read the ALB DNS Name from stack outputs**:
+   Note the `ComputeStack.AlbDnsName` output value (e.g. `Alb-123456789.ap-southeast-2.elb.amazonaws.com`).
+3. **Step 3: Redeploy with ALB DNS origin**:
+   ```bash
+   make deploy BUDGET_EMAIL=you@example.com READY_EMAILS=you@example.com APP_ORIGIN=http://<AlbDnsName>
+   ```
+   This updates the S3 bucket's CORS configuration to allow direct browser uploads from the ALB domain.
+
+### Bootstrap DB & Seed Demo via Session Manager
+The RDS PostgreSQL instance is deployed in isolated private subnets with no public access. To bootstrap tables or seed demo records, use AWS Systems Manager (SSM) Session Manager to execute the helper scripts from an EC2 instance:
+
+1. **Find an active instance**:
+   ```bash
+   aws ec2 describe-instances \
+     --filters "Name=tag:Project,Values=lectify" "Name=instance-state-name,Values=running" \
+     --query "Reservations[].Instances[][InstanceId,Tags[?Key=='Name'].Value|[0]]" \
+     --output table
+   ```
+2. **Start an SSM Session**:
+   ```bash
+   aws ssm start-session --target <instance-id>
+   ```
+3. **Bootstrap the Database Schema**:
+   Inside the instance shell, run:
+   ```bash
+   sudo -u lectify bash -c 'set -a; source /etc/lectify/app.env; set +a; cd /opt/lectify/backend && /opt/lectify/venv/bin/python -m scripts.bootstrap_db'
+   ```
+   This applies database schema creation under an advisory lock (`5504283845945100081`).
+4. **Seed Demo Hierarchy and Accounts**:
+   Inside the instance shell, supply passwords interactively or via environment variables:
+   ```bash
+   sudo -u lectify bash -c 'set -a; source /etc/lectify/app.env; set +a; \
+     export DEMO_ADMIN_PASSWORD=<admin-pw> \
+            DEMO_TEACHER_PASSWORD=<teacher-pw> \
+            DEMO_STUDENT_PASSWORD=<student-pw>; \
+     cd /opt/lectify/backend && /opt/lectify/venv/bin/python -m scripts.seed_demo'
+   ```
+   Never commit passwords to version control or shell history.
+
+### Live Verification Checklist
+Once deployed:
+1. **ALB Root & Routing**:
+   - Access `http://<AlbDnsName>/`: loads the Next.js landing page.
+   - Access `http://<AlbDnsName>/healthz`: returns HTTP 200 from the frontend health check.
+   - Access `http://<AlbDnsName>/api/healthz`: returns HTTP 200 `{"status":"ok"}` from FastAPI.
+2. **Target Group Health**:
+   - Verify both `WebTg` (:3000) and `ApiTg` (:8000) show instances as `healthy` in AWS EC2 Console.
+3. **Authentication & Endpoints**:
+   - Log in using a seeded demo account via the web UI.
+4. **Session Manager Access & SSH Lockdown**:
+   - Connect via `aws ssm start-session --target <instance-id>`.
+   - Confirm SSH (port 22) is closed: port 22 is not open on security groups and instances have no EC2 key pair.
+5. **Systemd Services**:
+   - On the web instance: `systemctl status lectify-api lectify-web` (both active and running).
+   - On the worker instance: `systemctl status lectify-worker` (active and running).
+
+### Limitations & Architecture Notes
+- **HTTP Only (Phase 15)**: The ALB listener runs on HTTP port 80. Custom domains and ACM HTTPS termination are planned for a subsequent release.
+- **Connection Budget**:
+  - `db.t4g.micro` RDS instance supports up to ~112 connections.
+  - SQLAlchemy connection pool is configured with `pool_size=5, max_overflow=2` (7 per process).
+  - Web instances (1 process) + Worker instances (max 3 instances, 1 process each) consume at most:
+    `7 × (1 + 3) = 28` connections, well within the 112 limit.
+- **In-Memory Rate Limiting**: SlowAPI rate limiting operates per-instance in Phase 15. Shared Redis-backed rate limiting is deferred to future multi-AZ production scale.
+- **Public Subnet Instances**: Web and worker instances reside in public subnets with public IPs to allow direct outbound egress to S3 and public package repositories without incurring NAT Gateway costs ($32+/month). Inbound traffic is strictly restricted to ALB security group forwarding (:3000, :8000) with all other inbound ports blocked.

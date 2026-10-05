@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-SKIP = {".venv", "node_modules", ".git", "cdk.out", "__pycache__", ".pytest_cache"}
+SKIP = {".venv", "node_modules", ".git", "cdk.out", "__pycache__", ".pytest_cache", "vendor"}
 PATTERNS = [
     r"AKIA[0-9A-Z]{16}",
     r"gsk_[A-Za-z0-9]{20,}",
@@ -18,7 +18,7 @@ PATTERNS = [
 
 def _files():
     for p in ROOT.rglob("*"):
-        if p.is_file() and not (SKIP & set(p.relative_to(ROOT).parts)) and p.suffix not in {".pyc", ".png"}:
+        if p.is_file() and not (SKIP & set(p.relative_to(ROOT).parts)) and p.suffix not in {".pyc", ".png", ".xz", ".tar"}:
             yield p
 
 
@@ -34,8 +34,26 @@ def _synth(tmp_path):
 
 def test_no_secrets_in_repo_or_synth(tmp_path):
     out = _synth(tmp_path)
-    targets = list(_files()) + list(out.glob("*.template.json"))
+    file_list = list(_files())
+    targets = file_list + list(out.glob("*.template.json"))
     assert list(out.glob("*.template.json"))
+
+    # Explicitly verify Phase 15 compute files are scanned
+    rel_paths = {p.relative_to(ROOT).as_posix() for p in file_list}
+    expected_scanned = {
+        "bootstrap/api.sh",
+        "bootstrap/worker.sh",
+        "bootstrap/common.sh",
+        "bootstrap/systemd/lectify-api.service",
+        "bootstrap/systemd/lectify-web.service",
+        "bootstrap/systemd/lectify-worker.service",
+        "lectify_cdk/compute_stack.py",
+        "lectify_cdk/compute_iam.py",
+        "scripts/vendor-ffmpeg.sh",
+    }
+    missing = expected_scanned - rel_paths
+    assert not missing, f"Expected files not scanned by hygiene checker: {missing}"
+
     for p in targets:
         if p.name == "test_secrets_hygiene.py":
             continue

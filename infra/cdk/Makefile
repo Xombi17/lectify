@@ -11,7 +11,7 @@ APP := -c app_origin=$(APP_ORIGIN) -c ready_emails=$(READY_EMAILS)
 CTX := -c budget_email=$(BUDGET_EMAIL) $(APP) $(OPT)
 PLACEHOLDER := -c budget_email=$(or $(BUDGET_EMAIL),test@example.com) $(APP) $(OPT)
 
-.PHONY: put-secrets install test synth deploy destroy destroy-all preflight orphans
+.PHONY: put-secrets install test synth deploy destroy destroy-all preflight orphans build-web vendor-ffmpeg bootstrap-db seed-demo
 
 install:
 	uv venv --python 3.12 .venv
@@ -21,25 +21,43 @@ install:
 test:
 	$(PY) -m pytest -q
 
-synth:
-	$(CDK) synth $(PLACEHOLDER) -q
+build-web:
+	bash scripts/build-web.sh
 
-deploy:
+vendor-ffmpeg:
+	bash scripts/vendor-ffmpeg.sh
+
+synth:
+	LECTIFY_SKIP_COMPUTE_ARTIFACT_CHECK=1 $(CDK) synth $(PLACEHOLDER) -q
+
+deploy: build-web vendor-ffmpeg
 	@test -n "$(BUDGET_EMAIL)" || { echo "BUDGET_EMAIL is required (make deploy BUDGET_EMAIL=you@example.com)"; exit 1; }
 	$(CDK) deploy --all --require-approval never $(CTX)
 
 destroy:
-	@STACKS=$$($(CDK) list $(PLACEHOLDER) | grep -v '^BudgetStack$$'); \
-	if [ -z "$$STACKS" ]; then echo "nothing to destroy"; else $(CDK) destroy $$STACKS --force $(PLACEHOLDER); fi
+	@STACKS=$$(LECTIFY_SKIP_COMPUTE_ARTIFACT_CHECK=1 $(CDK) list $(PLACEHOLDER) | grep -v '^BudgetStack$$'); \
+	if [ -z "$$STACKS" ]; then echo "nothing to destroy"; else LECTIFY_SKIP_COMPUTE_ARTIFACT_CHECK=1 $(CDK) destroy $$STACKS --force $(PLACEHOLDER); fi
 
 destroy-all:
-	$(CDK) destroy --all --force $(PLACEHOLDER)
+	LECTIFY_SKIP_COMPUTE_ARTIFACT_CHECK=1 $(CDK) destroy --all --force $(PLACEHOLDER)
 
 put-secrets:
 	bash scripts/put-secrets.sh
 
 preflight:
 	bash scripts/preflight.sh
+
+bootstrap-db:
+	@echo "To bootstrap the RDS database schema, start an SSM session on an API or worker instance:"
+	@echo "  aws ssm start-session --target <instance-id>"
+	@echo "Once logged in, run:"
+	@echo "  sudo -u lectify bash -c 'set -a; source /etc/lectify/app.env; set +a; cd /opt/lectify/backend && /opt/lectify/venv/bin/python -m scripts.bootstrap_db'"
+
+seed-demo:
+	@echo "To seed demo users and sample hierarchy, start an SSM session on an API or worker instance:"
+	@echo "  aws ssm start-session --target <instance-id>"
+	@echo "Once logged in, run (specify DEMO_*_PASSWORD in the environment):"
+	@echo "  sudo -u lectify bash -c 'set -a; source /etc/lectify/app.env; set +a; export DEMO_ADMIN_PASSWORD=... DEMO_TEACHER_PASSWORD=... DEMO_STUDENT_PASSWORD=...; cd /opt/lectify/backend && /opt/lectify/venv/bin/python -m scripts.seed_demo'"
 
 orphans:
 	@F="--filter Name=tag:Project,Values=lectify"; \

@@ -33,7 +33,34 @@ Rules:
 ## Status
 
 Living project status, updated after every feature lands.
-**Last updated:** 2026-10-05 (Phase 13.1 Plan 07 completed — Phase 13.1 All Plans Shipped)
+**Last updated:** 2026-10-05 (Phase 15 completed — Compute Tier & Delivery All Plans Shipped)
+
+### What was added (Phase 15 — Compute Tier & Delivery, Plans 01-06)
+
+- **Compute Tier & Delivery Infrastructure** (`infra/cdk/lectify_cdk/compute_stack.py`, `compute_iam.py`, `infra/cdk/app.py`, `infra/cdk/Makefile`, `infra/cdk/scripts/vendor-ffmpeg.sh`, `infra/cdk/bootstrap/`):
+  - Internet-facing Application Load Balancer with priority 10 `/api/*` routing rule forwarding to API target group (port 8000) and default forwarding to Web target group (port 3000) with independent shallow `/healthz` health checks.
+  - Hardened EC2 Launch Templates for Web and Worker tiers enforcing IMDSv2 (`require_imdsv2=True`, `http_put_response_hop_limit=1`), 20GB encrypted gp3 root EBS volumes, public IPs for direct outbound egress, and Session Manager IAM access with no SSH key pairs.
+  - AutoScalingGroups with Web ASG (min 1, max 2, desired 1, 300s ELB grace period) attached to both target groups and Worker ASG (min 1, max 3 hard-cap `WORKER_MAX`, desired 1, EC2 health check) completely decoupled from the ALB.
+  - Automated AL2023 instance bootstrap scripts (`common.sh`, `api.sh`, `worker.sh`) and hardened systemd service units (`lectify-api.service`, `lectify-web.service`, `lectify-worker.service`) with memory caps, user isolation (`lectify:lectify`), and 120s SIGTERM graceful drain timeouts.
+  - Vendored static ffmpeg script (`scripts/vendor-ffmpeg.sh`) with SHA-256 hash pinning (`bootstrap/ffmpeg.sha256`) and unattended bootstrap verification.
+  - App.py fail-fast synthesis validation preventing deployment of unbuilt artifacts, with `LECTIFY_SKIP_COMPUTE_ARTIFACT_CHECK=1` escape hatch for destroy/placeholder flows.
+- **Backend Infrastructure Seams** (`backend/server.py`, `backend/core/config.py`, `backend/core/db_secret.py`, `backend/workers/__main__.py`):
+  - Unauthenticated shallow `/healthz` endpoint returning `{"status": "ok"}` without database queries.
+  - `DB_AUTO_CREATE` setting gating automatic table creation during app lifespan.
+  - AWS Secrets Manager database credentials overlay composing asyncpg connection URLs.
+  - `python -m workers all` supervisor loop running all three pipeline workers concurrently with graceful signal propagation.
+- **RDS Schema Bootstrap & Deterministic Demo Seeder** (`backend/scripts/bootstrap_db.py`, `backend/scripts/seed_demo.py`):
+  - Out-of-band PostgreSQL schema bootstrap under 64-bit advisory lock `5504283845945100081`.
+  - Deterministic idempotent demo seeder creating complete academic hierarchy and demo accounts (admin, teacher, student) using `uuid5` stable identifiers and mandatory interactive/env password prompts.
+- **Frontend Relative API Client & Web Healthz** (`frontend/src/lib/api.js`, `frontend/next.config.mjs`, `frontend/app/healthz/route.ts`, `frontend/middleware.ts`, `infra/cdk/scripts/build-web.sh`):
+  - Same-origin relative `/api` base URL eliminating CORS preflights in production with Next.js dev rewrites to localhost:8000.
+  - Unauthenticated `/healthz` Next.js route handler returning `{"status": "ok"}` with middleware bypass.
+  - Off-instance Next.js standalone bundle builder packaging standalone output to `infra/cdk/build/web/`.
+- **Test suite counts:**
+  - CDK: 49 passed (12 new unit & integration tests across `test_app.py`, `test_compute.py`, `test_compute_iam.py`, `test_secrets_hygiene.py`).
+  - Backend: 193 passed, 3 skipped (8 new tests across `test_healthz.py`, `test_db_secret.py`, `test_worker_all.py`, `test_bootstrap_db.py`, `test_seed_demo.py`).
+  - Frontend: 6 passed (isolated unit tests in `src/lib/__tests__/`).
+- **Next card in queue:** Phase 15 complete; ready for Phase verification and milestone advance to Phase 16.
 
 ### What was added (Phase 13.1 — Class-Scoped Access & Timetable)
 
