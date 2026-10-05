@@ -33,21 +33,12 @@ Rules:
 ## Status
 
 Living project status, updated after every feature lands.
-**Last updated:** 2026-10-05 (Phase 13.1 — Class-Scoped Access & Timetable planned)
+**Last updated:** 2026-10-05 (Phase 13.1 Plan 01 completed)
 
-### What was planned (Phase 13.1 — Class-Scoped Access & Timetable, Plans 01-07)
+### What was added (Phase 13.1 — Class-Scoped Access & Timetable)
 
-- **Research & Strategy** — Produced `13.1-RESEARCH.md`, `13.1-VALIDATION.md`, and `13.1-UI-SPEC.md` locking contracts for class isolation, teacher upload validation, fail-closed 404 access control, timetable overlap rejection, and UI upload/schedule views.
-- **7 Executable Plans**:
-  - `13.1-01-PLAN.md`: Data Model, Schema Parity, and Migrations / Models (D-02, D-05, SCOPE-01/04/05)
-  - `13.1-02-PLAN.md`: Lecture Upload & Teacher Assignment Verification (D-01, SCOPE-01/03)
-  - `13.1-03-PLAN.md`: Student Fail-Closed Access & Direct Item Retrieval Protection (D-03, SCOPE-02)
-  - `13.1-04-PLAN.md`: Scoped List & Search Filtering (D-04, SCOPE-02/03)
-  - `13.1-05-PLAN.md`: Timetable Slot CRUD, Overlap Detection & Access Control (D-05, D-06, D-07, SCOPE-04/05)
-  - `13.1-06-PLAN.md`: Frontend Integration for Class Upload & Timetable (SCOPE-01, SCOPE-05, UI hint)
-  - `13.1-07-PLAN.md`: College Structure Seed Fixture & Cross-Class Isolation Test Suite (D-08, D-09, SCOPE-06)
-- **Coverage & Verification**: 100% decision coverage (9/9) and 100% requirement coverage (15/15) verified by GSD tools; 0 blockers/warnings across all 14 plan commands.
-- **Next card in queue:** Phase 13.1 execution (`/gsd-execute-phase 13.1`)
+- **Plan 13.1-01 (Database Schema & Model Foundations)** — Added `class_id` and `timetable_slot_id` foreign keys with indexes to `LectureORM` (`backend/models/orm.py`) and Prisma `model Lecture` (`prisma/schema.prisma`); defined `TimetableSlotORM` and `model TimetableSlot`; created `backend/models/timetable.py` Pydantic models; updated `test_schema_parity.py` with 4/4 passing tests.
+- **Next card in queue:** Plan 13.1-02 (Lecture upload & teacher assignment enforcement) and Plan 13.1-05 (Timetable slot CRUD & overlap detection) in Wave 2.
 
 ### What was added (Phase 13 — Code Seams, Plans 01-13)
 
