@@ -68,6 +68,13 @@ class Settings:
         # Redis / Queue
         self.REDIS_URL: str = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
         self.REDIS_MAX_CONNECTIONS: int = int(os.environ.get("REDIS_MAX_CONNECTIONS", "20"))
+        self.QUEUE_BACKEND: str = os.environ.get("QUEUE_BACKEND", "memory")
+        self.QUEUE_MAX_RECEIVES: int = int(os.environ.get("QUEUE_MAX_RECEIVES", "5"))
+        self.QUEUE_URL_TRANSCRIBE: str = os.environ.get("QUEUE_URL_TRANSCRIBE", "")
+        self.QUEUE_URL_MATERIALS: str = os.environ.get("QUEUE_URL_MATERIALS", "")
+        self.QUEUE_URL_EMBED: str = os.environ.get("QUEUE_URL_EMBED", "")
+        self.QUEUE_URL_DLQ: str = os.environ.get("QUEUE_URL_DLQ", "")
+        self.AWS_REGION: str = os.environ.get("AWS_REGION", "us-east-1")
         
         # Worker concurrency
         self.TRANSCRIPTION_CONCURRENCY: int = int(os.environ.get("TRANSCRIPTION_CONCURRENCY", "3"))

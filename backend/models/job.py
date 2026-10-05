@@ -31,15 +31,16 @@ class JobCreate(BaseModel):
 
 class JobDB(BaseModel):
     """Full job record stored in Redis / returned by the client."""
+    model_config = {"from_attributes": True}
+    
     id: str
     lecture_id: str
-    type: str = "process_lecture"
     stage: JobStage = "transcribe"
     status: JobStatus = "queued"
     version: int = 1
     priority_score: float = 0.0
     attempt: int = 0
-    max_attempts: int = 3
+    max_attempts: int = 5
     error_message: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

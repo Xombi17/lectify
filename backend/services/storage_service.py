@@ -23,6 +23,10 @@ from core.config import get_settings
 
 settings = get_settings()
 
+MAX_UPLOAD_BYTES = 200 * 1024 * 1024
+MAX_PRESIGN_SECONDS = 900
+
+
 
 class StorageService(ABC):
     """Backend-agnostic blob storage.
@@ -53,6 +57,18 @@ class StorageService(ABC):
     @abstractmethod
     async def delete(self, key: str) -> None:
         """Best-effort delete; never raises on missing keys."""
+
+    @abstractmethod
+    async def presign_post(self, key: str, content_type: str, max_bytes: int = 200*1024*1024, expires: int = 900) -> dict:
+        """Return {"url": str, "fields": dict} for browser-direct POST."""
+
+    @abstractmethod
+    async def presign_get(self, key: str, expires: int = 900) -> str:
+        """Return a presigned GET URL string."""
+
+    @abstractmethod
+    async def head_object(self, key: str) -> dict:
+        """Return {"size": int, "content_type": str}; raises FileNotFoundError if absent."""
 
 
 # --------------------------------------------------------------------------
@@ -110,6 +126,18 @@ class LocalStorage(StorageService):
         except OSError:
             return
 
+    async def presign_post(self, key: str, content_type: str, max_bytes: int = 200*1024*1024, expires: int = 900) -> dict:
+        raise NotImplementedError("presign_post not supported by LocalStorage")
+
+    async def presign_get(self, key: str, expires: int = 900) -> str:
+        raise NotImplementedError("presign_get not supported by LocalStorage")
+
+    async def head_object(self, key: str) -> dict:
+        p = self._path(key)
+        if not p.exists():
+            raise FileNotFoundError(f"Storage key not found: {key}")
+        return {"size": p.stat().st_size, "content_type": "application/octet-stream"}
+
 
 def _copy_to_disk(fileobj: BinaryIO, target: Path) -> None:
     with target.open("wb") as out:
@@ -140,17 +168,18 @@ class S3Storage(StorageService):
         bucket: str,
         endpoint_url: str | None,
         region: str,
-        access_key: str,
-        secret_key: str,
+        access_key: str | None = None,
+        secret_key: str | None = None,
     ):
         import aioboto3  # lazy import so dev envs don't need it
 
         self.bucket = bucket
-        self._session = aioboto3.Session(
-            aws_access_key_id=access_key,
-            aws_secret_access_key=secret_key,
-            region_name=region,
-        )
+        kwargs = {"region_name": region}
+        if access_key and secret_key:
+            kwargs["aws_access_key_id"] = access_key
+            kwargs["aws_secret_access_key"] = secret_key
+            
+        self._session = aioboto3.Session(**kwargs)
         self._endpoint = endpoint_url or None
 
     def _client(self):
@@ -208,6 +237,45 @@ class S3Storage(StorageService):
         except Exception:
             return  # best-effort
 
+    async def presign_post(self, key: str, content_type: str, max_bytes: int = 200*1024*1024, expires: int = 900) -> dict:
+        max_bytes = min(max_bytes, MAX_UPLOAD_BYTES)
+        expires = min(expires, MAX_PRESIGN_SECONDS)
+        async with self._client() as s3:
+            return await s3.generate_presigned_post(
+                Bucket=self.bucket,
+                Key=key,
+                Fields={"Content-Type": content_type},
+                Conditions=[
+                    ["content-length-range", 1, max_bytes],
+                    {"Content-Type": content_type},
+                ],
+                ExpiresIn=expires,
+            )
+
+    async def presign_get(self, key: str, expires: int = 900) -> str:
+        expires = min(expires, MAX_PRESIGN_SECONDS)
+        async with self._client() as s3:
+            return await s3.generate_presigned_url(
+                "get_object",
+                Params={"Bucket": self.bucket, "Key": key},
+                ExpiresIn=expires,
+            )
+
+    async def head_object(self, key: str) -> dict:
+        from botocore.exceptions import ClientError
+        try:
+            async with self._client() as s3:
+                head = await s3.head_object(Bucket=self.bucket, Key=key)
+                return {
+                    "size": head.get("ContentLength", 0),
+                    "content_type": head.get("ContentType", "application/octet-stream"),
+                }
+        except ClientError as e:
+            code = e.response.get("Error", {}).get("Code")
+            if code in ("404", "NoSuchKey", "NotFound"):
+                raise FileNotFoundError(key)
+            raise
+
 
 # --------------------------------------------------------------------------
 # Factory
@@ -224,7 +292,7 @@ def get_storage() -> StorageService:
             bucket=bucket,
             endpoint_url=os.environ.get("OBJECT_STORAGE_ENDPOINT") or None,
             region=os.environ.get("OBJECT_STORAGE_REGION", "us-east-1"),
-            access_key=os.environ.get("OBJECT_STORAGE_ACCESS_KEY", ""),
-            secret_key=os.environ.get("OBJECT_STORAGE_SECRET_KEY", ""),
+            access_key=os.environ.get("OBJECT_STORAGE_ACCESS_KEY") or None,
+            secret_key=os.environ.get("OBJECT_STORAGE_SECRET_KEY") or None,
         )
     raise RuntimeError(f"Unsupported STORAGE_BACKEND={backend!r}")

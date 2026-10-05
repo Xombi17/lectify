@@ -272,3 +272,22 @@ model StudentEnrollment {
   @@unique([classId, studentId])
   @@map("student_enrollments")
 }
+
+// ── Jobs ───────────────────────────────────────────────────────────────────────
+model Job {
+  id            String   @id @default(cuid())
+  lectureId     String   @map("lecture_id")
+  stage         String
+  version       Int      @default(1)
+  status        String
+  attempt       Int      @default(0)
+  maxAttempts   Int      @default(5) @map("max_attempts")
+  priorityScore Float    @default(0.0) @map("priority_score")
+  errorMessage  String?  @map("error_message")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @default(now()) @map("updated_at")
+
+  @@index([status])
+  @@unique([lectureId, stage, version])
+  @@map("jobs")
+}

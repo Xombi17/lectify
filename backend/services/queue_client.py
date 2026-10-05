@@ -1,31 +1,15 @@
 """Queue client — enqueue, status, retry, DLQ, idempotency."""
 import json
 import logging
-import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
-from core.queue import get_redis
-from core.queue_config import (
-    DLQ_PROCESS_LECTURE,
-    IDEMPOTENCY_SET,
-    QUEUE_PROCESS_LECTURE,
-    compute_priority_score,
-)
+from core.queue_backend import get_queue_backend
+from core.queue_config import compute_priority_score
 from models.job import JobCreate, JobDB, JobPublic, JobStatus
+from repositories.job_repository import JobRepository
 
 logger = logging.getLogger(__name__)
-
-IDEMPOTENCY_TTL = 86400  # 24 hours
-
-
-def _decode_or(value: bytes | str | None, default: str = "") -> str:
-    """Safely decode a Redis hash field that might be bytes, str, or None."""
-    if value is None:
-        return default
-    if isinstance(value, bytes):
-        return value.decode()
-    return str(value)
 
 
 async def enqueue_job(payload: JobCreate) -> JobDB:
@@ -33,104 +17,79 @@ async def enqueue_job(payload: JobCreate) -> JobDB:
 
     Returns the existing JobDB if this lecture+version was already enqueued.
     """
-    redis = get_redis()
-    idempotency_key = f"lecture:{payload.lecture_id}:v{payload.version}"
-
-    # Idempotency check: use individual key with TTL so each entry expires independently
-    # Using SET NX (only set if key doesn't exist) with per-key 24h expiry avoids the
-    # shared-SET-EXPIRE leak where every new entry resets TTL for ALL entries.
-    individual_key = f"{IDEMPOTENCY_SET}:{idempotency_key}"
-    existed = await redis.set(individual_key, "1", ex=IDEMPOTENCY_TTL, nx=True)
-    if existed is None:
-        # Key already existed — this is a duplicate
-        logger.info("Duplicate job detected for %s, skipping enqueue", idempotency_key)
-        # Return a placeholder JobDB with status completed
-        # Use a UUID for consistent id format and preserve the payload's stage
-        return JobDB(
-            id=str(uuid.uuid4()),
-            lecture_id=payload.lecture_id,
-            stage=payload.stage,
-            status="completed",
-            version=payload.version,
-        )
-
-    # Compute priority score
+    repo = JobRepository()
     score = payload.priority_score or compute_priority_score()
-
-    # Create job record
-    job_id = str(uuid.uuid4())
-    job = JobDB(
-        id=job_id,
+    
+    job, created = await repo.create_if_absent(
         lecture_id=payload.lecture_id,
         stage=payload.stage,
-        status="queued",
         version=payload.version,
         priority_score=score,
-        attempt=0,
+        max_attempts=5,
     )
+    
+    if not created:
+        logger.info("Duplicate job detected for %s v%s, skipping enqueue", payload.lecture_id, payload.version)
+        return job
 
-    # Push to the priority queue (Redis sorted set)
-    await redis.zadd(QUEUE_PROCESS_LECTURE, {job_id: score})
-    # Update queue depth metric
+    backend = get_queue_backend()
+    body = {
+        "job_id": job.id,
+        "lecture_id": job.lecture_id,
+        "stage": job.stage,
+        "version": job.version,
+    }
+    
+    target_queue = job.stage
+    try:
+        await backend.send(target_queue, body)
+    except Exception as e:
+        from core.sql_db import session_maker
+        from models.orm import JobORM
+        from sqlalchemy import delete
+        async with session_maker()() as session:
+            await session.execute(delete(JobORM).where(JobORM.id == job.id))
+            await session.commit()
+        raise e
+
     from services.metrics_service import queue_depth as _qd
-    depth = await redis.zcard(QUEUE_PROCESS_LECTURE)
+    depth = await backend.depth(target_queue)
     _qd.labels(queue_type="process_lecture").set(depth)
-    # Store job metadata in a hash for quick lookup
-    await redis.hset(
-        f"job:{job_id}",
-        mapping={
-            "lecture_id": payload.lecture_id,
-            "stage": payload.stage,
-            "status": "queued",
-            "version": str(payload.version),
-            "attempt": "0",
-            "max_attempts": "3",
-            "created_at": datetime.now(timezone.utc).isoformat(),
-        },
-    )
 
-    logger.info("Enqueued job %s for lecture %s (score=%.1f)", job_id, payload.lecture_id, score)
+    logger.info("Enqueued job %s for lecture %s (score=%.1f)", job.id, payload.lecture_id, score)
     return job
 
 
 async def get_job_status(job_id: str) -> Optional[JobPublic]:
-    """Get the current status of a job from its hash."""
-    redis = get_redis()
-    data = await redis.hgetall(f"job:{job_id}")
-    if not data:
+    """Get the current status of a job from the DB."""
+    repo = JobRepository()
+    job = await repo.get(job_id)
+    if not job:
         return None
 
     return JobPublic(
-        id=job_id,
-        lecture_id=data.get(b"lecture_id", b"").decode(),
-        stage=data.get(b"stage", b"transcribe").decode(),
-        status=data.get(b"status", b"queued").decode(),
-        attempt=int(data.get(b"attempt", b"0")),
-        error_message=data.get(b"error_message", b"").decode() or None,
-        created_at=datetime.fromisoformat(_decode_or(data.get(b"created_at")) or datetime.now(timezone.utc).isoformat()),
-        updated_at=datetime.fromisoformat(_decode_or(data.get(b"updated_at")) or datetime.now(timezone.utc).isoformat()),
+        id=job.id,
+        lecture_id=job.lecture_id,
+        stage=job.stage,
+        status=job.status,
+        attempt=job.attempt,
+        error_message=job.error_message,
+        created_at=job.created_at,
+        updated_at=job.updated_at,
     )
 
 
 async def update_job_status(job_id: str, status: JobStatus, error_message: Optional[str] = None) -> None:
     """Update the status of a job."""
-    redis = get_redis()
-    mapping = {
-        "status": status,
-        "updated_at": datetime.now(timezone.utc).isoformat(),
-    }
-    if error_message:
-        mapping["error_message"] = error_message[:500]
-    await redis.hset(f"job:{job_id}", mapping=mapping)
+    repo = JobRepository()
+    await repo.mark(job_id, status, error_message)
 
-    # Track processing duration on completion
     from services.metrics_service import queue_processing_duration
 
     if status in ("completed", "failed"):
-        job_hash = await redis.hgetall(f"job:{job_id}")
-        if job_hash and b"created_at" in job_hash:
-            created = datetime.fromisoformat(job_hash[b"created_at"].decode())
-            duration = (datetime.now(timezone.utc) - created).total_seconds()
+        job = await repo.get(job_id)
+        if job and job.created_at:
+            duration = (datetime.now(timezone.utc) - job.created_at).total_seconds()
             queue_processing_duration.labels(
                 queue_type="process_lecture",
                 status="success" if status == "completed" else "failed",
@@ -139,26 +98,26 @@ async def update_job_status(job_id: str, status: JobStatus, error_message: Optio
 
 async def move_to_dlq(job_id: str, error_message: str) -> None:
     """Move a failed job to the dead-letter queue."""
-    redis = get_redis()
-    dlq_entry = {
+    backend = get_queue_backend()
+    body = {
         "job_id": job_id,
         "error": error_message[:500],
         "moved_at": datetime.now(timezone.utc).isoformat(),
     }
-    await redis.lpush(DLQ_PROCESS_LECTURE, json.dumps(dlq_entry))
+    await backend.send("dlq", body)
+    
     await update_job_status(job_id, "dead_letter", error_message)
-    # Update DLQ depth metric
+    
     from services.metrics_service import dead_letter_depth as _dld
-    dlq_len = await redis.llen(DLQ_PROCESS_LECTURE)
+    dlq_len = await backend.dlq_depth()
     _dld.labels(queue_type="process_lecture").set(dlq_len)
     logger.warning("Job %s moved to DLQ: %s", job_id, error_message[:100])
 
 
 async def get_queue_depth() -> int:
-    """Get the number of jobs waiting in the priority queue."""
-    redis = get_redis()
-    depth = await redis.zcard(QUEUE_PROCESS_LECTURE)
-    # Update queue depth metric
+    """Get the number of jobs waiting in the primary queues."""
+    backend = get_queue_backend()
+    depth = await backend.depth("transcribe")
     from services.metrics_service import queue_depth as _qd
     _qd.labels(queue_type="process_lecture").set(depth)
     return depth

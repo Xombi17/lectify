@@ -299,3 +299,20 @@ class StudentEnrollmentORM(Base):
     )
     enrolled_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     __table_args__ = (UniqueConstraint("class_id", "student_id", name="uq_student_enrollment_class_student"),)
+
+class JobORM(Base):
+    __tablename__ = "jobs"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    lecture_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("lectures.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    stage: Mapped[str] = mapped_column(String(32), nullable=False)
+    version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, index=True)
+    attempt: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    max_attempts: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    priority_score: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    error_message: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    __table_args__ = (UniqueConstraint("lecture_id", "stage", "version", name="uq_jobs_lecture_stage_version"),)

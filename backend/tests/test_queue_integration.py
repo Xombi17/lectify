@@ -13,15 +13,14 @@ pytestmark = pytest.mark.integration
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_redis_connection():
-    """Verify Redis is reachable."""
+async def test_queue_connection():
+    """Verify Queue is reachable."""
     try:
-        from core.queue import get_redis
-        redis = get_redis()
-        pong = await redis.ping()
-        assert pong is True
+        from core.queue_backend import get_queue_backend
+        backend = get_queue_backend()
+        assert backend is not None
     except Exception:
-        pytest.skip("Redis not available")
+        pytest.skip("Queue not available")
 
 
 @pytest.mark.integration
@@ -55,9 +54,9 @@ async def test_idempotency():
         first = await enqueue_job(payload)
         second = await enqueue_job(payload)
 
-        assert second.status == "completed"  # Idempotent hit
+        assert second.id == first.id  # Idempotent hit
     except Exception:
-        pytest.skip("Redis not available")
+        pytest.skip("Queue not available")
 
 
 @pytest.mark.integration

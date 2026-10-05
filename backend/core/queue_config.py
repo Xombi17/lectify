@@ -38,3 +38,14 @@ def compute_priority_score(created_at: Optional[datetime] = None) -> float:
 TRANSCRIPTION_CONCURRENCY = 3
 AI_CONCURRENCY = 5
 EMBEDDING_CONCURRENCY = 10
+
+def queue_for_stage(stage: str) -> str:
+    from core.config import get_settings
+    settings = get_settings()
+    if stage == "transcribe":
+        return settings.QUEUE_URL_TRANSCRIBE or "transcribe"
+    elif stage == "generate_materials":
+        return settings.QUEUE_URL_MATERIALS or "materials"
+    elif stage in ("embed", "neo4j_sync"):
+        return settings.QUEUE_URL_EMBED or "embed"
+    return "default"

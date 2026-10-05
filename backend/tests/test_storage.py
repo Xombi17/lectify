@@ -110,6 +110,24 @@ class TestStorageFactory:
         with pytest.raises(RuntimeError, match="Unsupported"):
             ss.get_storage()
 
+    def test_s3_keyless(self, monkeypatch):
+        monkeypatch.setenv("STORAGE_BACKEND", "s3")
+        monkeypatch.setenv("OBJECT_STORAGE_BUCKET", "mybucket")
+        monkeypatch.delenv("OBJECT_STORAGE_ACCESS_KEY", raising=False)
+        monkeypatch.delenv("OBJECT_STORAGE_SECRET_KEY", raising=False)
+        
+        class MockSession:
+            def __init__(self, **kwargs):
+                self.kwargs = kwargs
+                
+        import aioboto3
+        monkeypatch.setattr(aioboto3, "Session", MockSession)
+        
+        ss = _reload_storage_module()
+        s = ss.get_storage()
+        assert "aws_access_key_id" not in s._session.kwargs
+        assert "aws_secret_access_key" not in s._session.kwargs
+
 
 # ---------------------------------------------------------------------------
 # S3Storage via moto (mock_aws)
@@ -200,4 +218,91 @@ class TestS3Storage:
             async for chunk in it:
                 collected += chunk
             assert collected == payload
+        _arun(go())
+
+class TestS3StorageFakes:
+    def _make_s3(self, client_fake):
+        from services.storage_service import S3Storage
+        s = S3Storage("mybucket", None, "us-east-1", "a", "b")
+        
+        class MockSession:
+            def client(self, *args, **kwargs):
+                return client_fake
+                
+        s._session = MockSession()
+        return s
+
+    def test_head_object(self):
+        class FakeClient:
+            async def __aenter__(self): return self
+            async def __aexit__(self, *args): pass
+            async def head_object(self, **kwargs):
+                return {"ContentLength": 123, "ContentType": "image/png"}
+                
+        fake = FakeClient()
+        s3 = self._make_s3(fake)
+        
+        async def go():
+            res = await s3.head_object("foo.png")
+            assert res == {"size": 123, "content_type": "image/png"}
+        _arun(go())
+
+    def test_head_object_not_found(self):
+        from botocore.exceptions import ClientError
+        class FakeClient:
+            async def __aenter__(self): return self
+            async def __aexit__(self, *args): pass
+            async def head_object(self, **kwargs):
+                raise ClientError({"Error": {"Code": "404"}}, "HeadObject")
+                
+        fake = FakeClient()
+        s3 = self._make_s3(fake)
+        
+        async def go():
+            with pytest.raises(FileNotFoundError):
+                await s3.head_object("foo.png")
+        _arun(go())
+
+    def test_presign_post(self):
+        class FakeClient:
+            async def __aenter__(self): return self
+            async def __aexit__(self, *args): pass
+            async def generate_presigned_post(self, **kwargs):
+                self.kwargs = kwargs
+                return {"url": "http://fake", "fields": {}}
+                
+        fake = FakeClient()
+        s3 = self._make_s3(fake)
+        
+        async def go():
+            res = await s3.presign_post("foo.mp4", "video/mp4", max_bytes=300*1024*1024, expires=1000)
+            assert res == {"url": "http://fake", "fields": {}}
+            assert fake.kwargs["Bucket"] == "mybucket"
+            assert fake.kwargs["Key"] == "foo.mp4"
+            assert fake.kwargs["ExpiresIn"] == 900
+            assert fake.kwargs["Conditions"] == [
+                ["content-length-range", 1, 200*1024*1024],
+                {"Content-Type": "video/mp4"}
+            ]
+        _arun(go())
+
+    def test_presign_get(self):
+        class FakeClient:
+            async def __aenter__(self): return self
+            async def __aexit__(self, *args): pass
+            async def generate_presigned_url(self, op, Params, ExpiresIn):
+                self.op = op
+                self.Params = Params
+                self.ExpiresIn = ExpiresIn
+                return "http://fake-get"
+                
+        fake = FakeClient()
+        s3 = self._make_s3(fake)
+        
+        async def go():
+            url = await s3.presign_get("foo.mp4", expires=1000)
+            assert url == "http://fake-get"
+            assert fake.op == "get_object"
+            assert fake.Params == {"Bucket": "mybucket", "Key": "foo.mp4"}
+            assert fake.ExpiresIn == 900
         _arun(go())
