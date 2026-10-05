@@ -1,0 +1,22 @@
+[Unit]
+Description=Lectify Worker Service
+After=network.target
+
+[Service]
+Type=simple
+User=lectify
+Group=lectify
+WorkingDirectory=/opt/lectify/backend
+EnvironmentFile=/etc/lectify/app.env
+ExecStart=/opt/lectify/venv/bin/python -m workers all
+Restart=always
+RestartSec=5
+KillSignal=SIGTERM
+TimeoutStopSec=120
+MemoryMax=1200M
+NoNewPrivileges=true
+ProtectSystem=full
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

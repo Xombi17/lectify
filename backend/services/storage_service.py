@@ -285,9 +285,9 @@ def get_storage() -> StorageService:
     if backend == "local":
         return LocalStorage(settings.STORAGE_LOCAL_DIR)
     if backend == "s3":
-        bucket = os.environ.get("OBJECT_STORAGE_BUCKET")
+        bucket = os.environ.get("OBJECT_STORAGE_BUCKET") or os.environ.get("S3_BUCKET")
         if not bucket:
-            raise RuntimeError("STORAGE_BACKEND=s3 requires OBJECT_STORAGE_BUCKET")
+            raise RuntimeError("STORAGE_BACKEND=s3 requires OBJECT_STORAGE_BUCKET or S3_BUCKET")
         return S3Storage(
             bucket=bucket,
             endpoint_url=os.environ.get("OBJECT_STORAGE_ENDPOINT") or None,

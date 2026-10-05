@@ -1,5 +1,6 @@
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -13,6 +14,7 @@ def _run(tmp_path, ctx, extra_env=None):
     env = {k: v for k, v in os.environ.items() if k not in ("BUDGET_EMAIL", "CDK_DEFAULT_ACCOUNT", "CDK_DEFAULT_REGION")}
     env["CDK_OUTDIR"] = str(tmp_path)
     env["CDK_CONTEXT_JSON"] = json.dumps({**({} if ctx.get("_nodata") else DATA), **{k: v for k, v in ctx.items() if k != "_nodata"}})
+    env.setdefault("LECTIFY_SKIP_COMPUTE_ARTIFACT_CHECK", "1")
     env.update(extra_env or {})
     return subprocess.run([sys.executable, "app.py"], cwd=CDK_DIR, env=env, capture_output=True, text=True)
 
@@ -85,3 +87,67 @@ def test_network_stack_wired(tmp_path):
     t = json.loads((tmp_path / "NetworkStack.template.json").read_text())
     vpc = next(x for x in t["Resources"].values() if x["Type"] == "AWS::EC2::VPC")
     assert {"Key": "Project", "Value": "lectify"} in vpc["Properties"]["Tags"]
+
+
+def test_compute_stack_wired(tmp_path):
+    r = _run(tmp_path, {"budget_email": EMAIL})
+    assert r.returncode == 0, r.stderr
+    arts = json.loads((tmp_path / "manifest.json").read_text())["artifacts"]
+    assert "ComputeStack" in arts
+    deps = arts["ComputeStack"]["dependencies"]
+    assert "NetworkStack" in deps and "DataStack" in deps
+
+
+def test_failfast_missing_web(tmp_path):
+    # Ensure web/server.js does not exist
+    web_dir = CDK_DIR / "build" / "web"
+    server_js = web_dir / "server.js"
+    if server_js.exists():
+        server_js.unlink()
+    r = _run(tmp_path, {"budget_email": EMAIL}, extra_env={"LECTIFY_SKIP_COMPUTE_ARTIFACT_CHECK": "0"})
+    assert r.returncode != 0
+    assert "make build-web" in r.stderr
+
+
+def test_failfast_missing_ffmpeg(tmp_path):
+    web_dir = CDK_DIR / "build" / "web"
+    web_dir.mkdir(parents=True, exist_ok=True)
+    server_js = web_dir / "server.js"
+    server_js.write_text("// test dummy\n")
+    vendor_tar = CDK_DIR / "bootstrap" / "vendor" / "ffmpeg-release-amd64-static.tar.xz"
+    if vendor_tar.exists():
+        vendor_tar.unlink()
+    try:
+        r = _run(tmp_path, {"budget_email": EMAIL}, extra_env={"LECTIFY_SKIP_COMPUTE_ARTIFACT_CHECK": "0"})
+        assert r.returncode != 0
+        assert "make vendor-ffmpeg" in r.stderr
+    finally:
+        if server_js.exists():
+            server_js.unlink()
+        if web_dir.exists() and not any(web_dir.iterdir()):
+            shutil.rmtree(web_dir)
+
+
+def test_failfast_ffmpeg_sha256_placeholder(tmp_path):
+    web_dir = CDK_DIR / "build" / "web"
+    web_dir.mkdir(parents=True, exist_ok=True)
+    server_js = web_dir / "server.js"
+    server_js.write_text("// test dummy\n")
+    vendor_dir = CDK_DIR / "bootstrap" / "vendor"
+    vendor_dir.mkdir(parents=True, exist_ok=True)
+    vendor_tar = vendor_dir / "ffmpeg-release-amd64-static.tar.xz"
+    vendor_tar.write_bytes(b"dummy tar")
+    try:
+        r = _run(tmp_path, {"budget_email": EMAIL}, extra_env={"LECTIFY_SKIP_COMPUTE_ARTIFACT_CHECK": "0"})
+        assert r.returncode != 0
+        assert "make vendor-ffmpeg" in r.stderr
+        assert "placeholder comments" in r.stderr
+    finally:
+        if server_js.exists():
+            server_js.unlink()
+        if web_dir.exists() and not any(web_dir.iterdir()):
+            shutil.rmtree(web_dir)
+        if vendor_tar.exists():
+            vendor_tar.unlink()
+        if vendor_dir.exists() and not any(vendor_dir.iterdir()):
+            shutil.rmtree(vendor_dir)

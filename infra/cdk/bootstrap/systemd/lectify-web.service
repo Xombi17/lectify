@@ -1,0 +1,24 @@
+[Unit]
+Description=Lectify Web Service
+After=network.target
+
+[Service]
+Type=simple
+User=lectify
+Group=lectify
+WorkingDirectory=/opt/lectify/web
+EnvironmentFile=/etc/lectify/app.env
+Environment=PORT=3000
+Environment=HOSTNAME=0.0.0.0
+ExecStart=/usr/local/bin/node server.js
+Restart=always
+RestartSec=5
+KillSignal=SIGTERM
+TimeoutStopSec=30
+MemoryMax=600M
+NoNewPrivileges=true
+ProtectSystem=full
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

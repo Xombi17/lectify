@@ -70,7 +70,9 @@ def assert_wildcard_guard(template: Template):
         for res in resources:
             assert res != "*", f"Disallowed bare wildcard Resource in statement: {stmt}"
             if "*" in res:
-                is_allowed = any(res.endswith(tail) for tail in allowed_wildcard_tails)
+                is_allowed = any(
+                    res.endswith(tail) for tail in allowed_wildcard_tails
+                ) or (":s3:::cdk-" in res and res.endswith("/*"))
                 assert is_allowed, f"Disallowed wildcard in Resource: {res} (stmt: {stmt})"
 
 

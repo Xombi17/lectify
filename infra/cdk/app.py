@@ -1,12 +1,58 @@
 import os
+from pathlib import Path
 import re
 import sys
 
 import aws_cdk as cdk
 
 from lectify_cdk.budget_stack import BudgetStack
+from lectify_cdk.compute_stack import ComputeStack
 from lectify_cdk.data_stack import DataStack
 from lectify_cdk.network_stack import NetworkStack
+
+
+def _require_artifacts(cdk_dir: Path):
+    backend_dir = cdk_dir.parent.parent / "backend"
+    web_dir = cdk_dir / "build" / "web"
+    bootstrap_dir = cdk_dir / "bootstrap"
+    ffmpeg_archive = bootstrap_dir / "vendor" / "ffmpeg-release-amd64-static.tar.xz"
+    sha_file = bootstrap_dir / "ffmpeg.sha256"
+
+    if os.environ.get("LECTIFY_SKIP_COMPUTE_ARTIFACT_CHECK") == "1":
+        # Create lightweight stub dirs for destroy / synth placeholder paths
+        stub_dir = cdk_dir / "build" / "stub"
+        stub_web = stub_dir / "web"
+        stub_web.mkdir(parents=True, exist_ok=True)
+        (stub_web / "server.js").write_text("// stub for cdk synth/destroy\n")
+
+        stub_vendor = stub_dir / "vendor"
+        stub_vendor.mkdir(parents=True, exist_ok=True)
+        stub_ffmpeg = stub_vendor / "ffmpeg-release-amd64-static.tar.xz"
+        if not stub_ffmpeg.exists():
+            stub_ffmpeg.write_bytes(b"stub")
+
+        actual_web = web_dir if (web_dir / "server.js").exists() or list(web_dir.glob("**/server.js")) else stub_web
+        actual_ffmpeg = ffmpeg_archive if ffmpeg_archive.is_file() else stub_ffmpeg
+        return str(backend_dir), str(actual_web), str(bootstrap_dir), str(actual_ffmpeg)
+
+    # Strict fail-fast mode
+    has_server_js = web_dir.is_dir() and ((web_dir / "server.js").exists() or any(web_dir.rglob("server.js")))
+    if not has_server_js:
+        sys.exit("Missing web build: build/web/server.js not found. Run 'make build-web' before synthesizing.")
+
+    if not ffmpeg_archive.is_file():
+        sys.exit("Missing ffmpeg archive: bootstrap/vendor/ffmpeg-release-amd64-static.tar.xz not found. Run 'make vendor-ffmpeg' before synthesizing.")
+
+    if not sha_file.is_file():
+        sys.exit("Missing ffmpeg checksum file: bootstrap/ffmpeg.sha256 not found. Run 'make vendor-ffmpeg' before synthesizing.")
+
+    lines = [ln.strip() for ln in sha_file.read_text().splitlines()]
+    has_hash = any(ln and not ln.startswith("#") for ln in lines)
+    if not has_hash:
+        sys.exit("ffmpeg.sha256 contains only placeholder comments. Run 'make vendor-ffmpeg' before synthesizing.")
+
+    return str(backend_dir), str(web_dir), str(bootstrap_dir), str(ffmpeg_archive)
+
 
 app = cdk.App()
 
@@ -36,6 +82,9 @@ try:
 except ValueError:
     sys.exit("recording_expiry_days must be a positive integer (default 30)")
 
+cdk_dir = Path(__file__).resolve().parent
+backend_dir, web_dir, bootstrap_dir, ffmpeg_archive = _require_artifacts(cdk_dir)
+
 env = cdk.Environment(
     account=os.environ.get("CDK_DEFAULT_ACCOUNT"),
     region=app.node.try_get_context("region") or os.environ.get("CDK_DEFAULT_REGION") or "ap-southeast-2",
@@ -47,6 +96,20 @@ net.add_dependency(budget)
 data = DataStack(app, "DataStack", network=net, app_origin=app_origin, ready_emails=ready_emails, recording_expiry_days=expiry, env=env)
 data.add_dependency(net)
 data.add_dependency(budget)
+
+compute = ComputeStack(
+    app,
+    "ComputeStack",
+    network=net,
+    data=data,
+    backend_dir=backend_dir,
+    web_dir=web_dir,
+    bootstrap_dir=bootstrap_dir,
+    ffmpeg_archive=ffmpeg_archive,
+    env=env,
+)
+compute.add_dependency(net)
+compute.add_dependency(data)
 
 cdk.Tags.of(app).add("Project", "lectify")
 

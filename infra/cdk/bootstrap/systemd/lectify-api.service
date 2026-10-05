@@ -1,0 +1,22 @@
+[Unit]
+Description=Lectify API Service
+After=network.target
+
+[Service]
+Type=simple
+User=lectify
+Group=lectify
+WorkingDirectory=/opt/lectify/backend
+EnvironmentFile=/etc/lectify/app.env
+ExecStart=/opt/lectify/venv/bin/uvicorn server:app --host 0.0.0.0 --port 8000 --workers 1
+Restart=always
+RestartSec=5
+KillSignal=SIGTERM
+TimeoutStopSec=30
+MemoryMax=700M
+NoNewPrivileges=true
+ProtectSystem=full
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

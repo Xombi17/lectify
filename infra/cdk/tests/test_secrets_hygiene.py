@@ -26,6 +26,7 @@ def _synth(tmp_path):
     out = tmp_path / "out"
     code = "import runpy,sys; sys.argv=['app.py']; runpy.run_path('app.py', run_name='__main__')"
     env = {**os.environ, "CDK_OUTDIR": str(out), "CDK_DEFAULT_ACCOUNT": "123456789012", "CDK_DEFAULT_REGION": "ap-southeast-2",
+           "LECTIFY_SKIP_COMPUTE_ARTIFACT_CHECK": "1",
            "CDK_CONTEXT_JSON": json.dumps({"budget_email": "a@example.com", "app_origin": "http://localhost:3000", "ready_emails": "a@example.com"})}
     subprocess.run([sys.executable, "-c", code], cwd=ROOT, env=env, check=True)
     return out

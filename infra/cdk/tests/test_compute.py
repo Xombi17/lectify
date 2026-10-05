@@ -1,15 +1,38 @@
-"""Tests for ComputeStack ALB, target groups, and listener routing rules."""
+"""Tests for ComputeStack ALB, target groups, ASGs, launch templates, and user-data wiring."""
+import tempfile
+from pathlib import Path
 import aws_cdk as cdk
 import pytest
 from aws_cdk.assertions import Match, Template
 
-from lectify_cdk.compute_stack import ComputeStack
+from lectify_cdk.compute_stack import ComputeStack, WORKER_MAX
 from lectify_cdk.data_stack import DataStack
 from lectify_cdk.network_stack import NetworkStack
 
 
-def make_stack():
-    """Build Network + Data + Compute stacks in a fresh App."""
+def make_stack(stub_dir: Path | None = None):
+    """Build Network + Data + Compute stacks in a fresh App with asset stubs."""
+    if stub_dir is None:
+        _tmp = tempfile.TemporaryDirectory()
+        stub_dir = Path(_tmp.name)
+
+    backend_dir = stub_dir / "backend"
+    backend_dir.mkdir(parents=True, exist_ok=True)
+    (backend_dir / "requirements.txt").write_text("# stub requirements\nfastapi\n")
+    (backend_dir / "server.py").write_text("# stub server\n")
+
+    web_dir = stub_dir / "web"
+    web_dir.mkdir(parents=True, exist_ok=True)
+    (web_dir / "server.js").write_text("// stub server\n")
+
+    bootstrap_dir = stub_dir / "bootstrap"
+    bootstrap_dir.mkdir(parents=True, exist_ok=True)
+    (bootstrap_dir / "api.sh").write_text("#!/bin/bash\n")
+    (bootstrap_dir / "worker.sh").write_text("#!/bin/bash\n")
+
+    ffmpeg_archive = stub_dir / "ffmpeg-release-amd64-static.tar.xz"
+    ffmpeg_archive.write_bytes(b"stub-archive")
+
     app = cdk.App()
     env = cdk.Environment(account="123456789012", region="ap-southeast-2")
     net = NetworkStack(app, "N", env=env)
@@ -26,6 +49,10 @@ def make_stack():
         "C",
         network=net,
         data=data,
+        backend_dir=str(backend_dir),
+        web_dir=str(web_dir),
+        bootstrap_dir=str(bootstrap_dir),
+        ffmpeg_archive=str(ffmpeg_archive),
         env=env,
     )
     return compute, Template.from_stack(compute), Template.from_stack(net)
@@ -33,7 +60,8 @@ def make_stack():
 
 @pytest.fixture(scope="module")
 def stacks():
-    return make_stack()
+    with tempfile.TemporaryDirectory() as td:
+        yield make_stack(Path(td))
 
 
 @pytest.fixture(scope="module")
@@ -62,11 +90,8 @@ def test_alb_configuration(t, t_net):
     attrs = {a["Key"]: a["Value"] for a in props.get("LoadBalancerAttributes", [])}
     assert attrs.get("routing.http.drop_invalid_header_fields.enabled") == "true"
 
-    # Security groups must only be sg_alb
     sgs = props["SecurityGroups"]
     assert len(sgs) == 1
-
-    # Subnets must be the two public subnets
     subnets = props["Subnets"]
     assert len(subnets) == 2
 
@@ -89,7 +114,6 @@ def test_target_groups_configuration(t):
         assert props["HealthCheckIntervalSeconds"] == 15
         assert props["HealthyThresholdCount"] == 2
         assert props["UnhealthyThresholdCount"] == 3
-        # TargetGroupAttributes: deregistration_delay.timeout_seconds = 30
         attrs = {a["Key"]: a["Value"] for a in props.get("TargetGroupAttributes", [])}
         assert attrs.get("deregistration_delay.timeout_seconds") == "30"
 
@@ -103,12 +127,10 @@ def test_listener_and_routing_rules(t):
     assert l_props["Port"] == 80
     assert l_props["Protocol"] == "HTTP"
 
-    # Default action must forward to web target group (port 3000)
     default_actions = l_props["DefaultActions"]
     assert len(default_actions) == 1
     assert default_actions[0]["Type"] == "forward"
 
-    # Rule priority 10 for /api/* -> API target group
     t.resource_count_is("AWS::ElasticLoadBalancingV2::ListenerRule", 1)
     rules = t.find_resources("AWS::ElasticLoadBalancingV2::ListenerRule")
     rule = next(iter(rules.values()))
@@ -127,6 +149,90 @@ def test_stack_outputs_and_no_exports(t):
     outputs = t.find_outputs("*")
     assert "AlbDnsName" in outputs
 
-    # Verify no CloudFormation Exports are created (tightly coupled by object ref)
     for out_name, out_data in outputs.items():
         assert "Export" not in out_data, f"Output {out_name} has unexpected Export"
+
+
+def test_launch_templates(t):
+    t.resource_count_is("AWS::EC2::LaunchTemplate", 2)
+    lts = t.find_resources("AWS::EC2::LaunchTemplate")
+
+    for lt in lts.values():
+        data = lt["Properties"]["LaunchTemplateData"]
+        # IMDSv2
+        meta = data["MetadataOptions"]
+        assert meta["HttpTokens"] == "required"
+        assert meta["HttpPutResponseHopLimit"] == 1
+
+        # No KeyName
+        assert "KeyName" not in data
+
+        # Encrypted gp3 root volume
+        bd = data["BlockDeviceMappings"][0]
+        ebs = bd["Ebs"]
+        assert ebs["Encrypted"] is True
+        assert ebs["VolumeType"] == "gp3"
+        assert ebs["VolumeSize"] == 20
+        assert ebs["DeleteOnTermination"] is True
+
+        # Public IP
+        ni = data["NetworkInterfaces"][0]
+        assert ni["AssociatePublicIpAddress"] is True
+
+        # Instance type
+        assert data["InstanceType"] == "t3.small"
+
+
+def test_web_asg(t):
+    asgs = t.find_resources("AWS::AutoScaling::AutoScalingGroup")
+    web_asgs = [a for a in asgs.values() if a["Properties"].get("HealthCheckType") == "ELB"]
+    assert len(web_asgs) == 1, "Expected 1 web ASG with ELB health check"
+    props = web_asgs[0]["Properties"]
+
+    assert props["MinSize"] == "1"
+    assert props["MaxSize"] == "2"
+    assert props["DesiredCapacity"] == "1"
+    assert props["HealthCheckGracePeriod"] == 300
+    assert len(props["VPCZoneIdentifier"]) == 2
+    # Attached to both target groups
+    assert len(props.get("TargetGroupARNs", [])) == 2
+
+
+def test_worker_asg(t):
+    asgs = t.find_resources("AWS::AutoScaling::AutoScalingGroup")
+    worker_asgs = [a for a in asgs.values() if a["Properties"].get("HealthCheckType") == "EC2"]
+    assert len(worker_asgs) == 1, "Expected 1 worker ASG with EC2 health check"
+    props = worker_asgs[0]["Properties"]
+
+    assert props["MinSize"] == "1"
+    assert int(props["MaxSize"]) == WORKER_MAX
+    assert int(props["MaxSize"]) <= 3, "Worker ASG must be hard-capped at 3"
+    assert props["DesiredCapacity"] == "1"
+    assert len(props["VPCZoneIdentifier"]) == 2
+    assert "TargetGroupARNs" not in props or len(props.get("TargetGroupARNs", [])) == 0
+
+
+def test_asg_cfn_signals(t):
+    asgs = t.find_resources("AWS::AutoScaling::AutoScalingGroup")
+    for asg in asgs.values():
+        cp = asg.get("CreationPolicy", {})
+        assert "ResourceSignal" in cp
+        assert cp["ResourceSignal"].get("Timeout") == "PT20M"
+
+
+def test_user_data_hygiene(t):
+    lts = t.find_resources("AWS::EC2::LaunchTemplate")
+    for lt in lts.values():
+        ud = lt["Properties"]["LaunchTemplateData"]["UserData"]
+        # decode base64 if dict or extract joined string
+        ud_str = str(ud)
+
+        # Thinness & non-secret assertions
+        assert "aws-cfn-bootstrap" in ud_str
+        assert "JWT_SECRET" not in ud_str
+        assert "GROQ_API_KEY" not in ud_str
+        assert "GEMINI_API_KEY" not in ud_str
+        assert "password" not in ud_str.lower()
+        # No inline heavy app logic
+        assert "uvicorn" not in ud_str
+        assert "systemctl" not in ud_str
