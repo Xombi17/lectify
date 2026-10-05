@@ -33,13 +33,14 @@ Rules:
 ## Status
 
 Living project status, updated after every feature lands.
-**Last updated:** 2026-10-05 (Phase 13.1 Plan 02 completed)
+**Last updated:** 2026-10-05 (Phase 13.1 Plan 05 completed)
 
 ### What was added (Phase 13.1 — Class-Scoped Access & Timetable)
 
 - **Plan 13.1-01 (Database Schema & Model Foundations)** — Added `class_id` and `timetable_slot_id` foreign keys with indexes to `LectureORM` (`backend/models/orm.py`) and Prisma `model Lecture` (`prisma/schema.prisma`); defined `TimetableSlotORM` and `model TimetableSlot`; created `backend/models/timetable.py` Pydantic models; updated `test_schema_parity.py` with 4/4 passing tests.
 - **Plan 13.1-02 (Lecture Upload & Teacher Assignment Verification)** — Enforced mandatory `class_id` on `POST /api/lectures` upload, validated active teacher assignments with HTTP 403 rejection (and admin bypass), hydrated and persisted `class_id` in `LectureRepository`, and added `backend/tests/test_lectures.py` (4/4 tests green).
-- **Next card in queue:** Plan 13.1-05 (Timetable slot CRUD & overlap detection) in Wave 2.
+- **Plan 13.1-05 (Timetable Slot CRUD, Overlap Detection & Access Control)** — Built `TimetableRepository` with `find_overlap` interval disjunction, implemented `/api/timetable` endpoints rejecting conflicts with HTTP 409, mounted in `backend/server.py`, and added `backend/tests/test_timetable.py` (4/4 tests green).
+- **Next card in queue:** Wave 3 plans — Plan 13.1-03 (Student fail-closed direct item retrieval), Plan 13.1-04 (Scoped list & search filtering), and Plan 13.1-06 (Frontend integration).
 
 ### What was added (Phase 13 — Code Seams, Plans 01-13)
 
