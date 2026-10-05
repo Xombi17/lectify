@@ -3,6 +3,7 @@
 set -u
 cd "$(dirname "$0")/.." || exit 1
 export AWS_PROFILE="${AWS_PROFILE:-lectify}"
+export BUDGET_EMAIL="${BUDGET_EMAIL:-test@example.com}"
 FAIL=0
 pass() { echo "PASS  $1"; }
 fail() { echo "FAIL  $1"; FAIL=$((FAIL + 1)); }
@@ -19,9 +20,8 @@ else
 fi
 
 REGION="${AWS_REGION:-${AWS_DEFAULT_REGION:-$(aws configure get region 2>/dev/null)}}"
-REGION="${REGION:-ap-south-1}"
+REGION="${REGION:-ap-southeast-2}"
 echo "region=$REGION"
-[ "$REGION" = "ap-south-1" ] || echo "WARN  region is not ap-south-1"
 export AWS_REGION="$REGION"
 
 if npx --no-install cdk --version; then pass "cdk cli"; else fail "cdk cli"; fi

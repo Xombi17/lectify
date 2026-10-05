@@ -36,7 +36,7 @@ preflight:
 	bash scripts/preflight.sh
 
 orphans:
-	@F="--filters Name=tag:Project,Values=lectify"; \
+	@F="--filter Name=tag:Project,Values=lectify"; \
 	V=$$(aws ec2 describe-vpcs $$F --query 'Vpcs[].VpcId' --output text); \
 	N=$$(aws ec2 describe-nat-gateways $$F Name=state,Values=pending,available --query 'NatGateways[].NatGatewayId' --output text); \
 	E=$$(aws ec2 describe-addresses $$F --query 'Addresses[].AllocationId' --output text); \

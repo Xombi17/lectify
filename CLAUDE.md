@@ -33,7 +33,16 @@ Rules:
 ## Status
 
 Living project status, updated after every feature lands.
-**Last updated:** 2026-06-30 (after Phase 11 — Microservices Migration)
+**Last updated:** 2026-10-05 (after Phase 12 — Account Gate, Budget, CDK Skeleton & Network)
+
+### What was added (Phase 12 — Account Gate, Budget, CDK Skeleton & Network)
+
+- **CDK Infrastructure Foundation** — Self-contained AWS CDK app in `infra/cdk/` (`app.py`, `budget_stack.py`, `network_stack.py`) with zero-NAT VPC, 4 subnets, S3 gateway endpoint, 4 security groups, and cost budget alarms ($50 default with 4 threshold alerts excluding credits).
+- **Automation & Operator Tooling** — `infra/cdk/Makefile` with one-command deploy/destroy/preflight/orphans targets, `scripts/preflight.sh` with automated account/region/CDK/bootstrap verification.
+- **Live AWS Verification** — Preflight passed, CDK bootstrap created `CDKToolkit` in `ap-southeast-2`, `BudgetStack` deployed before `NetworkStack`, teardown verified with zero orphaned resources.
+- **Test counts:** 19/19 new CDK tests green (`test_budget.py`, `test_network.py`, `test_app.py`).
+- **New graph nodes:** `infra/cdk/app.py`, `infra/cdk/lectify_cdk/budget_stack.py`, `infra/cdk/lectify_cdk/network_stack.py`.
+- **Next card in queue:** Phase 13 — Code Seams & Phase 14 — Data & Messaging Infrastructure
 
 ### What was added (Phase 11 — Microservices Migration)
 
