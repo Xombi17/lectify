@@ -33,7 +33,24 @@ Rules:
 ## Status
 
 Living project status, updated after every feature lands.
-**Last updated:** 2026-10-05 (Phase 15 completed — Compute Tier & Delivery All Plans Shipped)
+**Last updated:** 2026-10-05 (Phase 16 executed — Presigned Upload & End-to-End Pipeline, all 3 plans)
+
+### What was added (Phase 16 — Presigned Upload & End-to-End Pipeline, Plans 01-03)
+
+- **Backend presigned trio (16-01)** (`backend/routes/lectures.py`, `backend/models/lecture.py`, `backend/tests/test_upload_presign.py`):
+  - `POST /lectures/upload-url` with teacher/admin + assignment check, MIME/size validation, server-built `classes/{class_id}/lectures/{lecture_id}/recording/{safe}` keys, `uploading` rows, 900s presigned POST, 501 on LocalStorage.
+  - `POST /lectures/{id}/upload-complete` with owner check, head_object verification (409 missing, 413+delete on 0/oversize, 400 MIME mismatch), single transcribe enqueue, idempotent re-call.
+  - `GET /lectures/{id}/audio-url` behind `verify_lecture_access` with 900s presigned GET and 501 fallback; `uploading` mapped to queued-like job status.
+- **Browser-direct frontend (16-02)** (`frontend/src/lib/api.js`, `frontend/src/lib/lectureStatus.js`, `frontend/src/lib/uploadTransport.js`, `UploadLecturePage.jsx`, `LectureDetailPage.jsx`, `uploadS3.test.js`):
+  - `uploadToS3` XHR helper (fields-first FormData, progress), uploadUrl→S3→uploadComplete flow with Verifying state, 501 multipart fallback notice, documented 409/413/CORS error copy.
+  - Ready/Processing/Failed pills per UI-SPEC, extended 4s poll to uploading/queued/retrying, presigned audio preferred with blob fallback, dead_letter hides player.
+- **DLQ proof + redrive + docs (16-03)** (`backend/workers/transcription.py`, `POST /lectures/{id}/retry`, `infra/cdk/scripts/redrive-dlq.sh`, `infra/cdk/README.md` §10, `docs/SPEC_UPLOAD.md`):
+  - Env-gated `FORCE_FAIL_LECTURE_ID` hook (aws/demo/staging only), `receive_count` 5 dead_letter unit proof, admin-only retry with version-bumped job, executable redrive script via `start-message-move-task`, SPEC contract + VER-01/VER-02 operator checklist.
+- **Test counts (new green / total green):**
+  - Backend: 20 new (test_upload_presign.py) / 213 passed, 3 skipped full suite.
+  - Frontend: 9 new (uploadS3.test.js) / 15 passed full suite.
+  - CDK: 10 passed (test_data.py + test_secrets_hygiene.py, unchanged).
+- **Next card in queue:** Phase 16 pending verify-work (human UAT: live ALB upload-to-ready + DLQ redrive); then Phase 17.
 
 ### What was added (Phase 15 — Compute Tier & Delivery, Plans 01-06)
 
