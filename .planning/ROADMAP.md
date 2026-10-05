@@ -17,9 +17,9 @@ Phase 13 (offline queue/storage seams), Phase 13.1 (offline class-scoped access 
 
 - [x] **Phase 12: Account Gate, Budget, CDK Skeleton & Network** - Verify the AWS account, set cost alarms first, and stand up a clean-deploying CDK app with the VPC and security groups
 - [x] **Phase 13: Code Seams (Queue, Jobs, Storage, Config, Security Gate)** - Offline app changes: QueueBackend (SQS/memory), Postgres job state, SQS worker loops, S3 presign, SSM overlay, flag gates, security fixes
-- [ ] **Phase 13.1: Class-Scoped Access & Timetable** - Lectures belong to a class; students see only their own class's lectures, AI content and timetable; per-class timetable CRUD; cross-class isolation tests
+- [x] **Phase 13.1: Class-Scoped Access & Timetable** - Lectures belong to a class; students see only their own class's lectures, AI content and timetable; per-class timetable CRUD; cross-class isolation tests (completed 2026-10-05)
 - [x] **Phase 14: Data & Messaging Infrastructure** - RDS, S3 bucket policy/CORS/lifecycle, SQS queues + DLQ, SNS lecture-ready topic, secrets (completed 2026-10-05)
-- [ ] **Phase 15: Compute Tier & Delivery** - ALB, API/web ASG, worker ASG, per-tier IAM, unattended bootstrap, schema bootstrap on RDS
+- [x] **Phase 15: Compute Tier & Delivery** - ALB, API/web ASG, worker ASG, per-tier IAM, unattended bootstrap, schema bootstrap on RDS (completed 2026-10-05)
 - [ ] **Phase 16: Presigned Upload & End-to-End Pipeline** - Browser-direct S3 upload and one real lecture through every stage, plus the forced-failure DLQ proof
 - [ ] **Phase 17: Observability & Scaling** - CloudWatch logs, alarms, dashboard, ops SNS topic, and queue-backlog step scaling
 - [ ] **Phase 18: Load Test, Capacity Report, Runbook & Docs** - Scale-out demo, load test with honest capacity numbers, runbook and doc updates
@@ -160,7 +160,22 @@ Plans:
   4. Frontend requests go to same-origin `/api` (no `"undefined/api"`), and a user can log in on the deployed stack against the seeded demo institution and users
   5. API and worker roles are scoped to the specific S3 prefix, queues, SNS topic and SSM path with no wildcards, IMDSv2 is required, and instances are reachable only via Session Manager
 
-**Plans**: TBD
+**Plans**: 6/6 plans complete
+
+**Wave 1**
+- [x] 15-01-PLAN.md — Backend seams: shallow `/healthz`, DB URL from Secrets Manager, `workers all` (3 loops, 1 process), `DB_AUTO_CREATE` gate
+- [x] 15-03-PLAN.md — Frontend same-origin `/api`, Next `/healthz`, off-instance `build-web.sh`
+- [x] 15-04-PLAN.md — ComputeStack skeleton: ALB + target groups + `/api/*` rule, per-tier least-privilege IAM roles
+
+**Wave 2** *(blocked on Wave 1)*
+- [x] 15-02-PLAN.md — `bootstrap_db` (advisory lock) + idempotent `seed_demo`
+
+**Wave 3** *(blocked on Waves 1-2)*
+- [x] 15-05-PLAN.md — Launch templates (IMDSv2), web/worker ASGs (worker max 3), unattended bootstrap, systemd units, CFN signals, app.py wiring
+
+**Wave 4** *(blocked on Wave 3)*
+- [x] 15-06-PLAN.md — Makefile targets, ffmpeg vendoring, README runbook (two-step deploy), hygiene scan, CLAUDE.md status
+
 **UI hint**: yes
 
 ### Phase 16: Presigned Upload & End-to-End Pipeline
