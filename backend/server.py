@@ -39,13 +39,16 @@ settings = get_settings().validate()
 async def lifespan(app: FastAPI):
     # ensure indexes/tables on startup
     try:
-        await init_models()
-        logger.info("SQL tables ready (%s)", settings.DATABASE_BACKEND)
-        await UserRepository().ensure_indexes()
-        await LectureRepository().ensure_indexes()
-        await ChatRepository().ensure_indexes()
-        await AttemptRepository().ensure_indexes()
-        logger.info("Database indexes ready (backend=%s)", settings.DATABASE_BACKEND)
+        if settings.DB_AUTO_CREATE:
+            await init_models()
+            logger.info("SQL tables ready (%s)", settings.DATABASE_BACKEND)
+            await UserRepository().ensure_indexes()
+            await LectureRepository().ensure_indexes()
+            await ChatRepository().ensure_indexes()
+            await AttemptRepository().ensure_indexes()
+            logger.info("Database indexes ready (backend=%s)", settings.DATABASE_BACKEND)
+        else:
+            logger.info("DB_AUTO_CREATE=false: skipping create_all (run scripts.bootstrap_db)")
     except Exception:
         logger.exception("Failed to ensure indexes/tables")
 
@@ -131,6 +134,11 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="LectureMind AI", lifespan=lifespan)
+
+
+@app.get("/healthz")
+async def healthz():
+    return {"status": "ok"}
 
 # Prometheus instrumentation — created at module level, exposed in lifespan
 instrumentator = Instrumentator(

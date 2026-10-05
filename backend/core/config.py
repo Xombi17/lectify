@@ -21,6 +21,11 @@ from core.ssm_overlay import apply_ssm_overlay
 
 apply_ssm_overlay()
 
+if not is_testing:
+    from core.db_secret import apply_db_secret_overlay
+
+    apply_db_secret_overlay()
+
 
 DEV_ENVS = ("dev", "test", "local")
 
@@ -32,6 +37,9 @@ class Settings:
         self.SERVICE_NAME: str = os.environ.get("SERVICE_NAME", "monolith")
 
         # Database
+        self.DB_AUTO_CREATE: bool = (
+            os.environ.get("DB_AUTO_CREATE", "true").lower() == "true"
+        )
         self.DATABASE_BACKEND: str = os.environ.get("DATABASE_BACKEND", "postgres")
         self.DATABASE_URL: str = os.environ.get("DATABASE_URL", "")
         self.MONGO_URL: str = os.environ.get("MONGO_URL", "")

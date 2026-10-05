@@ -38,6 +38,7 @@ def test_main_usage_on_invalid_args():
     assert "transcribe" in output
     assert "generate_materials" in output
     assert "embed" in output
+    assert "all" in output
 
 
 def test_workers_queue_names():
