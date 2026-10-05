@@ -41,6 +41,8 @@ def _to_lecture(row: LectureORM) -> LectureDB:
         concepts_v2=row.concepts_v2,
         error_message=row.error_message,
         published=bool(row.published),
+        class_id=row.class_id,
+        timetable_slot_id=row.timetable_slot_id,
         created_at=row.created_at,
         updated_at=row.updated_at,
     )
@@ -55,6 +57,8 @@ def _to_summary(row: LectureORM) -> LectureSummary:
         semester=row.semester,
         status=row.status,
         published=bool(row.published),
+        class_id=row.class_id,
+        timetable_slot_id=row.timetable_slot_id,
         created_at=row.created_at,
     )
 
@@ -86,6 +90,8 @@ class LectureRepository:
                 translations=lecture.translations or {},
                 error_message=lecture.error_message,
                 published=lecture.published,
+                class_id=lecture.class_id,
+                timetable_slot_id=lecture.timetable_slot_id,
                 created_at=lecture.created_at,
                 updated_at=lecture.updated_at,
             ))

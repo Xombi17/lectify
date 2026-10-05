@@ -15,7 +15,7 @@ from fastapi import (
 )
 from fastapi.responses import StreamingResponse
 
-from core.deps import get_current_user, require_teacher
+from core.deps import get_current_user, require_teacher, require_teacher_or_admin
 from core.queue_config import compute_priority_score
 from models.chat import QuizAnswer, QuizAttemptRecord, QuizQuestionV2
 from models.job import JobCreate, JobPublic
@@ -33,6 +33,7 @@ from models.lecture import (
 from models.user import UserPublic
 from repositories.attempt_repository import AttemptRepository
 from repositories.lecture_repository import LectureRepository
+from repositories.teacher_assignment_repository import TeacherAssignmentRepository
 from services.ai_service import get_ai_service
 from services.lecture_service import (
     ALLOWED_AUDIO_MIME,
@@ -48,11 +49,19 @@ router = APIRouter(prefix="/lectures", tags=["lectures"])
 @router.post("", response_model=LectureDB, status_code=status.HTTP_202_ACCEPTED)
 async def upload_lecture(
     title: str = Form(...),
+    class_id: str = Form(...),
+    timetable_slot_id: str | None = Form(None),
     subject: str | None = Form(None),
     semester: str | None = Form(None),
     file: UploadFile = File(...),
-    user: UserPublic = Depends(require_teacher),
+    user: UserPublic = Depends(require_teacher_or_admin),
 ):
+    if user.role != "admin":
+        assignment_repo = TeacherAssignmentRepository()
+        assignment = await assignment_repo.find_existing(class_id=class_id, teacher_id=user.id, active_only=True)
+        if not assignment:
+            raise HTTPException(status_code=403, detail="Not assigned to teach this class")
+
     if file.size and file.size > 200 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="File too large (max 200 MB)")
 
@@ -75,6 +84,8 @@ async def upload_lecture(
         title=title.strip(),
         subject=(subject or "").strip() or None,
         semester=(semester or "").strip() or None,
+        class_id=class_id,
+        timetable_slot_id=timetable_slot_id,
         audio_object_key=key,
         audio_filename=safe_filename,
         audio_mime=mime,
