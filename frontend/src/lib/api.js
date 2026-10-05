@@ -260,3 +260,22 @@ export const qrApi = {
 export const enrollmentApi = {
     listForClass: (classId) => api.get(`/enrollment/classes/${classId}/students`).then((r) => r.data),
 };
+
+// ============================================================================
+// Timetable API
+// ============================================================================
+export const timetableApi = {
+    getMySchedule: () => api.get("/timetable/my-schedule").then((r) => r.data),
+    getClassTimetable: (classId) => api.get(`/timetable/class/${classId}`).then((r) => r.data),
+    createSlot: (data) => api.post("/timetable/slots", data).then((r) => r.data),
+    deleteSlot: (slotId) => api.delete(`/timetable/slots/${slotId}`).then((r) => r.data),
+};
+
+// ============================================================================
+// Academic / Teacher Assignment API
+// ============================================================================
+export const academicApi = {
+    getMyAssignedClasses: () => api.get("/enrollment/teacher-assignments/mine").then((r) => r.data),
+    getMyClasses: () => api.get("/enrollment/my-classes").then((r) => r.data),
+};
+

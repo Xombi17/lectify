@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { lectureApi } from "@/lib/api";
+import { lectureApi, timetableApi } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -10,6 +10,7 @@ import {
     CheckCircle,
     WarningCircle,
     Clock,
+    Calendar,
 } from "@phosphor-icons/react";
 import { motion } from "framer-motion";
 
@@ -23,9 +24,12 @@ const STATUS = {
     error: { label: "Error", icon: WarningCircle, cls: "bg-destructive text-destructive-foreground" },
 };
 
+const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+
 export default function TeacherDashboard() {
     const [lectures, setLectures] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [schedule, setSchedule] = useState([]);
 
     const load = async () => {
         try {
@@ -37,6 +41,7 @@ export default function TeacherDashboard() {
 
     useEffect(() => {
         load();
+        timetableApi.getMySchedule().then((s) => setSchedule(s || [])).catch(() => setSchedule([]));
         const t = setInterval(load, 8000); // poll while processing
         return () => clearInterval(t);
     }, []);
@@ -100,6 +105,49 @@ export default function TeacherDashboard() {
                     </div>
                 ))}
             </section>
+
+            {/* Teaching Schedule */}
+            {schedule.length > 0 && (
+                <section className="mb-10" data-testid="teacher-schedule">
+                    <div className="mb-4 flex items-center justify-between border-b border-border pb-2">
+                        <div className="flex items-center gap-2">
+                            <Calendar size={20} weight="duotone" className="text-primary" />
+                            <h2 className="font-display text-xl font-bold tracking-tight">
+                                Weekly teaching schedule
+                            </h2>
+                        </div>
+                        <span className="text-overline text-muted-foreground">
+                            {schedule.length} session{schedule.length === 1 ? "" : "s"}
+                        </span>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+                        {[...schedule]
+                            .sort((a, b) => a.day_of_week - b.day_of_week || a.start_time.localeCompare(b.start_time))
+                            .map((slot) => (
+                                <div
+                                    key={slot.id}
+                                    data-testid={`schedule-slot-${slot.id}`}
+                                    className="border border-border bg-card p-4 transition-all hover:border-primary/40"
+                                >
+                                    <div className="flex items-center justify-between">
+                                        <Badge variant="secondary" className="font-semibold">
+                                            {DAY_NAMES[slot.day_of_week] || `Day ${slot.day_of_week}`}
+                                        </Badge>
+                                        {slot.room && (
+                                            <span className="text-xs text-muted-foreground">
+                                                {slot.room}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div className="mt-3 flex items-center gap-2 text-sm font-bold font-display">
+                                        <Clock size={16} weight="duotone" className="text-primary" />
+                                        <span>{slot.start_time} - {slot.end_time}</span>
+                                    </div>
+                                </div>
+                            ))}
+                    </div>
+                </section>
+            )}
 
             {/* List */}
             <section data-testid="lectures-list">

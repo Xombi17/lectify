@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import { Link } from "react-router-dom";
-import { lectureApi, searchApi, analyticsApi } from "@/lib/api";
+import { lectureApi, searchApi, analyticsApi, timetableApi } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import {
@@ -12,11 +12,15 @@ import {
     Target,
     TrendUp,
     Trophy,
+    Calendar,
+    Clock,
 } from "@phosphor-icons/react";
 import { motion } from "framer-motion";
 
 const STUDENT_IMG =
     "https://images.pexels.com/photos/5553631/pexels-photo-5553631.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940";
+
+const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
 export default function StudentDashboard() {
     const [lectures, setLectures] = useState([]);
@@ -25,6 +29,8 @@ export default function StudentDashboard() {
     const [searching, setSearching] = useState(false);
     const [loading, setLoading] = useState(true);
     const [analytics, setAnalytics] = useState(null);
+    const [schedule, setSchedule] = useState([]);
+    const [loadingSchedule, setLoadingSchedule] = useState(true);
 
     useEffect(() => {
         lectureApi
@@ -32,6 +38,11 @@ export default function StudentDashboard() {
             .then(setLectures)
             .finally(() => setLoading(false));
         analyticsApi.me().then(setAnalytics).catch(() => {});
+        timetableApi
+            .getMySchedule()
+            .then((slots) => setSchedule(slots || []))
+            .catch(() => setSchedule([]))
+            .finally(() => setLoadingSchedule(false));
     }, []);
 
     // Debounced semantic search
@@ -123,6 +134,58 @@ export default function StudentDashboard() {
 
             {/* Analytics row */}
             <AnalyticsRow analytics={analytics} />
+
+            {/* Weekly Timetable */}
+            <section className="mb-10" data-testid="student-timetable">
+                <div className="mb-4 flex items-center justify-between border-b border-border pb-2">
+                    <div className="flex items-center gap-2">
+                        <Calendar size={20} weight="duotone" className="text-primary" />
+                        <h2 className="font-display text-xl font-bold tracking-tight">Weekly Timetable</h2>
+                    </div>
+                    <span className="text-overline text-muted-foreground">
+                        {schedule.length} scheduled session{schedule.length === 1 ? "" : "s"}
+                    </span>
+                </div>
+
+                {loadingSchedule ? (
+                    <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+                        {[1, 2, 3, 4].map((i) => (
+                            <div key={i} className="h-24 animate-pulse border border-border bg-muted/40" />
+                        ))}
+                    </div>
+                ) : schedule.length === 0 ? (
+                    <div className="border border-dashed border-border bg-card p-6 text-center text-sm text-muted-foreground" data-testid="empty-timetable">
+                        No scheduled lecture sessions for your enrolled classes yet.
+                    </div>
+                ) : (
+                    <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+                        {[...schedule]
+                            .sort((a, b) => a.day_of_week - b.day_of_week || a.start_time.localeCompare(b.start_time))
+                            .map((slot) => (
+                                <div
+                                    key={slot.id}
+                                    data-testid={`timetable-slot-${slot.id}`}
+                                    className="border border-border bg-card p-4 transition-all hover:border-primary/40"
+                                >
+                                    <div className="flex items-center justify-between">
+                                        <Badge variant="secondary" className="font-semibold">
+                                            {DAY_NAMES[slot.day_of_week] || `Day ${slot.day_of_week}`}
+                                        </Badge>
+                                        {slot.room && (
+                                            <span className="text-xs text-muted-foreground">
+                                                {slot.room}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div className="mt-3 flex items-center gap-2 text-sm font-bold font-display">
+                                        <Clock size={16} weight="duotone" className="text-primary" />
+                                        <span>{slot.start_time} - {slot.end_time}</span>
+                                    </div>
+                                </div>
+                            ))}
+                    </div>
+                )}
+            </section>
 
             {/* Lecture grid */}
             <section data-testid="published-lectures">

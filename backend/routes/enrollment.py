@@ -309,6 +309,10 @@ async def list_class_students(
 
 
 @router.get(
+    "/teacher-assignments/mine",
+    response_model=List[TeacherClassSummary],
+)
+@router.get(
     "/my-classes",
     response_model=List[TeacherClassSummary],
 )
