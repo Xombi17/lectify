@@ -39,18 +39,25 @@ def _engine_kwargs(url: str) -> dict:
             pool_pre_ping=True,
             pool_recycle=3600,
         )
+    elif ":memory:" in url:
+        from sqlalchemy.pool import StaticPool
+        kwargs.update(
+            poolclass=StaticPool,
+            connect_args={"check_same_thread": False},
+        )
     return kwargs
 
 def _engine() -> AsyncEngine:
-    if not _settings.DATABASE_URL:
+    settings = get_settings()
+    if not settings.DATABASE_URL:
         raise RuntimeError(
             "DATABASE_BACKEND is set to a SQL backend but DATABASE_URL is empty."
         )
     key = _loop_key()
     eng = _engines.get(key)
     if eng is None:
-        engine_kwargs = _engine_kwargs(_settings.DATABASE_URL)
-        eng = create_async_engine(_settings.DATABASE_URL, **engine_kwargs)
+        engine_kwargs = _engine_kwargs(settings.DATABASE_URL)
+        eng = create_async_engine(settings.DATABASE_URL, **engine_kwargs)
         _engines[key] = eng
         _makers[key] = async_sessionmaker(eng, expire_on_commit=False, class_=AsyncSession)
     return eng
@@ -69,8 +76,8 @@ async def init_models() -> None:
 
 
 async def close_sql() -> None:
-    key = _loop_key()
-    eng = _engines.pop(key, None)
-    _makers.pop(key, None)
-    if eng is not None:
+    for eng in list(_engines.values()):
         await eng.dispose()
+    _engines.clear()
+    _makers.clear()
+

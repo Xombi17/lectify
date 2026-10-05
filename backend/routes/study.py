@@ -210,5 +210,6 @@ async def lecture_flashcard_state(
     user: UserPublic = Depends(get_current_user),
 ):
     """All reviewed cards for a lecture (for showing due-status in the deck)."""
+    await verify_lecture_access(lecture_id, user)
     all_revs = await FlashcardReviewRepository().list_all_for_user(user.id)
     return [r for r in all_revs if r.lecture_id == lecture_id]
