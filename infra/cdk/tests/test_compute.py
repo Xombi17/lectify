@@ -10,7 +10,7 @@ from lectify_cdk.data_stack import DataStack
 from lectify_cdk.network_stack import NetworkStack
 
 
-def make_stack(stub_dir: Path | None = None):
+def make_stack(stub_dir: Path | None = None, context: dict | None = None, extra=None):
     """Build Network + Data + Compute stacks in a fresh App with asset stubs."""
     if stub_dir is None:
         _tmp = tempfile.TemporaryDirectory()
@@ -33,7 +33,7 @@ def make_stack(stub_dir: Path | None = None):
     ffmpeg_archive = stub_dir / "ffmpeg-release-amd64-static.tar.xz"
     ffmpeg_archive.write_bytes(b"stub-archive")
 
-    app = cdk.App()
+    app = cdk.App(context=context)
     env = cdk.Environment(account="123456789012", region="ap-southeast-2")
     net = NetworkStack(app, "N", env=env)
     data = DataStack(
@@ -55,6 +55,8 @@ def make_stack(stub_dir: Path | None = None):
         ffmpeg_archive=str(ffmpeg_archive),
         env=env,
     )
+    if extra:
+        extra(app, env, data, compute)  # must add stacks before first synth
     return compute, Template.from_stack(compute), Template.from_stack(net)
 
 
@@ -207,7 +209,8 @@ def test_worker_asg(t):
     assert props["MinSize"] == "1"
     assert int(props["MaxSize"]) == WORKER_MAX
     assert int(props["MaxSize"]) <= 3, "Worker ASG must be hard-capped at 3"
-    assert props["DesiredCapacity"] == "1"
+    assert "DesiredCapacity" not in props
+    assert props["MetricsCollection"][0]["Granularity"] == "1Minute"
     assert len(props["VPCZoneIdentifier"]) == 2
     assert "TargetGroupARNs" not in props or len(props.get("TargetGroupARNs", [])) == 0
 

@@ -36,6 +36,7 @@ STORAGE_BACKEND=s3
 OBJECT_STORAGE_BUCKET=${OBJECT_STORAGE_BUCKET}
 S3_BUCKET=${OBJECT_STORAGE_BUCKET}
 AWS_REGION=${AWS_REGION}
+AWS_DEFAULT_REGION=${AWS_REGION}
 SSM_PREFIX=${SSM_PREFIX:-/lectify/}
 CORS_ORIGINS=${ALB_ORIGIN}
 APP_URL=${ALB_ORIGIN}
@@ -44,7 +45,9 @@ SLACK_SUMMARY_ENABLED=false
 DAILY_SUMMARY_ENABLED=false
 EOF
 
+setup_log_files api web
 install_units "${SCRIPT_DIR}/systemd"
+install_cloudwatch_agent web
 
 echo "Starting lectify-api and lectify-web services..."
 systemctl enable --now lectify-api lectify-web
@@ -61,5 +64,5 @@ done
 echo "ERROR: Timed out waiting for API and Web services to become healthy." >&2
 systemctl status lectify-api --no-pager || true
 systemctl status lectify-web --no-pager || true
-journalctl -u lectify-api -u lectify-web --no-pager -n 50 || true
+tail -n 50 /var/log/lectify/*.log || true
 exit 1

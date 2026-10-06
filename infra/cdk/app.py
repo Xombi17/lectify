@@ -9,6 +9,7 @@ from lectify_cdk.budget_stack import BudgetStack
 from lectify_cdk.compute_stack import ComputeStack
 from lectify_cdk.data_stack import DataStack
 from lectify_cdk.network_stack import NetworkStack
+from lectify_cdk.observability_stack import ObservabilityStack
 
 
 def _require_artifacts(cdk_dir: Path):
@@ -110,6 +111,10 @@ compute = ComputeStack(
 )
 compute.add_dependency(net)
 compute.add_dependency(data)
+
+obs = ObservabilityStack(app, "ObservabilityStack", data=data, compute=compute, budget=budget, env=env)
+obs.add_dependency(compute)
+obs.add_dependency(budget)
 
 cdk.Tags.of(app).add("Project", "lectify")
 

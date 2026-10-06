@@ -262,6 +262,15 @@ async def complete_upload(
     if lecture.status in ("queued", "processing", "ready"):
         return lecture
 
+    if lecture.status == "dead_letter":
+        raise HTTPException(
+            status_code=409, detail="Lecture is in dead_letter; admin retry required"
+        )
+    if lecture.status not in ("uploading", "uploaded"):
+        raise HTTPException(
+            status_code=409, detail=f"Cannot complete from status {lecture.status}"
+        )
+
     storage = get_storage()
     try:
         meta = await storage.head_object(lecture.audio_object_key)
@@ -280,7 +289,7 @@ async def complete_upload(
     if actual_mime != lecture.audio_mime:
         raise HTTPException(status_code=400, detail="Content-Type mismatch")
 
-    await repo.update_fields(lecture_id, {"status": "queued"})
+    await repo.update_fields(lecture_id, {"status": "queued", "error_message": None})
 
     from services.metrics_service import record_lecture_uploaded
     record_lecture_uploaded(source="presigned_upload")

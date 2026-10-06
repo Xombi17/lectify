@@ -11,6 +11,8 @@ EnvironmentFile=/etc/lectify/app.env
 Environment=PORT=3000
 Environment=HOSTNAME=0.0.0.0
 ExecStart=/usr/local/bin/node server.js
+StandardOutput=append:/var/log/lectify/web.log
+StandardError=append:/var/log/lectify/web.log
 Restart=always
 RestartSec=5
 KillSignal=SIGTERM

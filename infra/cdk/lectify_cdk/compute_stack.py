@@ -201,7 +201,8 @@ class ComputeStack(Stack):
         )
 
         # 8. AutoScalingGroups
-        # NOTE: desired_capacity is explicit for MVP; Phase 17 owns scaling policies.
+        # NOTE: worker ASG omits desired_capacity on purpose: step scaling (ObservabilityStack) owns it,
+        # so redeploys do not reset scaled capacity (D-09; costly to reverse). Web ASG stays fixed.
         self.web_asg = autoscaling.AutoScalingGroup(
             self,
             "WebAsg",
@@ -225,7 +226,7 @@ class ComputeStack(Stack):
             launch_template=self.worker_lt,
             min_capacity=1,
             max_capacity=WORKER_MAX,
-            desired_capacity=1,
+            group_metrics=[autoscaling.GroupMetrics.all()],
             health_check=autoscaling.HealthCheck.ec2(),
             signals=autoscaling.Signals.wait_for_all(timeout=Duration.minutes(20)),
         )

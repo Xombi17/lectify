@@ -26,11 +26,13 @@ restrict services needed in Phases 14/15; upgrading keeps remaining credits.
 `BUDGET_EMAIL` is required. `BUDGET_LIMIT_USD` defaults to 50 (set it to your credit pool).
 Alerts by email: ACTUAL 50/80/100% and FORECASTED 100%. Credits are excluded so gross spend alerts.
 Budgets data refreshes up to about once per 24h, and FORECASTED needs usage history.
+Budget alerts also publish to the `lectify-ops` SNS topic (see section 11).
 
 ## 6. Deploy / destroy
 - `make deploy BUDGET_EMAIL=you@example.com` deploys all stacks (BudgetStack first).
 - `make destroy` removes everything except BudgetStack.
 - `make destroy-all` also removes BudgetStack.
+- Plain `make destroy` removes ObservabilityStack (log groups, alarms, dashboard, scaling policies) while BudgetStack persists. BudgetStack holds the `lectify-ops` topic, its CMK and the confirmed email subscription; `make destroy-all` schedules the CMK for deletion (7-day window) and removes the subscription, which must be re-confirmed after redeploy.
 - `make orphans` lists leftover Project=lectify VPC/NAT/EIP (fails if any). Expected leftover stacks: BudgetStack and CDKToolkit only.
 
 ## 7. DataStack
@@ -166,8 +168,12 @@ bash scripts/redrive-dlq.sh --source <dlq-arn> --dest <stage-queue-arn> --max 50
 ```
 
 ### Lecture reset
-Moving the message does not reset the lecture row. For each affected lecture,
-as an admin:
+Moving the message does not reset the lecture row, and /retry enqueues a NEW
+version-bumped job while the move already restored the ORIGINAL message.
+Use ONE per lecture (message-move OR /retry, never both): (A) if the move
+restored the message, wait for the worker and confirm the lecture left
+dead_letter with no /retry; (B) only if a lecture has no restored message
+(stage depth zero, no fresh transcribe job row), reset it as an admin:
 ```bash
 curl -X POST "$API/api/lectures/{lecture_id}/retry" -H "Authorization: Bearer $ADMIN_JWT"
 ```
@@ -177,4 +183,46 @@ curl -X POST "$API/api/lectures/{lecture_id}/retry" -H "Authorization: Bearer $A
 - DLQ depth is zero:
   `aws sqs get-queue-attributes --queue-url <dlq-url> --attribute-names ApproximateNumberOfMessages`
 - The lecture left `dead_letter` (`GET /api/lectures/{id}` shows `queued`).
-- A fresh `transcribe` job row exists for the lecture.
+- A fresh `transcribe` job row exists for the lecture, and only one transcribe job is pending per lecture.
+
+## 11. Phase 17 - Observability & Scaling
+
+### Ops topic
+`lectify-ops` (BudgetStack, encrypted with CMK `alias/lectify-ops`; a CMK because the AWS-managed `alias/aws/sns` key cannot be used by CloudWatch/Budgets service principals). The `BUDGET_EMAIL` address is subscribed. Click the confirm link in the "AWS Notification - Subscription Confirmation" email, then check:
+`aws sns list-subscriptions-by-topic --topic-arn <arn>` must show a real SubscriptionArn, not `PendingConfirmation`.
+
+### Test alarm
+`aws cloudwatch set-alarm-state --alarm-name lectify-dlq-depth --state-value ALARM --state-reason "ops test"`
+An ALARM email arrives; the alarm returns to OK on its next evaluation (OK email follows). Alternative: `aws sns publish --topic-arn <arn> --message test`.
+
+### Alarms (7 + 2 scaling = 9 of the 10 cap)
+All 7 notify `lectify-ops` on ALARM and OK. Thresholds are overridable with `-c <key>=<value>`.
+
+| Alarm | Fires when | Context key |
+|---|---|---|
+| lectify-transcribe-backlog-age | oldest transcribe message >= 1800 s (3 x 5 min) | `obs_transcribe_age_s` |
+| lectify-materials-backlog-depth | materials queue >= 20 (3 x 5 min) | `obs_materials_depth` |
+| lectify-dlq-depth | DLQ >= 1 | `obs_dlq_threshold` |
+| lectify-worker-cpu-high | worker CPU >= 85% (3 x 5 min) | `obs_worker_cpu` |
+| lectify-web-cpu-high | web CPU >= 80% (3 x 5 min) | `obs_web_cpu` |
+| lectify-dead-letter-jobs | any `JOB_DEAD_LETTER` log line (`Lectify/DeadLetterJobs`) | fixed at 1 |
+| lectify-api-5xx-unhealthy | ALB 5xx + unhealthy hosts >= 10 | `obs_api_5xx` |
+
+Plus 2 auto-named alarms created by the step-scaling policies.
+
+### Logs
+Groups `/lectify/api`, `/lectify/web`, `/lectify/worker`, retention 7 days. The CloudWatch agent tails `/var/log/lectify/*.log` (logrotate daily, keep 3). Follow with `aws logs tail /lectify/worker --follow`. On first deploy the agent starts before ObservabilityStack creates the groups; if a group stays empty, run `sudo systemctl restart amazon-cloudwatch-agent` on the instance via Session Manager.
+
+### Dashboard
+CloudWatch console > Dashboards > `lectify-overview` (queue depth, worker count, CPU, DLQ, dead-letter jobs, ALB).
+
+### Scaling
+Worker ASG min 1, max 3, with `DesiredCapacity` removed from the template (redeploys do not reset it). Backlog = visible + in-flight messages over transcribe + materials (embed excluded). Policies:
+- `WorkerScaleOut`: backlog >= 5 adds 1, >= 20 adds 2; instance warmup 300 s.
+- `WorkerScaleIn`: backlog <= 1 for 15 consecutive 1-minute datapoints removes 1. Step scaling has no cooldown, so this long evaluation is the scale-in damping.
+
+Verify live: `aws autoscaling describe-auto-scaling-groups` and `aws autoscaling describe-policies --auto-scaling-group-name <name>`. The scale-out demo is deferred to Phase 18.
+
+## 12. Pause and resume (save credits)
+
+`make aws-pause` scales the web and worker ASGs to 0 and stops RDS, with live progress; `make aws-resume` starts RDS, restores the ASG sizes, and waits until the ALB serves `/healthz`; `make aws-status` is read-only. Still billing while paused: the ALB and RDS storage (about $1/day). AWS auto-restarts a stopped RDS after 7 days, so re-run `make aws-pause` if you are away longer. `make deploy` undoes a pause. For zero cost use `make destroy`.

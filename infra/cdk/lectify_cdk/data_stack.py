@@ -64,7 +64,7 @@ class DataStack(Stack):
         for e in ready_emails:
             self.topic.add_subscription(subs.EmailSubscription(e))
 
-        engine = rds.DatabaseInstanceEngine.postgres(version=rds.PostgresEngineVersion.VER_16_3)
+        engine = rds.DatabaseInstanceEngine.postgres(version=rds.PostgresEngineVersion.VER_16_13)
         self.parameter_group = rds.ParameterGroup(self, "RdsParameterGroup", engine=engine, parameters={"rds.force_ssl": "1"})
         self.credentials = rds.Credentials.from_generated_secret("lectify", secret_name="lectify/rds/credentials")
         self.db = rds.DatabaseInstance(

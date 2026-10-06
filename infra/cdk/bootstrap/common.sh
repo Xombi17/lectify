@@ -86,3 +86,30 @@ install_units() {
   cp -f "${units_dir}"/*.service /etc/systemd/system/
   systemctl daemon-reload
 }
+
+setup_log_files() {
+  mkdir -p /var/log/lectify
+  chown lectify:lectify /var/log/lectify
+  local name
+  for name in "$@"; do
+    touch "/var/log/lectify/${name}.log"
+    chown lectify:lectify "/var/log/lectify/${name}.log"
+    chmod 0640 "/var/log/lectify/${name}.log"
+  done
+  cat > /etc/logrotate.d/lectify <<'LOGROTATE'
+/var/log/lectify/*.log {
+  daily
+  rotate 3
+  missingok
+  notifempty
+  compress
+  copytruncate
+}
+LOGROTATE
+}
+
+install_cloudwatch_agent() {
+  local tier="$1"
+  dnf install -y amazon-cloudwatch-agent
+  /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c "file:/opt/lectify/bootstrap/cloudwatch-agent-${tier}.json" -s
+}

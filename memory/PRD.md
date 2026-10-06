@@ -14,7 +14,7 @@ notes, quizzes, flashcards, search, analytics — for institutions.
 - **Preview**: MongoDB (Motor) + Local filesystem storage. `DATABASE_BACKEND=mongo`, `STORAGE_BACKEND=local`.
 - **Self-host (docker compose)**: PostgreSQL (SQLAlchemy 2.0 async) + MinIO/S3 (aioboto3). `DATABASE_BACKEND=postgres`, `STORAGE_BACKEND=s3`. Same code, env-var flip only.
 - Backend: FastAPI + repository pattern + AI service abstraction + storage abstraction
-- AI: Google Gemini 2.5 Flash via `google-genai` SDK (text + audio + embeddings)
+- AI: Google Gemini 3.7 Flash via `google-genai` SDK (text + audio + embeddings)
 - Auth: JWT (HS256) with teacher/student roles
 - Frontend: React + Tailwind + shadcn/ui + Phosphor icons + framer-motion
 
@@ -58,7 +58,7 @@ notes, quizzes, flashcards, search, analytics — for institutions.
 - Zoom / Meet integration
 - ✅ Repository-pattern data layer (UserRepository, LectureRepository, ChatRepository, AttemptRepository)
 - ✅ Storage abstraction (LocalStorage; S3 ready)
-- ✅ AIProvider abstraction → GeminiProvider (gemini-2.5-flash) with `chat`, `translate_pack`, `embed`, `digest_chunk`, `merge_chunk_digests` methods
+- ✅ AIProvider abstraction → GeminiProvider (gemini-3.7-flash) with `chat`, `translate_pack`, `embed`, `digest_chunk`, `merge_chunk_digests` methods
 - ✅ JWT auth: signup / login / me (teacher & student roles)
 - ✅ Lecture upload + background AI pipeline (now also computes embeddings)
 - ✅ **Long-lecture handling**: ffmpeg-driven chunking (>30 min → ~10-min chunks), hierarchical merge into one study pack; live progress (step/total/label/chunk_count) persisted on the lecture doc and shown in the UI

@@ -3,6 +3,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: "standalone",
+  // Pin the workspace root to frontend/ so the standalone bundle is flat (server.js at the top).
+  outputFileTracingRoot: import.meta.dirname,
+  turbopack: { root: import.meta.dirname },
   async rewrites() {
     if (process.env.NODE_ENV === "production") {
       return [];

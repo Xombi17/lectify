@@ -4,6 +4,32 @@ from aws_cdk import ArnFormat, Stack
 from aws_cdk import aws_iam as iam
 from constructs import Construct
 
+LOG_GROUP_API = "/lectify/api"
+LOG_GROUP_WEB = "/lectify/web"
+LOG_GROUP_WORKER = "/lectify/worker"
+
+
+def _add_log_write(role: iam.Role, stack: Stack, names: Sequence[str]) -> None:
+    """Write-only access to fixed log groups (CDK owns creation/retention)."""
+    role.add_to_policy(
+        iam.PolicyStatement(
+            actions=[
+                "logs:CreateLogStream",
+                "logs:PutLogEvents",
+                "logs:DescribeLogStreams",
+            ],
+            resources=[
+                stack.format_arn(
+                    service="logs",
+                    resource="log-group",
+                    resource_name=f"{n}:*",
+                    arn_format=ArnFormat.COLON_RESOURCE_NAME,
+                )
+                for n in names
+            ],
+        )
+    )
+
 
 def build_api_role(
     scope: Construct,
@@ -76,6 +102,8 @@ def build_api_role(
             resources=[data.db.secret.secret_arn],
         )
     )
+
+    _add_log_write(role, stack, (LOG_GROUP_API, LOG_GROUP_WEB))
 
     # Optional asset read permissions (for CDK deployment assets in 15-05)
     if extra_read_arns:
@@ -179,6 +207,8 @@ def build_worker_role(
             resources=[data.db.secret.secret_arn],
         )
     )
+
+    _add_log_write(role, stack, (LOG_GROUP_WORKER,))
 
     # Optional asset read permissions (for CDK deployment assets in 15-05)
     if extra_read_arns:

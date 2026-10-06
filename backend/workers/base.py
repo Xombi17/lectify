@@ -190,6 +190,10 @@ class BaseWorker(ABC):
             if rc >= self.settings.QUEUE_MAX_RECEIVES:
                 # Dead letter
                 await repo.mark(job_id, "dead_letter", error_message)
+                logger.error(
+                    "JOB_DEAD_LETTER job_id=%s lecture_id=%s stage=%s receive_count=%s error=%s",
+                    job_id, claimed.lecture_id, self.stage, rc, error_message,
+                )
                 lec_repo = LectureRepository()
                 await lec_repo.update_fields(
                     claimed.lecture_id,

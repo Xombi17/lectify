@@ -61,6 +61,9 @@ def assert_wildcard_guard(template: Template):
     allowed_wildcard_tails = (
         "/classes/*",
         "parameter/lectify/*",
+        "log-group:/lectify/api:*",
+        "log-group:/lectify/web:*",
+        "log-group:/lectify/worker:*",
     )
 
     assert len(all_statements) > 0, "No IAM statements found to validate"
@@ -173,3 +176,35 @@ def test_no_ssh_ingress_and_no_nat(t_net):
 
     t_net.resource_count_is("AWS::EC2::NatGateway", 0)
     t_net.resource_count_is("AWS::EC2::EIP", 0)
+
+
+def _role_policy_statements(t, role_id):
+    for p_id, p in t.find_resources("AWS::IAM::Policy").items():
+        if role_id in p_id:
+            return p["Properties"]["PolicyDocument"]["Statement"]
+    raise AssertionError(f"{role_id} policy not found")
+
+
+def _log_resources(stmts):
+    out = []
+    for s in stmts:
+        acts = s["Action"] if isinstance(s["Action"], list) else [s["Action"]]
+        assert "logs:CreateLogGroup" not in acts and "logs:*" not in acts
+        assert "logs:PutRetentionPolicy" not in acts
+        if "logs:PutLogEvents" in acts:
+            assert set(acts) == {
+                "logs:CreateLogStream",
+                "logs:PutLogEvents",
+                "logs:DescribeLogStreams",
+            }
+            out.extend(_extract_resources(s["Resource"]))
+    return out
+
+
+def test_log_write_scoped(t_compute):
+    api = _log_resources(_role_policy_statements(t_compute, "ApiRole"))
+    worker = _log_resources(_role_policy_statements(t_compute, "WorkerRole"))
+    assert len(api) == 2
+    assert any(r.endswith("log-group:/lectify/api:*") for r in api)
+    assert any(r.endswith("log-group:/lectify/web:*") for r in api)
+    assert len(worker) == 1 and worker[0].endswith("log-group:/lectify/worker:*")

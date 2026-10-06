@@ -55,6 +55,7 @@ STORAGE_BACKEND=s3
 OBJECT_STORAGE_BUCKET=${OBJECT_STORAGE_BUCKET}
 S3_BUCKET=${OBJECT_STORAGE_BUCKET}
 AWS_REGION=${AWS_REGION}
+AWS_DEFAULT_REGION=${AWS_REGION}
 SSM_PREFIX=${SSM_PREFIX:-/lectify/}
 TRANSCRIPTION_CONCURRENCY=1
 AI_CONCURRENCY=2
@@ -65,7 +66,9 @@ SLACK_SUMMARY_ENABLED=false
 DAILY_SUMMARY_ENABLED=false
 EOF
 
+setup_log_files worker
 install_units "${SCRIPT_DIR}/systemd"
+install_cloudwatch_agent worker
 
 echo "Starting lectify-worker service..."
 systemctl enable --now lectify-worker
@@ -77,6 +80,6 @@ if systemctl is-active --quiet lectify-worker; then
 else
   echo "ERROR: lectify-worker failed to start." >&2
   systemctl status lectify-worker --no-pager || true
-  journalctl -u lectify-worker --no-pager -n 50 || true
+  tail -n 50 /var/log/lectify/*.log || true
   exit 1
 fi

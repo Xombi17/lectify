@@ -9,6 +9,9 @@ Group=lectify
 WorkingDirectory=/opt/lectify/backend
 EnvironmentFile=/etc/lectify/app.env
 ExecStart=/opt/lectify/venv/bin/python -m workers all
+StandardOutput=append:/var/log/lectify/worker.log
+StandardError=append:/var/log/lectify/worker.log
+Environment=PYTHONUNBUFFERED=1
 Restart=always
 RestartSec=5
 KillSignal=SIGTERM

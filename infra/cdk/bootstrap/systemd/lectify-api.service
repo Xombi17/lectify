@@ -9,6 +9,9 @@ Group=lectify
 WorkingDirectory=/opt/lectify/backend
 EnvironmentFile=/etc/lectify/app.env
 ExecStart=/opt/lectify/venv/bin/uvicorn server:app --host 0.0.0.0 --port 8000 --workers 1
+StandardOutput=append:/var/log/lectify/api.log
+StandardError=append:/var/log/lectify/api.log
+Environment=PYTHONUNBUFFERED=1
 Restart=always
 RestartSec=5
 KillSignal=SIGTERM

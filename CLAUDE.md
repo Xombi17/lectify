@@ -33,7 +33,46 @@ Rules:
 ## Status
 
 Living project status, updated after every feature lands.
-**Last updated:** 2026-10-05 (Phase 16 executed — Presigned Upload & End-to-End Pipeline, all 3 plans)
+**Last updated:** 2026-10-06 (Phase 17 executed — Observability & Scaling, Plans 01-04; live checkpoint pending)
+
+### What was added (ChatGPT-adjudicated schema fixes: progression + teaching instances)
+
+- **`batch_semesters` progression table** (`BatchSemesterORM`, triple, `BatchSemesterRepository`, routes `POST /admin/batch-semesters`, `GET /batches/{id}/semesters`, `DELETE /batch-semesters/{id}`): joins the cohort axis to the curriculum axis. A division's current semester is derived from term dates, never stored — one source of truth. Seeded 16 rows (2028/2029 × sems 1-8, Mumbai Univ Jul-Dec/Jan-Jun windows); live check: 2028 → Sem 5, 2029 → Sem 3.
+- **Classes as teaching instances** (`ClassORM.batch_semester_id` nullable, unique now on the triple): retakes/repeat teaching no longer collide. Class creation pins the period.
+- **Admin UI**: batch detail shows a cohort progression timeline (past/current/future terms); department view shows a "Currently in Semester N" badge per batch; class dialog pre-fills the teaching period from the division's batch current term.
+- **Convention documented:** `Branch` (DB) = Department (institution/UI); rename deferred to a cleanup migration.
+- **Deferred per advice:** subject M:N catalog, curriculum versioning (not needed until a second curriculum revision ships).
+- **Test counts:** `test_batches.py` 6 passed (added progression derivation + triple-uniqueness rejection); frontend 15 passed.
+- **Next card in queue:** verify-work on the admin batch flows (create batch/division via UI, rename-rename persistence), then Phase 18.
+
+### What was added (Fr. CRCE A.Y. 2026-27 curriculum subjects)
+
+- **Subject department + category columns** (`SubjectORM.branch_id/category`, Pydantic triple, repo `list_by_branch`/`list_by_semester_branch`, routes `POST /subjects` passthrough + `GET /branches/{id}/subjects`): subjects belong to a department within a semester, typed as mandatory/elective/lab/project/internship/broadening.
+- **Curriculum seed** (`backend/scripts/seed_curriculum.py`, idempotent uuid5, rebuild-if-empty DDL guard, honest NULL credits): 324 subjects across FE/SE/TE/BE × CE(CSE)/CSE/ECS/MECH transcribed from the college curriculum docs — verified 83/78/82/81 per branch, 96 mandatory / 134 elective / 40 lab / 12 project / 4 internship / 38 broadening. BE VII/VIII pool split documented in-script (electives+research in VII; project+internship in VIII).
+- **Admin UI**: subject dialog gains department + category dropdowns; class-dialog subject picker filters to the division's department when known.
+- **Prisma** (`schema.prisma`): `Subject.branchId/category` + back-relations.
+- **Branch code note:** official docs abbreviate Computer Engineering as CE, but the DB (and division names COMPS A/B/C) uses COMPS per the earlier spec — curriculum keyed to COMPS.
+- **Test counts:** `test_batches.py` now 4 passed (added branch-subject scoping); `test_academic.py` + batch file 23 passed together; frontend 15 passed.
+- **Next card in queue:** verify-work on the admin batch flows (create batch/division via UI, rename-rename persistence), then Phase 18.
+
+### What was added (Batch-aware academic structure — Fr. CRCE cohorts)
+
+- **Backend Batch entity** (`backend/models/orm.py` `BatchORM`, `backend/models/academic.py` triple + placement validator, `repositories/_sql/academic_repository.py` `BatchRepository`, `repositories/batch_repository.py` dispatcher, `backend/routes/admin.py`): `POST/GET/PUT/DELETE /admin/batches`, `GET /institutions/{id}/batches`, `GET /branches/{id}/divisions`, `GET /batches/{id}/divisions`; `DivisionCreate` requires `semester_id` OR (`branch_id` + `batch_id`).
+- **Division cohort placement** (`DivisionORM.branch_id/batch_id` nullable FKs, `semester_id` now nullable): divisions attach to department × graduating batch, so CSE-2028 → single `CSE` while CSE-2029+ → `CSE A/B/C`. Legacy semester divisions keep working.
+- **Fr. CRCE seed** (`backend/scripts/seed_crce.py`, idempotent uuid5, adopts the single existing institution instead of duplicating): 4 branches (COMPS/CSE/ECS/MECH), batches 2028 (adm 2024) + 2029 (adm 2025), years 1-4, semesters 1-8, 14 divisions per the spec matrix. Live sqlite verified: 1 institution, 4 branches, 2 batches, 14 divisions.
+- **Admin UI batch support** (`HierarchyTree.jsx`, `CreateEntityDialog.jsx`, `lib/api.js`): Batches group under the college, batch detail with its divisions, department detail showing divisions grouped by batch with per-batch Add, division dialog with department/batch/semester dropdowns (no pasted IDs), batch-first setup checklist step, Batches stat.
+- **Prisma** (`prisma/schema.prisma`): `Batch` model + `Division` cohort fields with back-relations (CLI validate skipped — engine download timed out offline; edits mirror existing patterns).
+- **Test counts:** backend `test_batches.py` 3 passed (repo CRUD, branch×batch listing, placement validator); existing `test_academic.py` + `test_lectures.py` + `test_schema_parity.py` 27 passed; frontend 15 passed.
+- **Next card in queue:** verify-work on the admin batch flows (create batch/division via UI, rename-rename persistence), then Phase 18.
+
+### What was added (Phase 17 — Observability & Scaling, Plans 01-04)
+
+- **Ops topic + dead-letter log (17-01)** (`infra/cdk/lectify_cdk/budget_stack.py`, `backend/workers/base.py`): CMK-encrypted `lectify-ops` SNS topic (email subscribed, account-scoped publish policy), Budget alerts fan out to EMAIL + SNS, `JOB_DEAD_LETTER` ERROR line in the worker dead-letter branch.
+- **Compute logging (17-02)** (`compute_iam.py`, `compute_stack.py`, `infra/cdk/bootstrap/`): scoped log-write IAM, CloudWatch agent shipping `/var/log/lectify/*.log`, logrotate, worker ASG without template desired capacity plus group metrics.
+- **ObservabilityStack (17-03)** (`infra/cdk/lectify_cdk/observability_stack.py`): `/lectify/{api,web,worker}` log groups (7d), dead-letter metric filter, 7 ops alarms + 2 scaling alarms, `WorkerScaleOut`/`WorkerScaleIn` step policies (max 3), `lectify-overview` dashboard.
+- **Docs (17-04)**: `infra/cdk/README.md` section 11 (topic confirmation, test alarm, alarms, logs, dashboard, scaling); `make destroy` removes ObservabilityStack, BudgetStack persists.
+- **Test counts:** CDK 65 passed (53 -> 57 -> 65); backend 36 passed in the touched worker/presign suites.
+- **Next card in queue:** Phase 17 live verification (17-04 Task 2: confirm subscription, test alarm, logs, dashboard, policies), then verify-work, then Phase 18.
 
 ### What was added (Phase 16 — Presigned Upload & End-to-End Pipeline, Plans 01-03)
 
@@ -209,7 +248,7 @@ Living project status, updated after every feature lands.
 | **7 — Monitoring + Reliability (F)** | Prometheus, Grafana, SLA tracking, failure alerts | **DONE** | 3 plans, 15 panels, 6 queue metric groups, alert dedup |
 | **8 — Auth Polish (I)** | Full RBAC enforcement, session refresh, audit logging | **DONE** | require_student, require_role, can_access_lecture, token blacklist, logout/refresh, audit logging wired to 25+ endpoints |
 | **B — Recording + upload** | Upload, store, transcribe | **DONE** | Pre-GSD, complete |
-| **D — AI pipeline** | Hierarchical chunking, embeddings, summary, notes, quiz, flashcards, exam-tag | **DONE** | `services/ai_service.py` (Gemini 2.5 Flash) |
+| **D — AI pipeline** | Hierarchical chunking, embeddings, summary, notes, quiz, flashcards, exam-tag | **DONE** | `services/ai_service.py` (Gemini 3.7 Flash) |
 | **E — Student features** | Dashboard, search, study, bookmarks, chat | **DONE** | Pre-GSD, complete |
 
 ### Phase status
@@ -258,10 +297,10 @@ See [.planning/PROJECT.md](.planning/PROJECT.md) for full project context — re
 - **Database:** PostgreSQL (Neon), SQLite for tests
 - **Storage:** MinIO (S3-compatible)
 - **Queue:** Redis/RabbitMQ (Phase 5 — not yet implemented)
-- **AI:** Google Gemini 2.5 Flash (transcription, summarization, quiz/flashcard gen)
+- **AI:** Google Gemini 3.7 Flash (transcription, summarization, quiz/flashcard gen)
 - **Auth:** Custom JWT with role-based access (admin, teacher, student)
 - **Search:** Lexical + cosine similarity
-- **IaC:** AWS CDK (Python 3.12 venv) in infra/cdk: BudgetStack + NetworkStack (Phase 12); see infra/cdk/README.md
+- **IaC:** AWS CDK (Python 3.12 venv) in infra/cdk: BudgetStack + NetworkStack (Phase 12) + DataStack/ComputeStack + ObservabilityStack (Phase 17); see infra/cdk/README.md
 - **Dev tools:** Graphify (knowledge graph), Prisma (schema management), aiosqlite (in-process tests)
 <!-- GSD:stack-end -->
 
@@ -294,7 +333,7 @@ The backend follows a layered architecture:
 Key integrations:
 - **MinIO** for lecture audio file storage
 - **Neon (Postgres)** via SQLAlchemy async engine
-- **Gemini 2.5 Flash** for all AI tasks
+- **Gemini 3.7 Flash** for all AI tasks
 - **Graphify** for codebase knowledge graph
 
 See [.planning/ROADMAP.md](.planning/ROADMAP.md) for phase progression and [.planning/STATE.md](.planning/STATE.md) for current status.

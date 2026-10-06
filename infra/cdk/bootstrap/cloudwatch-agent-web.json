@@ -1,0 +1,20 @@
+{
+  "logs": {
+    "logs_collected": {
+      "files": {
+        "collect_list": [
+          {
+            "file_path": "/var/log/lectify/api.log",
+            "log_group_name": "/lectify/api",
+            "log_stream_name": "{instance_id}"
+          },
+          {
+            "file_path": "/var/log/lectify/web.log",
+            "log_group_name": "/lectify/web",
+            "log_stream_name": "{instance_id}"
+          }
+        ]
+      }
+    }
+  }
+}

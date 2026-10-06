@@ -191,7 +191,7 @@ Plans:
   4. A forced failure lands in the DLQ with the lecture marked `dead_letter`, and the documented redrive procedure recovers it
   5. A student can play back lecture audio via a presigned GET (cut first if time slips)
 
-**Plans**: 3 plans
+**Plans**: 5 plans
 Plans:
 **Wave 1**
 
@@ -201,6 +201,11 @@ Plans:
 
 - 16-02-PLAN.md — Frontend browser-direct uploadToS3 with XHR progress + 501 fallback, ready/failed pills, presigned audio with blob fallback (wave 2)
 - 16-03-PLAN.md — Forced-failure DLQ proof, redrive-dlq.sh + README runbook, SPEC docs + VER-01/VER-02 operator record (wave 2)
+
+**Gap closure** *(from 16-VERIFICATION.md, wave 1, parallel)*
+
+- 16-04-PLAN.md — G1 critical: gate complete_upload to uploading/uploaded-only before head_object, 409 otherwise, clear error_message on success
+- 16-05-PLAN.md — G2 docs: redrive-dlq.sh + README either-or (message-move OR /retry, never both)
 
 **UI hint**: yes
 
@@ -216,7 +221,20 @@ Plans:
   3. One CloudWatch dashboard shows queue depth, worker count, CPU, DLQ and failures
   4. Queue backlog (visible + in-flight across transcribe and materials) drives the worker ASG to scale out and back in via step scaling, with a long scale-in cooldown and max capacity of 2-3
 
-**Plans**: TBD
+**Plans**: 4 plans
+Plans:
+**Wave 1**
+
+- [ ] 17-01-PLAN.md — Ops SNS topic (CMK) + Budget SNS subscriber in BudgetStack; JOB_DEAD_LETTER worker log line (wave 1)
+- [ ] 17-02-PLAN.md — Scoped log IAM, worker ASG scaling-ready (no desired, group metrics), CloudWatch agent + unit file logging (wave 1)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 17-03-PLAN.md — ObservabilityStack: log groups, metric filter, 7 alarms, step scaling, lectify-overview dashboard, app.py wiring (wave 2)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 17-04-PLAN.md — README section 11, CLAUDE.md status, live verification checkpoint (wave 3)
 
 ### Phase 18: Load Test, Capacity Report, Runbook & Docs
 

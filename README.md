@@ -29,7 +29,7 @@ lectify/
 | Layer       | Technology                                                           |
 |-------------|----------------------------------------------------------------------|
 | Backend     | Python 3.11+, FastAPI, SQLAlchemy 2.0 (async), Motor (Mongo)         |
-| AI          | Google Gemini 2.5 Flash (transcription, summarisation, quiz gen)     |
+| AI          | Google Gemini 3.7 Flash (transcription, summarisation, quiz gen)     |
 | Database    | PostgreSQL 16 (prod) / SQLite (dev) or MongoDB                       |
 | Storage     | MinIO / S3 (prod) or local filesystem (dev)                          |
 | Frontend    | React 19, CRACO, Tailwind CSS, Radix UI, TanStack Query, Recharts   |
@@ -118,7 +118,7 @@ Before running, copy `.env.example` to `.env` and fill in the required values (`
 | `JWT_ALGORITHM`          | `HS256`                  | JWT signing algorithm                  |
 | `JWT_EXPIRE_MINUTES`     | `10080` (7 days)         | Token expiry                           |
 | `GEMINI_API_KEY`         | —                        | Google AI Studio API key               |
-| `GEMINI_MODEL`           | `gemini-2.5-flash`       | Gemini model name                      |
+| `GEMINI_MODEL`           | `gemini-3.7-flash`       | Gemini model name                      |
 | `STORAGE_BACKEND`        | `local`                  | `local` or `s3`                        |
 | `STORAGE_LOCAL_DIR`      | `./storage_data`         | Directory for local file storage       |
 | `CORS_ORIGINS`           | `*`                      | Comma-separated allowed origins        |

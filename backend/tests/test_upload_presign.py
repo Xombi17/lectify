@@ -203,6 +203,9 @@ class TestUploadComplete:
             r = client.post(f"/api/lectures/{lec.id}/upload-complete")
             assert r.status_code == 202, r.text
             assert mock_enq.call_count == 1
+            assert inst.update_fields.call_count == 1
+            _, fields = inst.update_fields.call_args[0]
+            assert fields == {"status": "queued", "error_message": None}
         finally:
             _clear()
 
@@ -284,6 +287,49 @@ class TestUploadComplete:
             r = client.post(f"/api/lectures/{lec.id}/upload-complete")
             assert r.status_code == 202
             assert mock_enq.call_count == 0
+        finally:
+            _clear()
+
+    @patch("routes.lectures.enqueue_job", new_callable=AsyncMock)
+    @patch("routes.lectures.get_storage")
+    @patch("routes.lectures.LectureRepository")
+    def test_dead_letter_409_no_side_effects(self, mock_lec, mock_storage_fn, mock_enq, client):
+        _override(_teacher())
+        try:
+            lec = _lecture(status="dead_letter")
+            inst = mock_lec.return_value
+            inst.get_by_id = AsyncMock(return_value=lec)
+            inst.update_fields = AsyncMock()
+            storage = AsyncMock()
+            storage.head_object = AsyncMock(return_value={"size": 1024, "content_type": "audio/mpeg"})
+            mock_storage_fn.return_value = storage
+            r = client.post(f"/api/lectures/{lec.id}/upload-complete")
+            assert r.status_code == 409, r.text
+            assert "admin retry" in r.json()["detail"].lower()
+            storage.head_object.assert_not_called()
+            assert mock_enq.call_count == 0
+            inst.update_fields.assert_not_called()
+        finally:
+            _clear()
+
+    @patch("routes.lectures.enqueue_job", new_callable=AsyncMock)
+    @patch("routes.lectures.get_storage")
+    @patch("routes.lectures.LectureRepository")
+    def test_error_409_no_side_effects(self, mock_lec, mock_storage_fn, mock_enq, client):
+        _override(_teacher())
+        try:
+            lec = _lecture(status="error")
+            inst = mock_lec.return_value
+            inst.get_by_id = AsyncMock(return_value=lec)
+            inst.update_fields = AsyncMock()
+            storage = AsyncMock()
+            storage.head_object = AsyncMock(return_value={"size": 1024, "content_type": "audio/mpeg"})
+            mock_storage_fn.return_value = storage
+            r = client.post(f"/api/lectures/{lec.id}/upload-complete")
+            assert r.status_code == 409, r.text
+            storage.head_object.assert_not_called()
+            assert mock_enq.call_count == 0
+            inst.update_fields.assert_not_called()
         finally:
             _clear()
 
@@ -379,6 +425,31 @@ class TestDeadLetter:
 
         # message left for broker DLQ (not deleted)
         assert len(backend._queues.get("transcribe", [])) == 1
+
+    async def test_dead_letter_emits_log_line(self, caplog):
+        import logging
+
+        from core.queue_backend import get_queue_backend
+        from services.queue_client import enqueue_job
+
+        caplog.set_level(logging.ERROR, logger="workers.base")
+        await enqueue_job(JobCreate(lecture_id="l1", stage="transcribe", version=1))
+        get_queue_backend()._queues["transcribe"][0]["receive_count"] = 4
+        await _FailingWorker().run_once(wait_seconds=0)
+        recs = [r.getMessage() for r in caplog.records if "JOB_DEAD_LETTER" in r.getMessage()]
+        assert len(recs) == 1
+        assert recs[0].startswith("JOB_DEAD_LETTER job_id=")
+        assert "lecture_id=l1" in recs[0] and "stage=transcribe" in recs[0]
+
+    async def test_retry_does_not_emit_dead_letter_line(self, caplog):
+        import logging
+
+        from services.queue_client import enqueue_job
+
+        caplog.set_level(logging.ERROR, logger="workers.base")
+        await enqueue_job(JobCreate(lecture_id="l1", stage="transcribe", version=1))
+        await _FailingWorker().run_once(wait_seconds=0)
+        assert "JOB_DEAD_LETTER" not in caplog.text
 
     def test_force_fail_hook_gating(self, monkeypatch):
         from workers.transcription import is_forced_failure

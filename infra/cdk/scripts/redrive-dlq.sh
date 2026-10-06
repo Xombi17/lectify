@@ -5,7 +5,11 @@
 # Usage:
 #   redrive-dlq.sh [--source lectify-dlq|ARN] [--dest lectify-transcribe|ARN]
 #                  [--max 10] [--force] [--region ap-southeast-2]
-# After the move completes, reset each lecture:
+# After the move completes, reset ONLY lectures with nothing restored:
+# do NOT call /retry for a lecture the move already restored (it would
+# enqueue a SECOND transcribe job alongside the restored message).
+# Call /retry ONLY for lectures with nothing restored — verify DLQ/stage
+# depth zero for that lecture and no new transcribe job version first:
 #   curl -X POST $API/api/lectures/{id}/retry -H "Authorization: Bearer $ADMIN_JWT"
 set -euo pipefail
 
@@ -90,7 +94,9 @@ for _ in $(seq 1 60); do
   echo "status: $STATUS"
   case "$STATUS" in
     COMPLETED)
-      echo "Redrive complete. Next: reset each lecture from dead_letter to queued:"
+      echo "Redrive complete. Next, per lecture use ONE mechanism only:"
+      echo "If the move restored processing for a lecture (queue depth shows the message back, lecture left dead_letter), do NOT call /retry."
+      echo 'Call /retry ONLY for lectures with nothing restored (verify DLQ/stage depth and no new transcribe job version first):'
       echo '  curl -X POST "$API/api/lectures/{lecture_id}/retry" -H "Authorization: Bearer $ADMIN_JWT"'
       echo "Then confirm queue depth zero and the lecture left dead_letter."
       exit 0

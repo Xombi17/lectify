@@ -32,7 +32,7 @@ echo "==> Assembling build bundle in ${OUTPUT_DIR}..."
 rm -rf "${OUTPUT_DIR}"
 mkdir -p "${OUTPUT_DIR}"
 
-cp -R .next/standalone/* "${OUTPUT_DIR}/"
+cp -R .next/standalone/. "${OUTPUT_DIR}/"
 
 if [ -n "${REL_APP_SUBDIR}" ] && [ -d "${OUTPUT_DIR}/${REL_APP_SUBDIR}" ]; then
   TARGET_APP_DIR="${OUTPUT_DIR}/${REL_APP_SUBDIR}"

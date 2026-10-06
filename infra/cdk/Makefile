@@ -11,7 +11,7 @@ APP := -c app_origin=$(APP_ORIGIN) -c ready_emails=$(READY_EMAILS)
 CTX := -c budget_email=$(BUDGET_EMAIL) $(APP) $(OPT)
 PLACEHOLDER := -c budget_email=$(or $(BUDGET_EMAIL),test@example.com) $(APP) $(OPT)
 
-.PHONY: put-secrets install test synth deploy destroy destroy-all preflight orphans build-web vendor-ffmpeg bootstrap-db seed-demo
+.PHONY: aws-pause aws-resume aws-status put-secrets install test synth deploy destroy destroy-all preflight orphans build-web vendor-ffmpeg bootstrap-db seed-demo
 
 install:
 	uv venv --python 3.12 .venv
@@ -68,3 +68,12 @@ orphans:
 	echo "Stacks (expected: BudgetStack, CDKToolkit only):"; \
 	aws cloudformation list-stacks --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE DELETE_FAILED --query 'StackSummaries[].StackName' --output text; \
 	if [ -n "$$V$$N$$E" ]; then echo "ORPHANS FOUND"; exit 1; fi; echo "no orphans"
+
+aws-pause:
+	bash scripts/aws-pause.sh pause
+
+aws-resume:
+	bash scripts/aws-pause.sh resume
+
+aws-status:
+	bash scripts/aws-pause.sh status

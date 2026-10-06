@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { api, authApi } from "@/lib/api";
 
+/** @type {import("react").Context<any>} */
 const AuthCtx = createContext(null);
 
 export function AuthProvider({ children }) {

@@ -3,6 +3,7 @@
 import logging
 from datetime import datetime, timezone
 
+from core.config import get_settings
 from models.job import JobCreate, JobDB
 from repositories.lecture_repository import LectureRepository
 from services.ai_service import get_ai_service

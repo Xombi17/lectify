@@ -98,6 +98,15 @@ def test_compute_stack_wired(tmp_path):
     assert "NetworkStack" in deps and "DataStack" in deps
 
 
+def test_observability_stack_wired(tmp_path):
+    r = _run(tmp_path, {"budget_email": EMAIL})
+    assert r.returncode == 0, r.stderr
+    arts = json.loads((tmp_path / "manifest.json").read_text())["artifacts"]
+    assert "ObservabilityStack" in arts
+    deps = arts["ObservabilityStack"]["dependencies"]
+    assert "ComputeStack" in deps and "BudgetStack" in deps
+
+
 def test_failfast_missing_web(tmp_path):
     # Ensure web/server.js does not exist
     web_dir = CDK_DIR / "build" / "web"
