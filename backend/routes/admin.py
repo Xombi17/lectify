@@ -15,6 +15,10 @@ from core.deps import (
 )
 from models.academic import (
     AuditLogPublic,
+    BatchCreate,
+    BatchPublic,
+    BatchSemesterCreate,
+    BatchSemesterPublic,
     BranchCreate,
     BranchPublic,
     ClassCreate,
@@ -34,6 +38,8 @@ from models.academic import (
 )
 from models.user import UserPublic
 from repositories.audit_log_repository import AuditLogRepository
+from repositories.batch_repository import BatchRepository
+from repositories.batch_semester_repository import BatchSemesterRepository
 from repositories.branch_repository import BranchRepository
 from repositories.class_repository import ClassRepository
 from repositories.division_repository import DivisionRepository
@@ -333,6 +339,168 @@ async def list_institution_branches(institution_id: str):
 
 
 # ============================================================================
+# Batch (graduating cohorts)
+# ============================================================================
+
+
+@router.get("/batches", response_model=List[BatchPublic])
+async def list_batches():
+    repo = BatchRepository()
+    return await repo.list_all()
+
+
+@router.post(
+    "/batches",
+    response_model=BatchPublic,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_batch(payload: BatchCreate, admin: UserPublic = Depends(get_admin_user)):
+    repo = BatchRepository()
+    from models.academic import BatchDB
+
+    batch = BatchDB(
+        id=repo.new_id(),
+        institution_id=payload.institution_id,
+        admission_year=payload.admission_year,
+        graduating_year=payload.graduating_year,
+        name=payload.name,
+    )
+    result = await repo.create(batch)
+
+    await log_audit(
+        action=AUDIT_CREATE,
+        entity_type="batch",
+        entity_id=result.id,
+        details=f"Created batch: {payload.name}",
+        admin_id=admin.id,
+    )
+
+    return result
+
+
+@router.get("/batches/{batch_id}", response_model=BatchPublic)
+async def get_batch(batch_id: str):
+    repo = BatchRepository()
+    result = await repo.get_by_id(batch_id)
+    if not result:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    return result
+
+
+@router.put("/batches/{batch_id}", response_model=BatchPublic)
+async def update_batch(batch_id: str, payload: BatchCreate, admin: UserPublic = Depends(get_admin_user)):
+    repo = BatchRepository()
+    result = await repo.update(batch_id, payload.model_dump())
+    if not result:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+
+    await log_audit(
+        action=AUDIT_UPDATE,
+        entity_type="batch",
+        entity_id=batch_id,
+        details=f"Updated batch: {payload.name}",
+        admin_id=admin.id,
+    )
+
+    return result
+
+
+@router.delete("/batches/{batch_id}")
+async def delete_batch(batch_id: str, admin: UserPublic = Depends(get_admin_user)):
+    repo = BatchRepository()
+    entity = await repo.get_by_id(batch_id)
+    if not entity:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+
+    await log_audit(
+        action=AUDIT_DELETE,
+        entity_type="batch",
+        entity_id=batch_id,
+        details=f"Deleted batch: {entity.name}",
+        admin_id=admin.id,
+    )
+
+    success = await repo.delete(batch_id)
+    if not success:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    return {"ok": True}
+
+
+@router.get(
+    "/institutions/{institution_id}/batches",
+    response_model=List[BatchPublic],
+)
+async def list_institution_batches(institution_id: str):
+    repo = BatchRepository()
+    return await repo.list_by_institution(institution_id)
+
+
+# ============================================================================
+# BatchSemester (cohort progression)
+# ============================================================================
+
+
+@router.post(
+    "/batch-semesters",
+    response_model=BatchSemesterPublic,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_batch_semester(payload: BatchSemesterCreate, admin: UserPublic = Depends(get_admin_user)):
+    repo = BatchSemesterRepository()
+    from models.academic import BatchSemesterDB
+
+    row = BatchSemesterDB(
+        id=repo.new_id(),
+        batch_id=payload.batch_id,
+        semester_id=payload.semester_id,
+        academic_year=payload.academic_year,
+        starts_on=payload.starts_on,
+        ends_on=payload.ends_on,
+    )
+    result = await repo.create(row)
+
+    await log_audit(
+        action=AUDIT_CREATE,
+        entity_type="batch_semester",
+        entity_id=result.id,
+        details=f"Mapped batch {payload.batch_id} to semester {payload.semester_id} ({payload.academic_year})",
+        admin_id=admin.id,
+    )
+
+    return result
+
+
+@router.get(
+    "/batches/{batch_id}/semesters",
+    response_model=List[BatchSemesterPublic],
+)
+async def list_batch_semesters(batch_id: str):
+    repo = BatchSemesterRepository()
+    return await repo.list_by_batch(batch_id)
+
+
+@router.delete("/batch-semesters/{row_id}")
+async def delete_batch_semester(row_id: str, admin: UserPublic = Depends(get_admin_user)):
+    repo = BatchSemesterRepository()
+    entity = await repo.get_by_id(row_id)
+    if not entity:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+
+    await log_audit(
+        action=AUDIT_DELETE,
+        entity_type="batch_semester",
+        entity_id=row_id,
+        details=f"Removed batch-semester mapping {row_id}",
+        admin_id=admin.id,
+    )
+
+    success = await repo.delete(row_id)
+    if not success:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    return {"ok": True}
+
+
+# ============================================================================
 # Semester
 # ============================================================================
 
@@ -451,9 +619,11 @@ async def create_subject(payload: SubjectCreate, admin: UserPublic = Depends(get
     subject = SubjectDB(
         id=repo.new_id(),
         semester_id=payload.semester_id,
+        branch_id=payload.branch_id,
         code=payload.code,
         name=payload.name,
         credits=payload.credits,
+        category=payload.category,
     )
     result = await repo.create(subject)
 
@@ -525,6 +695,15 @@ async def list_semester_subjects(semester_id: str):
     return await repo.list_by_semester(semester_id)
 
 
+@router.get(
+    "/branches/{branch_id}/subjects",
+    response_model=List[SubjectPublic],
+)
+async def list_branch_subjects(branch_id: str):
+    repo = SubjectRepository()
+    return await repo.list_by_branch(branch_id)
+
+
 # ============================================================================
 # Division
 # ============================================================================
@@ -548,6 +727,8 @@ async def create_division(payload: DivisionCreate, admin: UserPublic = Depends(g
     division = DivisionDB(
         id=repo.new_id(),
         semester_id=payload.semester_id,
+        branch_id=payload.branch_id,
+        batch_id=payload.batch_id,
         name=payload.name,
         capacity=payload.capacity,
     )
@@ -621,6 +802,24 @@ async def list_semester_divisions(semester_id: str):
     return await repo.list_by_semester(semester_id)
 
 
+@router.get(
+    "/branches/{branch_id}/divisions",
+    response_model=List[DivisionPublic],
+)
+async def list_branch_divisions(branch_id: str):
+    repo = DivisionRepository()
+    return await repo.list_by_branch(branch_id)
+
+
+@router.get(
+    "/batches/{batch_id}/divisions",
+    response_model=List[DivisionPublic],
+)
+async def list_batch_divisions(batch_id: str):
+    repo = DivisionRepository()
+    return await repo.list_by_batch(batch_id)
+
+
 # ============================================================================
 # Class
 # ============================================================================
@@ -645,6 +844,8 @@ async def create_class(payload: ClassCreate, admin: UserPublic = Depends(get_adm
         id=repo.new_id(),
         division_id=payload.division_id,
         subject_id=payload.subject_id,
+        batch_semester_id=payload.batch_semester_id,
+        name=payload.name,
     )
     result = await repo.create(cls)
 

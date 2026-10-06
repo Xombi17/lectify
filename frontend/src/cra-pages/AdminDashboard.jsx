@@ -11,7 +11,7 @@ export default function AdminDashboard() {
                         Academic hierarchy.
                     </h1>
                     <p className="mt-3 max-w-xl text-base text-muted-foreground">
-                        Manage institutions, years, branches, semesters, subjects, divisions, and classes.
+                        Manage years, branches, semesters, subjects, divisions, and classes for your institution.
                     </p>
                 </section>
 

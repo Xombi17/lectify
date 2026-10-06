@@ -1,9 +1,9 @@
 """Pydantic models for academic hierarchy entities."""
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Optional
 from uuid import uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 # ============================================================================
@@ -111,26 +111,60 @@ class SemesterPublic(BaseModel):
 # ============================================================================
 class SubjectCreate(BaseModel):
     semester_id: str
+    branch_id: Optional[str] = None
     code: str = Field(..., min_length=1, max_length=32)
     name: str = Field(..., min_length=1, max_length=120)
     credits: Optional[int] = Field(None, gt=0)
+    category: Optional[str] = Field(None, max_length=32)
 
 
 class SubjectDB(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid4()))
     semester_id: str
+    branch_id: Optional[str] = None
     code: str
     name: str
     credits: Optional[int] = None
+    category: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class SubjectPublic(BaseModel):
     id: str
     semester_id: str
+    branch_id: Optional[str]
     code: str
     name: str
     credits: Optional[int]
+    category: Optional[str]
+    created_at: datetime
+
+
+# ============================================================================
+# Batch (graduating cohort)
+# ============================================================================
+class BatchCreate(BaseModel):
+    institution_id: str
+    admission_year: int = Field(..., gt=1900, le=2100)
+    graduating_year: int = Field(..., gt=1900, le=2100)
+    name: str = Field(..., min_length=1, max_length=120)
+
+
+class BatchDB(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    institution_id: str
+    admission_year: int
+    graduating_year: int
+    name: str
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class BatchPublic(BaseModel):
+    id: str
+    institution_id: str
+    admission_year: int
+    graduating_year: int
+    name: str
     created_at: datetime
 
 
@@ -138,14 +172,26 @@ class SubjectPublic(BaseModel):
 # Division
 # ============================================================================
 class DivisionCreate(BaseModel):
-    semester_id: str
+    # Legacy placement (semester of the curriculum). Optional now.
+    semester_id: Optional[str] = None
+    # Cohort placement (department × graduating batch). Both required together.
+    branch_id: Optional[str] = None
+    batch_id: Optional[str] = None
     name: str = Field(..., min_length=1, max_length=120)
     capacity: Optional[int] = Field(None, gt=0)
+
+    @model_validator(mode="after")
+    def _require_placement(self):
+        if self.semester_id is None and (self.branch_id is None or self.batch_id is None):
+            raise ValueError("Division needs semester_id or (branch_id + batch_id)")
+        return self
 
 
 class DivisionDB(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid4()))
-    semester_id: str
+    semester_id: Optional[str] = None
+    branch_id: Optional[str] = None
+    batch_id: Optional[str] = None
     name: str
     capacity: Optional[int] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -153,18 +199,52 @@ class DivisionDB(BaseModel):
 
 class DivisionPublic(BaseModel):
     id: str
-    semester_id: str
+    semester_id: Optional[str]
+    branch_id: Optional[str]
+    batch_id: Optional[str]
     name: str
     capacity: Optional[int]
     created_at: datetime
 
 
 # ============================================================================
-# Class
+# BatchSemester (cohort progression — where a batch is in curriculum time)
+# ============================================================================
+class BatchSemesterCreate(BaseModel):
+    batch_id: str
+    semester_id: str
+    academic_year: str = Field(..., min_length=4, max_length=9)  # e.g. "2026-27"
+    starts_on: date
+    ends_on: date
+
+
+class BatchSemesterDB(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    batch_id: str
+    semester_id: str
+    academic_year: str
+    starts_on: date
+    ends_on: date
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class BatchSemesterPublic(BaseModel):
+    id: str
+    batch_id: str
+    semester_id: str
+    academic_year: str
+    starts_on: date
+    ends_on: date
+    created_at: datetime
+
+
+# ============================================================================
+# Class (teaching instance)
 # ============================================================================
 class ClassCreate(BaseModel):
     division_id: str
     subject_id: str
+    batch_semester_id: Optional[str] = None
     name: Optional[str] = Field(None, max_length=120)  # Display name for admin UI
 
 
@@ -172,6 +252,7 @@ class ClassDB(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid4()))
     division_id: str
     subject_id: str
+    batch_semester_id: Optional[str] = None
     name: Optional[str] = None  # Display name for admin UI
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
@@ -180,6 +261,7 @@ class ClassPublic(BaseModel):
     id: str
     division_id: str
     subject_id: str
+    batch_semester_id: Optional[str]
     name: Optional[str]  # Display name for admin UI
     created_at: datetime
 

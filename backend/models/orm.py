@@ -4,12 +4,13 @@ Used by the PostgreSQL (and SQLite-for-tests) repository implementations.
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date
 from typing import Any
 
 from sqlalchemy import (
     JSON,
     Boolean,
+    Date,
     DateTime,
     Float,
     ForeignKey,
@@ -189,6 +190,8 @@ class YearORM(Base):
 
 
 class BranchORM(Base):
+    # Domain convention: Branch (DB entity) = Department (institution/UI terminology).
+    # Rename to departments/department_id only in a dedicated cleanup migration.
     __tablename__ = "branches"
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     institution_id: Mapped[str] = mapped_column(
@@ -198,6 +201,46 @@ class BranchORM(Base):
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     __table_args__ = (UniqueConstraint("institution_id", "code", name="uq_branch_institution_code"),)
+
+
+class BatchORM(Base):
+    """Graduating cohort, e.g. Batch of 2028 (admitted 2024).
+
+    Divisions attach to (branch, batch) so the division structure can
+    differ per cohort (CSE-2028 has one division, CSE-2029+ has A/B/C).
+    """
+    __tablename__ = "batches"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    institution_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("institutions.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    admission_year: Mapped[int] = mapped_column(Integer, nullable=False)
+    graduating_year: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    __table_args__ = (UniqueConstraint("institution_id", "graduating_year", name="uq_batch_institution_graduating"),)
+
+
+class BatchSemesterORM(Base):
+    """Cohort progression: where a batch is in curriculum time.
+
+    A division's "current semester" is DERIVED from this (batch -> row whose
+    window contains today), never stored on the division itself — one source
+    of truth. A class pins a teaching instance to one of these rows.
+    """
+    __tablename__ = "batch_semesters"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    batch_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("batches.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    semester_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("semesters.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    academic_year: Mapped[str] = mapped_column(String(9), nullable=False)  # e.g. "2026-27"
+    starts_on: Mapped[date] = mapped_column(Date, nullable=False)
+    ends_on: Mapped[date] = mapped_column(Date, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    __table_args__ = (UniqueConstraint("batch_id", "semester_id", name="uq_batchsemester_batch_semester"),)
 
 
 class SemesterORM(Base):
@@ -218,18 +261,33 @@ class SubjectORM(Base):
     semester_id: Mapped[str] = mapped_column(
         String(64), ForeignKey("semesters.id", ondelete="CASCADE"), index=True, nullable=False
     )
+    # Owning department, e.g. CSE's Semester III subjects vs CE's.
+    branch_id: Mapped[str | None] = mapped_column(
+        String(64), ForeignKey("branches.id", ondelete="CASCADE"), index=True, nullable=True
+    )
     code: Mapped[str] = mapped_column(String(32), nullable=False)
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     credits: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # mandatory | elective | lab | project | internship | broadening
+    category: Mapped[str | None] = mapped_column(String(32), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
-    __table_args__ = (UniqueConstraint("semester_id", "code", name="uq_subject_semester_code"),)
+    __table_args__ = (UniqueConstraint("semester_id", "branch_id", "code", name="uq_subject_semester_branch_code"),)
 
 
 class DivisionORM(Base):
     __tablename__ = "divisions"
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
-    semester_id: Mapped[str] = mapped_column(
-        String(64), ForeignKey("semesters.id", ondelete="CASCADE"), index=True, nullable=False
+    # Legacy placement: which semester of the curriculum this division sits in.
+    # Nullable now — cohort-based divisions use branch_id + batch_id instead.
+    semester_id: Mapped[str | None] = mapped_column(
+        String(64), ForeignKey("semesters.id", ondelete="CASCADE"), index=True, nullable=True
+    )
+    # Cohort placement: department + graduating batch, e.g. CSE × Batch 2029.
+    branch_id: Mapped[str | None] = mapped_column(
+        String(64), ForeignKey("branches.id", ondelete="CASCADE"), index=True, nullable=True
+    )
+    batch_id: Mapped[str | None] = mapped_column(
+        String(64), ForeignKey("batches.id", ondelete="CASCADE"), index=True, nullable=True
     )
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     capacity: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -238,6 +296,9 @@ class DivisionORM(Base):
 
 
 class ClassORM(Base):
+    """A teaching instance: one subject taught to one division during one
+    academic period. The (division, subject, batch_semester) triple is unique
+    so retakes and repeat teaching across years don't collide."""
     __tablename__ = "classes"
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     division_id: Mapped[str] = mapped_column(
@@ -246,9 +307,15 @@ class ClassORM(Base):
     subject_id: Mapped[str] = mapped_column(
         String(64), ForeignKey("subjects.id", ondelete="CASCADE"), index=True, nullable=False
     )
+    batch_semester_id: Mapped[str | None] = mapped_column(
+        String(64), ForeignKey("batch_semesters.id", ondelete="SET NULL"), index=True, nullable=True
+    )
     name: Mapped[str | None] = mapped_column(String(120), nullable=True)  # Display name for admin UI
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
-    __table_args__ = (UniqueConstraint("division_id", "subject_id", name="uq_class_division_subject"),)
+    __table_args__ = (UniqueConstraint(
+        "division_id", "subject_id", "batch_semester_id",
+        name="uq_class_division_subject_period",
+    ),)
 
 
 class TeacherAssignmentORM(Base):
@@ -276,6 +343,23 @@ class AuditLogORM(Base):
     entity_id: Mapped[str] = mapped_column(String(64), nullable=False)
     details: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
+
+
+class QueueMessageORM(Base):
+    """Durable queue storage for the SQLite queue backend (local dev).
+
+    Lets the API process and worker processes share one queue through the
+    same database file. Workers claim jobs in the jobs table, so duplicate
+    delivery from concurrent pollers is safe.
+    """
+    __tablename__ = "queue_messages"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    queue: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    visible_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    receipt: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    receive_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
 
 class QRCodeORM(Base):

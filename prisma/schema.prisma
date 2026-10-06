@@ -167,6 +167,7 @@ model Institution {
   createdAt DateTime  @default(now()) @map("created_at")
   years     Year[]
   branches  Branch[]
+  batches   Batch[]
 
   @@index([code])
   @@map("institutions")
@@ -193,6 +194,8 @@ model Branch {
   name          String
   createdAt     DateTime   @default(now()) @map("created_at")
   institution   Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  divisions     Division[]
+  subjects      Subject[]
 
   @@index([institutionId])
   @@unique([institutionId, code])
@@ -208,6 +211,7 @@ model Semester {
   year      Year       @relation(fields: [yearId], references: [id], onDelete: Cascade)
   subjects  Subject[]
   divisions Division[]
+  batchSemesters BatchSemester[]
 
   @@index([yearId])
   @@unique([yearId, number])
@@ -217,39 +221,85 @@ model Semester {
 model Subject {
   id         String     @id @default(cuid())
   semesterId String     @map("semester_id")
+  branchId   String?    @map("branch_id")
   code       String
   name       String
   credits    Int?
+  category   String?
   createdAt  DateTime   @default(now()) @map("created_at")
   semester   Semester   @relation(fields: [semesterId], references: [id], onDelete: Cascade)
+  branch     Branch?    @relation(fields: [branchId], references: [id], onDelete: Cascade)
   classes    Class[]
 
   @@index([semesterId])
-  @@unique([semesterId, code])
+  @@index([branchId])
+  @@unique([semesterId, branchId, code])
   @@map("subjects")
 }
 
 model Division {
   id         String     @id @default(cuid())
-  semesterId String     @map("semester_id")
+  semesterId String?    @map("semester_id")
+  branchId   String?    @map("branch_id")
+  batchId    String?    @map("batch_id")
   name       String
   capacity   Int?
   createdAt  DateTime   @default(now()) @map("created_at")
-  semester   Semester   @relation(fields: [semesterId], references: [id], onDelete: Cascade)
+  semester   Semester?  @relation(fields: [semesterId], references: [id], onDelete: Cascade)
+  branch     Branch?    @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  batch      Batch?     @relation(fields: [batchId], references: [id], onDelete: Cascade)
   classes    Class[]
 
   @@index([semesterId])
+  @@index([branchId])
+  @@index([batchId])
   @@unique([semesterId, name])
   @@map("divisions")
 }
 
+model Batch {
+  id             String      @id @default(cuid())
+  institutionId  String      @map("institution_id")
+  admissionYear  Int         @map("admission_year")
+  graduatingYear Int         @map("graduating_year")
+  name           String
+  createdAt      DateTime    @default(now()) @map("created_at")
+  institution    Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  divisions      Division[]
+  batchSemesters BatchSemester[]
+
+  @@index([institutionId])
+  @@unique([institutionId, graduatingYear])
+  @@map("batches")
+}
+
+model BatchSemester {
+  id           String   @id @default(cuid())
+  batchId      String   @map("batch_id")
+  semesterId   String   @map("semester_id")
+  academicYear String   @map("academic_year")
+  startsOn     DateTime @map("starts_on")
+  endsOn       DateTime @map("ends_on")
+  createdAt    DateTime @default(now()) @map("created_at")
+  batch        Batch    @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  semester     Semester @relation(fields: [semesterId], references: [id], onDelete: Cascade)
+  classes      Class[]
+
+  @@index([batchId])
+  @@index([semesterId])
+  @@unique([batchId, semesterId])
+  @@map("batch_semesters")
+}
+
 model Class {
-  id           String                @id @default(cuid())
-  divisionId   String                @map("division_id")
-  subjectId    String                @map("subject_id")
-  createdAt    DateTime              @default(now()) @map("created_at")
-  division     Division              @relation(fields: [divisionId], references: [id], onDelete: Cascade)
-  subject      Subject               @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  id               String                @id @default(cuid())
+  divisionId       String                @map("division_id")
+  subjectId        String                @map("subject_id")
+  batchSemesterId  String?               @map("batch_semester_id")
+  createdAt        DateTime              @default(now()) @map("created_at")
+  division         Division              @relation(fields: [divisionId], references: [id], onDelete: Cascade)
+  subject          Subject               @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  batchSemester    BatchSemester?        @relation(fields: [batchSemesterId], references: [id], onDelete: SetNull)
   teacherAssignments TeacherAssignment[]
   studentEnrollments StudentEnrollment[]
   lectures     Lecture[]
@@ -257,7 +307,8 @@ model Class {
 
   @@index([divisionId])
   @@index([subjectId])
-  @@unique([divisionId, subjectId])
+  @@index([batchSemesterId])
+  @@unique([divisionId, subjectId, batchSemesterId])
   @@map("classes")
 }
 

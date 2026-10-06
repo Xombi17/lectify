@@ -37,16 +37,35 @@ const ENTITY_FIELDS = {
         { key: "name", label: "Name", required: true },
         { key: "code", label: "Code", required: true },
         { key: "credits", label: "Credits", required: false, type: "number" },
+        { key: "branch_id", label: "Department", required: false, type: "select" },
+        { key: "category", label: "Category", required: false, type: "select",
+          options: [
+            { value: "mandatory", label: "Mandatory" },
+            { value: "elective", label: "Elective" },
+            { value: "lab", label: "Lab" },
+            { value: "project", label: "Project" },
+            { value: "internship", label: "Internship" },
+            { value: "broadening", label: "Broadening (HSSM/MDM)" },
+          ] },
         { key: "semester_id", label: "Semester ID", hidden: true },
     ],
     division: [
-        { key: "name", label: "Name", required: true },
+        { key: "name", label: "Name", required: true, placeholder: "e.g. COMPS A" },
         { key: "capacity", label: "Capacity", required: false, type: "number", placeholder: "Max students" },
-        { key: "semester_id", label: "Semester ID", hidden: true },
+        { key: "branch_id", label: "Department", required: false, type: "select" },
+        { key: "batch_id", label: "Batch", required: false, type: "select" },
+        { key: "semester_id", label: "Semester (legacy placement, optional)", required: false, type: "select" },
+    ],
+    batch: [
+        { key: "admission_year", label: "Admission Year", required: true, type: "number", placeholder: "e.g. 2025" },
+        { key: "graduating_year", label: "Graduating Year", required: true, type: "number", placeholder: "e.g. 2029" },
+        { key: "name", label: "Name", required: true, placeholder: "e.g. Batch of 2029" },
+        { key: "institution_id", label: "Institution ID", hidden: true },
     ],
     class: [
         { key: "name", label: "Display Name", required: false, placeholder: "Optional display name" },
-        { key: "subject_id", label: "Subject ID", required: true },
+        { key: "subject_id", label: "Subject", required: true, type: "select" },
+        { key: "batch_semester_id", label: "Taught in", required: false, type: "select" },
         { key: "division_id", label: "Division ID", hidden: true },
     ],
 };
@@ -56,6 +75,7 @@ const CREATE_FNS = {
     institution: adminApi.createInstitution,
     year: adminApi.createYear,
     branch: adminApi.createBranch,
+    batch: adminApi.createBatch,
     semester: adminApi.createSemester,
     subject: adminApi.createSubject,
     division: adminApi.createDivision,
@@ -65,14 +85,14 @@ const CREATE_FNS = {
 // Fields that need string→int conversion
 const NUMBER_FIELDS = ["number", "credits", "capacity"];
 
-export default function CreateEntityDialog({ open, onOpenChange, entityType, parentId, onSuccess }) {
+export default function CreateEntityDialog({ open, onOpenChange, entityType, parentId, onSuccess, selectOptions = {}, initialValues = {} }) {
     const [values, setValues] = useState({});
     const [loading, setLoading] = useState(false);
     const fields = ENTITY_FIELDS[entityType] || [];
 
-    // Reset form when dialog opens
+    // Reset form when dialog opens, prefilled with caller-provided values
     useEffect(() => {
-        if (open) setValues({});
+        if (open) setValues({ ...initialValues });
     }, [open]);
 
     const handleSubmit = async (e) => {
@@ -123,6 +143,24 @@ export default function CreateEntityDialog({ open, onOpenChange, entityType, par
                                     {field.label}
                                     {field.required && <span className="text-destructive ml-1">*</span>}
                                 </label>
+                                {field.type === "select" ? (
+                                    <select
+                                        value={values[field.key] || ""}
+                                        onChange={(e) =>
+                                            setValues((v) => ({ ...v, [field.key]: e.target.value }))
+                                        }
+                                        required={field.required}
+                                        data-testid={`create-${entityType}-${field.key}`}
+                                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                                    >
+                                        <option value="">Select {field.label.toLowerCase()}…</option>
+                                        {(selectOptions[field.key] || field.options || []).map((o) => (
+                                            <option key={o.value} value={o.value}>
+                                                {o.label}
+                                            </option>
+                                        ))}
+                                    </select>
+                                ) : (
                                 <Input
                                     value={values[field.key] || ""}
                                     onChange={(e) =>
@@ -133,6 +171,7 @@ export default function CreateEntityDialog({ open, onOpenChange, entityType, par
                                     placeholder={field.placeholder || ""}
                                     data-testid={`create-${entityType}-${field.key}`}
                                 />
+                                )}
                             </div>
                         ))}
                     <DialogFooter>

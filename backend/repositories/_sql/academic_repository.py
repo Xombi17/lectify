@@ -7,6 +7,8 @@ from sqlalchemy import select
 from core.sql_db import session_maker
 from models.academic import (
     AuditLogDB,
+    BatchDB,
+    BatchSemesterDB,
     InstitutionDB,
     YearDB,
     BranchDB,
@@ -20,6 +22,8 @@ from models.academic import (
 )
 from models.orm import (
     AuditLogORM,
+    BatchORM,
+    BatchSemesterORM,
     InstitutionORM,
     YearORM,
     BranchORM,
@@ -241,6 +245,133 @@ class BranchRepository:
 
 
 # ============================================================================
+# Batch Repository (graduating cohorts)
+# ============================================================================
+def _to_batch(row: BatchORM) -> BatchDB:
+    return BatchDB(
+        id=row.id,
+        institution_id=row.institution_id,
+        admission_year=row.admission_year,
+        graduating_year=row.graduating_year,
+        name=row.name,
+        created_at=row.created_at,
+    )
+
+
+class BatchRepository:
+    async def ensure_indexes(self) -> None:
+        return None
+
+    async def create(self, batch: BatchDB) -> BatchDB:
+        async with session_maker()() as s, s.begin():
+            s.add(BatchORM(
+                id=batch.id,
+                institution_id=batch.institution_id,
+                admission_year=batch.admission_year,
+                graduating_year=batch.graduating_year,
+                name=batch.name,
+                created_at=batch.created_at,
+            ))
+        return batch
+
+    async def get_by_id(self, batch_id: str) -> Optional[BatchDB]:
+        async with session_maker()() as s:
+            row = await s.get(BatchORM, batch_id)
+            return _to_batch(row) if row else None
+
+    async def list_by_institution(self, institution_id: str) -> List[BatchDB]:
+        async with session_maker()() as s:
+            stmt = select(BatchORM).where(BatchORM.institution_id == institution_id)
+            rows = (await s.execute(stmt)).scalars().all()
+            return [_to_batch(r) for r in rows]
+
+    async def list_all(self) -> List[BatchDB]:
+        async with session_maker()() as s:
+            stmt = select(BatchORM)
+            rows = (await s.execute(stmt)).scalars().all()
+            return [_to_batch(r) for r in rows]
+
+    async def update(self, batch_id: str, fields: dict) -> Optional[BatchDB]:
+        async with session_maker()() as s, s.begin():
+            row = await s.get(BatchORM, batch_id)
+            if not row:
+                return None
+            for key, value in fields.items():
+                if hasattr(row, key):
+                    setattr(row, key, value)
+            await s.flush()
+            return _to_batch(row)
+
+    async def delete(self, batch_id: str) -> bool:
+        async with session_maker()() as s, s.begin():
+            row = await s.get(BatchORM, batch_id)
+            if not row:
+                return False
+            await s.delete(row)
+            return True
+
+    @staticmethod
+    def new_id() -> str:
+        return str(uuid.uuid4())
+
+
+# ============================================================================
+# BatchSemester Repository (cohort progression)
+# ============================================================================
+def _to_batch_semester(row: BatchSemesterORM) -> BatchSemesterDB:
+    return BatchSemesterDB(
+        id=row.id,
+        batch_id=row.batch_id,
+        semester_id=row.semester_id,
+        academic_year=row.academic_year,
+        starts_on=row.starts_on,
+        ends_on=row.ends_on,
+        created_at=row.created_at,
+    )
+
+
+class BatchSemesterRepository:
+    async def ensure_indexes(self) -> None:
+        return None
+
+    async def create(self, row: BatchSemesterDB) -> BatchSemesterDB:
+        async with session_maker()() as s, s.begin():
+            s.add(BatchSemesterORM(
+                id=row.id,
+                batch_id=row.batch_id,
+                semester_id=row.semester_id,
+                academic_year=row.academic_year,
+                starts_on=row.starts_on,
+                ends_on=row.ends_on,
+                created_at=row.created_at,
+            ))
+        return row
+
+    async def get_by_id(self, row_id: str) -> Optional[BatchSemesterDB]:
+        async with session_maker()() as s:
+            row = await s.get(BatchSemesterORM, row_id)
+            return _to_batch_semester(row) if row else None
+
+    async def list_by_batch(self, batch_id: str) -> List[BatchSemesterDB]:
+        async with session_maker()() as s:
+            stmt = select(BatchSemesterORM).where(BatchSemesterORM.batch_id == batch_id)
+            rows = (await s.execute(stmt)).scalars().all()
+            return [_to_batch_semester(r) for r in rows]
+
+    async def delete(self, row_id: str) -> bool:
+        async with session_maker()() as s, s.begin():
+            row = await s.get(BatchSemesterORM, row_id)
+            if not row:
+                return False
+            await s.delete(row)
+            return True
+
+    @staticmethod
+    def new_id() -> str:
+        return str(uuid.uuid4())
+
+
+# ============================================================================
 # Semester Repository
 # ============================================================================
 def _to_semester(row: SemesterORM) -> SemesterDB:
@@ -316,9 +447,11 @@ def _to_subject(row: SubjectORM) -> SubjectDB:
     return SubjectDB(
         id=row.id,
         semester_id=row.semester_id,
+        branch_id=row.branch_id,
         code=row.code,
         name=row.name,
         credits=row.credits,
+        category=row.category,
         created_at=row.created_at,
     )
 
@@ -332,9 +465,11 @@ class SubjectRepository:
             s.add(SubjectORM(
                 id=subject.id,
                 semester_id=subject.semester_id,
+                branch_id=subject.branch_id,
                 code=subject.code,
                 name=subject.name,
                 credits=subject.credits,
+                category=subject.category,
                 created_at=subject.created_at,
             ))
         return subject
@@ -347,6 +482,21 @@ class SubjectRepository:
     async def list_by_semester(self, semester_id: str) -> List[SubjectDB]:
         async with session_maker()() as s:
             stmt = select(SubjectORM).where(SubjectORM.semester_id == semester_id)
+            rows = (await s.execute(stmt)).scalars().all()
+            return [_to_subject(r) for r in rows]
+
+    async def list_by_branch(self, branch_id: str) -> List[SubjectDB]:
+        async with session_maker()() as s:
+            stmt = select(SubjectORM).where(SubjectORM.branch_id == branch_id)
+            rows = (await s.execute(stmt)).scalars().all()
+            return [_to_subject(r) for r in rows]
+
+    async def list_by_semester_branch(self, semester_id: str, branch_id: str) -> List[SubjectDB]:
+        async with session_maker()() as s:
+            stmt = select(SubjectORM).where(
+                (SubjectORM.semester_id == semester_id) &
+                (SubjectORM.branch_id == branch_id)
+            )
             rows = (await s.execute(stmt)).scalars().all()
             return [_to_subject(r) for r in rows]
 
@@ -387,6 +537,8 @@ def _to_division(row: DivisionORM) -> DivisionDB:
     return DivisionDB(
         id=row.id,
         semester_id=row.semester_id,
+        branch_id=row.branch_id,
+        batch_id=row.batch_id,
         name=row.name,
         capacity=row.capacity,
         created_at=row.created_at,
@@ -402,6 +554,8 @@ class DivisionRepository:
             s.add(DivisionORM(
                 id=division.id,
                 semester_id=division.semester_id,
+                branch_id=division.branch_id,
+                batch_id=division.batch_id,
                 name=division.name,
                 capacity=division.capacity,
                 created_at=division.created_at,
@@ -416,6 +570,27 @@ class DivisionRepository:
     async def list_by_semester(self, semester_id: str) -> List[DivisionDB]:
         async with session_maker()() as s:
             stmt = select(DivisionORM).where(DivisionORM.semester_id == semester_id)
+            rows = (await s.execute(stmt)).scalars().all()
+            return [_to_division(r) for r in rows]
+
+    async def list_by_branch(self, branch_id: str) -> List[DivisionDB]:
+        async with session_maker()() as s:
+            stmt = select(DivisionORM).where(DivisionORM.branch_id == branch_id)
+            rows = (await s.execute(stmt)).scalars().all()
+            return [_to_division(r) for r in rows]
+
+    async def list_by_batch(self, batch_id: str) -> List[DivisionDB]:
+        async with session_maker()() as s:
+            stmt = select(DivisionORM).where(DivisionORM.batch_id == batch_id)
+            rows = (await s.execute(stmt)).scalars().all()
+            return [_to_division(r) for r in rows]
+
+    async def list_by_branch_batch(self, branch_id: str, batch_id: str) -> List[DivisionDB]:
+        async with session_maker()() as s:
+            stmt = select(DivisionORM).where(
+                (DivisionORM.branch_id == branch_id) &
+                (DivisionORM.batch_id == batch_id)
+            )
             rows = (await s.execute(stmt)).scalars().all()
             return [_to_division(r) for r in rows]
 
@@ -457,6 +632,8 @@ def _to_class(row: ClassORM) -> ClassDB:
         id=row.id,
         division_id=row.division_id,
         subject_id=row.subject_id,
+        batch_semester_id=row.batch_semester_id,
+        name=row.name,
         created_at=row.created_at,
     )
 
@@ -471,6 +648,8 @@ class ClassRepository:
                 id=cls.id,
                 division_id=cls.division_id,
                 subject_id=cls.subject_id,
+                batch_semester_id=cls.batch_semester_id,
+                name=cls.name,
                 created_at=cls.created_at,
             ))
         return cls

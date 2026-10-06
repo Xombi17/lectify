@@ -40,7 +40,9 @@ api.interceptors.response.use(
             error.response?.status === 401 &&
             !originalRequest._retry &&
             !originalRequest.url?.includes("/auth/refresh") &&
-            !originalRequest.url?.includes("/auth/logout")
+            !originalRequest.url?.includes("/auth/logout") &&
+            !originalRequest.url?.includes("/auth/login") &&
+            !originalRequest.url?.includes("/auth/signup")
         ) {
             if (isRefreshing) {
                 // Queue this request until refresh completes
@@ -67,7 +69,7 @@ api.interceptors.response.use(
                 // Refresh failed — force logout
                 localStorage.removeItem("lm_token");
                 localStorage.removeItem("lm_user");
-                window.location.href = "/auth";
+                window.location.href = "/login";
                 return Promise.reject(refreshError);
             } finally {
                 isRefreshing = false;
@@ -198,6 +200,17 @@ export const adminApi = {
     getBranch: (id) => api.get(`/admin/branches/${id}`).then((r) => r.data),
     updateBranch: (id, data) => api.put(`/admin/branches/${id}`, data).then((r) => r.data),
     deleteBranch: (id) => api.delete(`/admin/branches/${id}`).then((r) => r.data),
+    listBranchDivisions: (id) => api.get(`/admin/branches/${id}/divisions`).then((r) => r.data),
+
+    // Batches (graduating cohorts)
+    listBatches: () => api.get("/admin/batches").then((r) => r.data),
+    createBatch: (data) => api.post("/admin/batches", data).then((r) => r.data),
+    getBatch: (id) => api.get(`/admin/batches/${id}`).then((r) => r.data),
+    updateBatch: (id, data) => api.put(`/admin/batches/${id}`, data).then((r) => r.data),
+    deleteBatch: (id) => api.delete(`/admin/batches/${id}`).then((r) => r.data),
+    listInstitutionBatches: (id) => api.get(`/admin/institutions/${id}/batches`).then((r) => r.data),
+    listBatchDivisions: (id) => api.get(`/admin/batches/${id}/divisions`).then((r) => r.data),
+    listBatchSemesters: (id) => api.get(`/admin/batches/${id}/semesters`).then((r) => r.data),
 
     // Semesters
     listSemesters: () => api.get("/admin/semesters").then((r) => r.data),
@@ -210,6 +223,7 @@ export const adminApi = {
 
     // Subjects
     listSubjects: () => api.get("/admin/subjects").then((r) => r.data),
+    listBranchSubjects: (id) => api.get(`/admin/branches/${id}/subjects`).then((r) => r.data),
     createSubject: (data) => api.post("/admin/subjects", data).then((r) => r.data),
     getSubject: (id) => api.get(`/admin/subjects/${id}`).then((r) => r.data),
     updateSubject: (id, data) => api.put(`/admin/subjects/${id}`, data).then((r) => r.data),
