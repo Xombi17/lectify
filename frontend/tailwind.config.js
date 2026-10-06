@@ -3,10 +3,16 @@ module.exports = {
     darkMode: ["class"],
     content: [
     "./src/**/*.{js,jsx,ts,tsx}",
+    "./app/**/*.{js,jsx,ts,tsx}",
     "./public/index.html"
   ],
   theme: {
   	extend: {
+  		fontFamily: {
+  			display: ['"Cabinet Grotesk"', '"IBM Plex Sans"', 'system-ui', 'sans-serif'],
+  			sans: ['"IBM Plex Sans"', 'system-ui', '-apple-system', 'sans-serif'],
+  			mono: ['"JetBrains Mono"', 'ui-monospace', 'monospace'],
+  		},
   		borderRadius: {
   			lg: 'var(--radius)',
   			md: 'calc(var(--radius) - 2px)',

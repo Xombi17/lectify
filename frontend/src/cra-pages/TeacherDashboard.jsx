@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import Link from "next/link";
 import { lectureApi, timetableApi } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -181,7 +181,7 @@ export default function TeacherDashboard() {
                                     transition={{ delay: idx * 0.04 }}
                                 >
                                     <Link
-                                        to={`/teacher/lectures/${l.id}`}
+                                        href={`/teacher/lectures/${l.id}`}
                                         data-testid={`lecture-row-${l.id}`}
                                         className="group flex items-center justify-between gap-4 border border-border bg-card px-5 py-4 transition-all hover:border-primary/40 hover:shadow-sm"
                                     >
