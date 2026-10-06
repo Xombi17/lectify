@@ -62,7 +62,13 @@ class Settings:
 
         # Gemini
         self.GEMINI_API_KEY: str = os.environ.get("GEMINI_API_KEY", "")
-        self.GEMINI_MODEL: str = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+        self.GEMINI_MODEL: str = os.environ.get("GEMINI_MODEL", "gemini-3.7-flash")
+        # Ordered failover chain (comma-separated). When the primary model
+        # 429s/503s, calls fall through to the next model instead of sleeping
+        # through a backoff. Empty = primary only (previous behavior).
+        self.GEMINI_FALLBACK_MODELS: list = [
+            m.strip() for m in os.environ.get("GEMINI_FALLBACK_MODELS", "").split(",") if m.strip()
+        ]
 
         # NVIDIA NIM
         self.NIM_API_KEY: str = os.environ.get("NIM_API_KEY", "")

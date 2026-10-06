@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
-import { Link } from "react-router-dom";
+import Link from "next/link";
 import { lectureApi, searchApi, analyticsApi, timetableApi } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -79,6 +79,7 @@ export default function StudentDashboard() {
         : lectures;
 
     return (
+    <>
         {/* Hero banner */}
             <section className="mb-10 grid grid-cols-1 gap-6 lg:grid-cols-5">
                 <div className="lg:col-span-3">
@@ -229,7 +230,7 @@ export default function StudentDashboard() {
                                 transition={{ delay: i * 0.04 }}
                             >
                                 <Link
-                                    to={`/student/lectures/${l.id}`}
+                                    href={`/student/lectures/${l.id}`}
                                     data-testid={`student-lecture-card-${l.id}`}
                                     className="group block h-full border border-border bg-card p-5 transition-all hover:border-primary/40 hover:shadow-sm"
                                 >
@@ -270,6 +271,7 @@ export default function StudentDashboard() {
                     </div>
                 )}
             </section>
+    </>
     );
 }
 
@@ -322,7 +324,7 @@ function AnalyticsRow({ analytics }) {
                         {analytics.weak_lectures.map((w) => (
                             <Link
                                 key={w.lecture_id}
-                                to={`/student/lectures/${w.lecture_id}`}
+                                href={`/student/lectures/${w.lecture_id}`}
                                 className="flex items-center justify-between border-b border-border pb-2 text-sm transition-colors hover:text-primary"
                                 data-testid={`weak-lecture-${w.lecture_id}`}
                             >

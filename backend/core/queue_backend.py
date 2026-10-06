@@ -1,8 +1,10 @@
-"""Queue backend abstraction (Memory/SQS)."""
+"""Queue backend abstraction (Memory/SQS/SQLite)."""
 import asyncio
+import json
 import time
 import uuid
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Protocol
 
 @dataclass
@@ -132,6 +134,152 @@ class MemoryQueueBackend:
         return len(self._dlq) + len(self._get_q("dlq"))
 
 
+class SqliteQueueBackend:
+    """File-backed queue for local dev: every process sharing the same
+    DATABASE_URL sees the same messages. Mirrors MemoryQueueBackend semantics
+    (visibility timeouts, max-receives DLQ move) on the queue_messages table.
+    Duplicate delivery across workers is safe — workers claim jobs in the DB.
+    """
+
+    def __init__(self, max_receives: int = 5, poll_interval: float = 1.0):
+        self._max_receives = max_receives
+        self._poll_interval = poll_interval
+
+    def _now(self) -> datetime:
+        return datetime.now(timezone.utc)
+
+    async def send(self, queue: str, body: dict, delay_seconds: int = 0) -> str:
+        from datetime import timedelta
+
+        from core.sql_db import session_maker
+        from models.orm import QueueMessageORM
+
+        msg_id = str(uuid.uuid4())
+        async with session_maker()() as s, s.begin():
+            s.add(QueueMessageORM(
+                id=msg_id,
+                queue=queue,
+                body=json.dumps(body),
+                visible_at=self._now() + timedelta(seconds=max(delay_seconds, 0)),
+                receipt=None,
+                receive_count=0,
+            ))
+        return msg_id
+
+    async def receive(
+        self, queue: str, max_messages: int = 1, wait_seconds: int = 20, visibility_timeout: int = 300
+    ) -> list[QueueMessage]:
+        import asyncio as _asyncio
+        from datetime import timedelta
+        from sqlalchemy import delete as sa_delete, select as sa_select, update as sa_update
+
+        from core.sql_db import session_maker
+        from models.orm import QueueMessageORM
+
+        deadline = time.monotonic() + wait_seconds
+        while True:
+            results: list[QueueMessage] = []
+            async with session_maker()() as s, s.begin():
+                now = self._now()
+                stmt = (
+                    sa_select(QueueMessageORM)
+                    .where(QueueMessageORM.queue == queue)
+                    .order_by(QueueMessageORM.created_at)
+                    .limit(max_messages * 2)
+                )
+                rows = (await s.execute(stmt)).scalars().all()
+                for row in rows:
+                    visible_at = row.visible_at
+                    if visible_at is not None and visible_at.tzinfo is None:
+                        visible_at = visible_at.replace(tzinfo=timezone.utc)
+                    if visible_at is not None and visible_at > now:
+                        continue
+                    new_count = (row.receive_count or 0) + 1
+                    if new_count > self._max_receives:
+                        # Move to DLQ (same convention as the memory backend)
+                        await s.execute(sa_delete(QueueMessageORM).where(QueueMessageORM.id == row.id))
+                        s.add(QueueMessageORM(
+                            id=str(uuid.uuid4()),
+                            queue="dlq",
+                            body=row.body,
+                            visible_at=now,
+                            receive_count=new_count,
+                        ))
+                        continue
+                    receipt = str(uuid.uuid4())
+                    await s.execute(
+                        sa_update(QueueMessageORM)
+                        .where(QueueMessageORM.id == row.id)
+                        .values(
+                            receive_count=new_count,
+                            receipt=receipt,
+                            visible_at=now + timedelta(seconds=visibility_timeout),
+                        )
+                    )
+                    try:
+                        body = json.loads(row.body) if isinstance(row.body, str) else dict(row.body)
+                    except (ValueError, TypeError):
+                        body = {}
+                    results.append(QueueMessage(
+                        message_id=row.id,
+                        queue=queue,
+                        body=body,
+                        receipt=receipt,
+                        receive_count=new_count,
+                    ))
+                    if len(results) >= max_messages:
+                        break
+            if results:
+                return results
+            if time.monotonic() >= deadline:
+                return []
+            await _asyncio.sleep(min(self._poll_interval, max(deadline - time.monotonic(), 0)))
+
+    async def delete(self, queue: str, receipt: str) -> None:
+        from sqlalchemy import delete as sa_delete
+
+        from core.sql_db import session_maker
+        from models.orm import QueueMessageORM
+
+        async with session_maker()() as s, s.begin():
+            await s.execute(
+                sa_delete(QueueMessageORM).where(
+                    (QueueMessageORM.queue == queue) & (QueueMessageORM.receipt == receipt)
+                )
+            )
+
+    async def change_visibility(self, queue: str, receipt: str, seconds: int) -> None:
+        from datetime import timedelta
+        from sqlalchemy import update as sa_update
+
+        from core.sql_db import session_maker
+        from models.orm import QueueMessageORM
+
+        async with session_maker()() as s, s.begin():
+            await s.execute(
+                sa_update(QueueMessageORM)
+                .where(
+                    (QueueMessageORM.queue == queue) & (QueueMessageORM.receipt == receipt)
+                )
+                .values(visible_at=self._now() + timedelta(seconds=seconds))
+            )
+
+    async def depth(self, queue: str) -> int:
+        from sqlalchemy import func, select as sa_select
+
+        from core.sql_db import session_maker
+        from models.orm import QueueMessageORM
+
+        async with session_maker()() as s:
+            n = await s.scalar(
+                sa_select(func.count()).where(QueueMessageORM.queue == queue)
+            )
+            return int(n or 0)
+
+    async def dlq_depth(self) -> int:
+        return await self.depth("dlq")
+
+
 _instance: QueueBackend | None = None
 
 def get_queue_backend() -> QueueBackend:
@@ -141,6 +289,8 @@ def get_queue_backend() -> QueueBackend:
         settings = get_settings()
         if settings.QUEUE_BACKEND == "sqs":
             _instance = SqsQueueBackend()
+        elif settings.QUEUE_BACKEND == "sqlite":
+            _instance = SqliteQueueBackend(max_receives=settings.QUEUE_MAX_RECEIVES)
         else:
             _instance = MemoryQueueBackend(max_receives=settings.QUEUE_MAX_RECEIVES)
     return _instance

@@ -68,7 +68,7 @@ export default function FlashcardDeck({ cards = [], lectureId = null }) {
                     data-testid="flashcard"
                     className="preserve-3d relative h-72 w-full cursor-pointer"
                     animate={{ rotateY: flipped ? 180 : 0 }}
-                    transition={{ duration: 0.6, type: "spring", stiffness: 90 }}
+                    transition={{ duration: 0.45, ease: "easeInOut" }}
                 >
                     <div className="backface-hidden absolute inset-0 flex flex-col items-center justify-center border-2 border-border bg-card p-8 text-center">
                         <div className="text-overline mb-3 text-primary">Question</div>

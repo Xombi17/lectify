@@ -1,5 +1,7 @@
+"use client";
+
 import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useParams, useRouter } from "next/navigation";
 import { lectureApi, API, bookmarkApi } from "@/lib/api";
 import { STATUS_LABEL, statusPillKind } from "@/lib/lectureStatus";
 import { useAuth } from "@/lib/auth";
@@ -39,10 +41,36 @@ const STATUS_LABEL_FALLBACK = {
 
 export default function LectureDetailPage() {
     const { id } = useParams();
-    const navigate = useNavigate();
+    const router = useRouter();
     const { user } = useAuth();
     const [lecture, setLecture] = useState(null);
     const [audioToken, setAudioToken] = useState(null);
+    const [downloadingPdf, setDownloadingPdf] = useState(false);
+
+    const downloadPdf = async () => {
+        if (!lecture?.id || downloadingPdf) return;
+        setDownloadingPdf(true);
+        try {
+            const token = localStorage.getItem("lm_token");
+            const r = await fetch(lectureApi.pdfUrl(lecture.id), {
+                headers: token ? { Authorization: `Bearer ${token}` } : {},
+            });
+            if (!r.ok) throw new Error(`PDF export failed: ${r.status}`);
+            const blob = await r.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `${(lecture.title || "lecture").slice(0, 60)} - Notes.pdf`.replace(/[^\w\-. ]+/g, "-");
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+        } catch {
+            toast.error("Couldn't download PDF");
+        } finally {
+            setDownloadingPdf(false);
+        }
+    };
 
     useEffect(() => {
         let cancelled = false;
@@ -57,7 +85,7 @@ export default function LectureDetailPage() {
                 }
             } catch (err) {
                 toast.error(err?.response?.data?.detail || "Failed to load lecture");
-                navigate(-1);
+                router.back();
             }
         };
         load();
@@ -65,7 +93,7 @@ export default function LectureDetailPage() {
             cancelled = true;
             if (timer) clearTimeout(timer);
         };
-    }, [id, navigate]);
+    }, [id, router]);
 
     // Prefer presigned audio-url (no auth header); fall back to authed blob stream.
     useEffect(() => {
@@ -130,13 +158,14 @@ export default function LectureDetailPage() {
         try {
             await lectureApi.remove(lecture.id);
             toast.success("Lecture deleted");
-            navigate("/teacher");
+            router.push("/teacher/dashboard");
         } catch (err) {
             toast.error(err?.response?.data?.detail || "Delete failed");
         }
     };
 
     return (
+    <>
             <div className="mb-8">
                 <div className="text-overline mb-2 text-primary">Lecture</div>
                 <div className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-end">
@@ -179,10 +208,11 @@ export default function LectureDetailPage() {
                                 <Button
                                     variant="outline"
                                     onClick={downloadPdf}
+                                    disabled={downloadingPdf}
                                     data-testid="download-pdf-btn"
                                 >
                                     <DownloadSimple size={16} weight="duotone" className="mr-2" />
-                                    PDF
+                                    {downloadingPdf ? "Preparing…" : "PDF"}
                                 </Button>
                             )}
                             <Button
@@ -228,6 +258,7 @@ export default function LectureDetailPage() {
             ) : (
                 <ContentTabs lecture={lecture} isOwner={isOwner} onLectureUpdate={setLecture} />
             )}
+    </>
     );
 }
 

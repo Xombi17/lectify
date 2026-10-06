@@ -1,4 +1,3 @@
-"use client";
 
 import type { Metadata } from "next";
 import { Suspense } from "react";
@@ -7,10 +6,11 @@ import LectureDetailPage from "@/cra-pages/LectureDetailPage";
 export async function generateMetadata({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }): Promise<Metadata> {
+  const { id } = await params;
   return {
-    title: `Lecture ${params.id} | LectureMind AI`,
+    title: `Lecture ${id} | LectureMind AI`,
     description: "View lecture transcript, AI notes, quiz, and flashcards",
     openGraph: {
       type: "article",

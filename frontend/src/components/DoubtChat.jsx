@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
+import ReactMarkdown from "react-markdown";
 import { PaperPlaneTilt, ChatCircle, Robot, User } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -150,13 +151,33 @@ function Bubble({ msg }) {
                 {isUser ? <User size={16} weight="duotone" /> : <Robot size={16} weight="duotone" />}
             </div>
             <div
-                className={`max-w-[80%] whitespace-pre-wrap border px-4 py-2.5 text-sm leading-relaxed ${
+                className={`max-w-[80%] border px-4 py-2.5 text-sm leading-relaxed ${
                     isUser
                         ? "border-primary bg-primary text-primary-foreground"
                         : "border-border bg-background"
                 }`}
             >
-                {msg.content}
+                {isUser ? (
+                    <span className="whitespace-pre-wrap">{msg.content}</span>
+                ) : (
+                    <div className="chat-markdown" data-testid={`chat-msg-${msg.role}-md`}>
+                        <ReactMarkdown
+                            components={{
+                                p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+                                ul: ({ children }) => <ul className="mb-2 list-disc space-y-1 pl-5 last:mb-0">{children}</ul>,
+                                ol: ({ children }) => <ol className="mb-2 list-decimal space-y-1 pl-5 last:mb-0">{children}</ol>,
+                                li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+                                strong: ({ children }) => <strong className="font-bold text-foreground">{children}</strong>,
+                                em: ({ children }) => <em className="italic">{children}</em>,
+                                code: ({ children }) => (
+                                    <code className="rounded bg-muted px-1 py-0.5 font-mono text-[13px]">{children}</code>
+                                ),
+                            }}
+                        >
+                            {msg.content}
+                        </ReactMarkdown>
+                    </div>
+                )}
             </div>
         </motion.div>
     );

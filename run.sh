@@ -102,6 +102,9 @@ set -a; source .env; set +a
 export DATABASE_BACKEND="${DATABASE_BACKEND:-postgres}"
 export DATABASE_URL="${DATABASE_URL:-sqlite+aiosqlite:///./lecturemind.db}"
 export STORAGE_BACKEND="${STORAGE_BACKEND:-local}"
+# SQLite queue so the API and worker processes share one queue file locally
+# (the memory backend is per-process; SQS is for deployed environments).
+export QUEUE_BACKEND="${QUEUE_BACKEND:-sqlite}"
 export STORAGE_LOCAL_DIR="${STORAGE_LOCAL_DIR:-./storage_data}"
 export JWT_SECRET="${JWT_SECRET:-change-me-dev-local}"
 export CORS_ORIGINS="${CORS_ORIGINS:-http://localhost:3000}"

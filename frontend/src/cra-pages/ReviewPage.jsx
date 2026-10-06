@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import Link from "next/link";
 import { motion } from "framer-motion";
 import {
     Brain,
@@ -110,7 +110,7 @@ export default function ReviewPage() {
                 {/* card meta */}
                 <div className="mb-3 flex items-center justify-between">
                     <Link
-                        to={`/student/lectures/${card.lecture_id}`}
+                        href={`/student/lectures/${card.lecture_id}`}
                         className="text-sm font-bold text-primary underline-offset-4 hover:underline"
                         data-testid="review-card-lecture-link"
                     >
@@ -128,7 +128,7 @@ export default function ReviewPage() {
                         data-testid="review-card"
                         className="preserve-3d relative h-72 w-full cursor-pointer"
                         animate={{ rotateY: flipped ? 180 : 0 }}
-                        transition={{ duration: 0.6, type: "spring", stiffness: 90 }}
+                        transition={{ duration: 0.45, ease: "easeInOut" }}
                     >
                         <div className="backface-hidden absolute inset-0 flex flex-col items-center justify-center border-2 border-border bg-card p-8 text-center">
                             <div className="text-overline mb-3 text-primary">Question</div>
@@ -210,7 +210,7 @@ function EmptyState({ onRefresh, reviewed }) {
                     <ArrowsClockwise size={14} weight="duotone" className="mr-2" />
                     Refresh
                 </Button>
-                <Link to="/student">
+                <Link href="/student/dashboard">
                     <Button>
                         <CaretLeft size={14} weight="bold" /> Back to library
                     </Button>

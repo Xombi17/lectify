@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import Link from "next/link";
 import { motion } from "framer-motion";
 import {
     BookmarkSimple,
@@ -53,6 +53,7 @@ export default function BookmarksPage() {
     }, {});
 
     return (
+    <>
             <div className="text-overline mb-3 text-primary">Saved for later</div>
             <h1 className="font-display text-4xl font-black tracking-tighter sm:text-5xl">
                 Your bookmarks.
@@ -94,7 +95,7 @@ export default function BookmarksPage() {
                             >
                                 <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2 border-b border-border pb-2">
                                     <Link
-                                        to={`/student/lectures/${meta.lecture_id}`}
+                                        href={`/student/lectures/${meta.lecture_id}`}
                                         className="font-display text-lg font-bold tracking-tight text-primary underline-offset-4 hover:underline"
                                     >
                                         {meta.lecture_title}
@@ -148,5 +149,6 @@ export default function BookmarksPage() {
                     </div>
                 )}
             </div>
+    </>
     );
 }

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
-import { lectureApi, timetableApi } from "@/lib/api";
+import Link from "next/link";
+import { academicApi, lectureApi, timetableApi } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -30,6 +30,7 @@ export default function TeacherDashboard() {
     const [lectures, setLectures] = useState([]);
     const [loading, setLoading] = useState(true);
     const [schedule, setSchedule] = useState([]);
+    const [assignedClasses, setAssignedClasses] = useState([]);
 
     const load = async () => {
         try {
@@ -42,6 +43,7 @@ export default function TeacherDashboard() {
     useEffect(() => {
         load();
         timetableApi.getMySchedule().then((s) => setSchedule(s || [])).catch(() => setSchedule([]));
+        academicApi.getMyAssignedClasses().then((c) => setAssignedClasses(c || [])).catch(() => setAssignedClasses([]));
         const t = setInterval(load, 8000); // poll while processing
         return () => clearInterval(t);
     }, []);
@@ -54,6 +56,7 @@ export default function TeacherDashboard() {
     };
 
     return (
+    <>
         <section className="mb-10 flex flex-col items-start justify-between gap-6 md:flex-row md:items-end">
                 <div>
                     <div className="text-overline mb-3 text-primary">Teacher dashboard</div>
@@ -65,7 +68,7 @@ export default function TeacherDashboard() {
                         quiz, and cut flashcards — automatically.
                     </p>
                 </div>
-                <Link to="/teacher/upload">
+                <Link href="/teacher/upload">
                     <Button
                         size="lg"
                         data-testid="upload-lecture-btn"
@@ -75,6 +78,65 @@ export default function TeacherDashboard() {
                         Upload lecture
                     </Button>
                 </Link>
+            </section>
+
+            {/* Assigned classes */}
+            <section className="mb-10" data-testid="teacher-classes">
+                <div className="mb-4 flex items-center justify-between border-b border-border pb-2">
+                    <h2 className="font-display text-xl font-bold tracking-tight">
+                        My classes
+                    </h2>
+                    <span className="text-overline text-muted-foreground">
+                        {assignedClasses.length} assigned
+                    </span>
+                </div>
+
+                {assignedClasses.length === 0 ? (
+                    <div className="border border-dashed border-border bg-card p-6 text-center text-sm text-muted-foreground" data-testid="empty-assigned-classes">
+                        No assigned classes found. Contact an administrator to assign classes before uploading lectures.
+                    </div>
+                ) : (
+                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                        {assignedClasses.map((c, idx) => (
+                            <motion.div
+                                key={c.class_id}
+                                initial={{ opacity: 0, y: 8 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: idx * 0.04 }}
+                                data-testid={`teacher-class-card-${c.class_id}`}
+                                className="flex flex-col border border-border bg-card p-5 transition-all hover:border-primary/40"
+                            >
+                                <div className="flex items-center gap-3">
+                                    <div className="flex h-10 w-10 shrink-0 items-center justify-center bg-primary text-primary-foreground">
+                                        <BookOpen size={20} weight="duotone" />
+                                    </div>
+                                    <div className="min-w-0">
+                                        <div className="truncate font-display text-base font-bold">
+                                            {c.subject_name || "Untitled subject"}
+                                        </div>
+                                        <div className="truncate text-xs text-muted-foreground">
+                                            {[c.division_name, c.semester_label].filter(Boolean).join(" · ")}
+                                        </div>
+                                    </div>
+                                </div>
+                                <Link
+                                    href={`/teacher/upload?class_id=${c.class_id}`}
+                                    className="mt-4"
+                                >
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="w-full"
+                                        data-testid={`upload-to-class-${c.class_id}`}
+                                    >
+                                        <Microphone size={14} weight="duotone" className="mr-2" />
+                                        Upload lecture
+                                    </Button>
+                                </Link>
+                            </motion.div>
+                        ))}
+                    </div>
+                )}
             </section>
 
             {/* Stats bento */}
@@ -181,7 +243,7 @@ export default function TeacherDashboard() {
                                     transition={{ delay: idx * 0.04 }}
                                 >
                                     <Link
-                                        to={`/teacher/lectures/${l.id}`}
+                                        href={`/teacher/lectures/${l.id}`}
                                         data-testid={`lecture-row-${l.id}`}
                                         className="group flex items-center justify-between gap-4 border border-border bg-card px-5 py-4 transition-all hover:border-primary/40 hover:shadow-sm"
                                     >
@@ -230,6 +292,7 @@ export default function TeacherDashboard() {
                     </div>
                 )}
             </section>
+    </>
     );
 }
 
@@ -244,7 +307,7 @@ function EmptyState() {
                 <p className="mt-3 text-muted-foreground">
                     Upload any audio file (mp3, wav, m4a). LectureMind will do the rest.
                 </p>
-                <Link to="/teacher/upload" className="mt-6 inline-block">
+                <Link href="/teacher/upload" className="mt-6 inline-block">
                     <Button data-testid="empty-upload-btn">
                         <Microphone size={18} weight="duotone" className="mr-2" />
                         Upload lecture

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useRouter } from "next/navigation";
 import { academicApi, lectureApi, timetableApi, uploadToS3 } from "@/lib/api";
 import { FALLBACK_NOTICE, isPresignedUnavailable, uploadErrorCopy } from "@/lib/uploadTransport";
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,7 @@ import { toast } from "sonner";
 const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
 export default function UploadLecturePage() {
-    const navigate = useNavigate();
+    const router = useRouter();
     const [title, setTitle] = useState("");
     const [subject, setSubject] = useState("");
     const [semester, setSemester] = useState("");
@@ -60,6 +60,21 @@ export default function UploadLecturePage() {
             .then((classes) => {
                 const list = classes || [];
                 setAssignedClasses(list);
+                // Deep link from the teacher dashboard ("Upload lecture" on a
+                // class card) preselects that class here.
+                const params = new URLSearchParams(window.location.search);
+                const requested = params.get("class_id");
+                if (requested) {
+                    const found = list.find((c) => c.class_id === requested);
+                    if (found) {
+                        setSelectedClassId(found.class_id);
+                        setSelectedSlotId("");
+                        if (found.subject_name) setSubject(found.subject_name);
+                        if (found.semester_label) setSemester(found.semester_label);
+                        loadSlots(found.class_id);
+                        return;
+                    }
+                }
                 if (list.length === 1) {
                     const single = list[0];
                     setSelectedClassId(single.class_id);
@@ -137,7 +152,7 @@ export default function UploadLecturePage() {
             try {
                 const lec = await lectureApi.upload(fd, onProgress);
                 toast.success("Uploaded — AI is processing your lecture");
-                navigate(`/teacher/lectures/${lec.id}`);
+                router.push(`/teacher/lectures/${lec.id}`);
             } catch (err) {
                 showError(err?.response?.data?.detail || "Upload failed");
             }
@@ -151,7 +166,7 @@ export default function UploadLecturePage() {
             setVerifying(true);
             const lec = await lectureApi.uploadComplete(presigned.lecture_id);
             toast.success("Upload complete — processing started");
-            navigate(`/teacher/lectures/${lec.id}`);
+            router.push(`/teacher/lectures/${lec.id}`);
         } catch (err) {
             showError(uploadErrorCopy(err));
         }
@@ -308,7 +323,7 @@ export default function UploadLecturePage() {
                     <Button
                         type="button"
                         variant="ghost"
-                        onClick={() => navigate("/teacher")}
+                        onClick={() => router.push("/teacher/dashboard")}
                         data-testid="cancel-upload-btn"
                     >
                         Cancel

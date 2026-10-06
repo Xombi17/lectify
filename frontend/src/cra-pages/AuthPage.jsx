@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { useNavigate, Link, useLocation } from "react-router-dom";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,8 +14,7 @@ const BG_IMG =
 export default function AuthPage({ mode }) {
     const isSignup = mode === "signup";
     const { login, signup } = useAuth();
-    const navigate = useNavigate();
-    const location = useLocation();
+    const router = useRouter();
     const [submitting, setSubmitting] = useState(false);
     const [form, setForm] = useState({
         name: "",
@@ -31,8 +31,14 @@ export default function AuthPage({ mode }) {
         try {
             const u = isSignup ? await signup(form) : await login(form);
             toast.success(isSignup ? "Welcome to LectureMind" : `Welcome back, ${u.name}`);
-            const to = u.role === "teacher" ? "/teacher" : "/student";
-            navigate(location.state?.from || to, { replace: true });
+            const params = new URLSearchParams(window.location.search);
+            const redirect = params.get("redirect");
+            const dashboards = {
+                teacher: "/teacher/dashboard",
+                student: "/student/dashboard",
+                admin: "/admin/dashboard",
+            };
+            router.push(redirect || dashboards[u.role] || "/");
         } catch (err) {
             toast.error(err?.response?.data?.detail || "Something went wrong");
         } finally {
@@ -44,7 +50,7 @@ export default function AuthPage({ mode }) {
         <div className="grid min-h-screen grid-cols-1 lg:grid-cols-2">
             {/* Left: form */}
             <div className="flex flex-col justify-between bg-background p-8 lg:p-14">
-                <Link to="/" className="flex items-center gap-2" data-testid="brand-link-auth">
+                <Link href="/" className="flex items-center gap-2" data-testid="brand-link-auth">
                     <div className="flex h-9 w-9 items-center justify-center bg-primary text-primary-foreground">
                         <GraduationCap size={22} weight="duotone" />
                     </div>
@@ -161,7 +167,7 @@ export default function AuthPage({ mode }) {
                     <p className="mt-6 text-sm text-muted-foreground">
                         {isSignup ? "Already onboard?" : "New here?"}{" "}
                         <Link
-                            to={isSignup ? "/login" : "/signup"}
+                            href={isSignup ? "/login" : "/signup"}
                             data-testid="auth-switch-link"
                             className="font-semibold text-primary underline-offset-4 hover:underline"
                         >

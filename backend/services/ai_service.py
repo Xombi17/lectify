@@ -1,6 +1,6 @@
 """AI service — single point of contact with the LLM provider.
 
-Today: Google Gemini 2.5 Flash via google-genai SDK.
+Today: Google Gemini 3.7 Flash via google-genai SDK.
 Tomorrow: swap to Ollama / vLLM by writing a new `AIProvider` subclass
 and changing one line in `get_ai_service()`.
 
@@ -324,11 +324,51 @@ class AIProvider(ABC):
 
 
 class GeminiProvider(AIProvider):
-    def __init__(self, api_key: str, model: str):
+    def __init__(self, api_key: str, model: str, fallback_models: list | None = None):
         from google import genai  # imported lazily so the app boots without a key
 
         self._client = genai.Client(api_key=api_key)
         self._model = model
+        self._models = [model, *(fallback_models or [])]
+
+    @staticmethod
+    def _is_overloaded(e: Exception) -> bool:
+        status = getattr(e, "status_code", None) or getattr(e, "code", None)
+        if status in (429, 500, 502, 503):
+            return True
+        msg = str(e).lower()
+        return "overload" in msg or "unavailable" in msg or "rate limit" in msg
+
+    def _generate(self, *, contents, config=None):
+        """Call generate_content with ordered model failover.
+
+        429/5xx/overload and 404 (unknown model id) fall through to the next
+        model. Anything else fails fast. If every model is overloaded, raise
+        ProviderRateLimited so workers back off instead of burning retries.
+        Single-model behavior is unchanged.
+        """
+        last_error: Exception | None = None
+        for i, name in enumerate(self._models):
+            try:
+                if config is None:
+                    return self._client.models.generate_content(model=name, contents=contents)
+                return self._client.models.generate_content(
+                    model=name, contents=contents, config=config
+                )
+            except Exception as e:  # noqa: BLE001 — classified below
+                status = getattr(e, "status_code", None) or getattr(e, "code", None)
+                if (self._is_overloaded(e) or status == 404) and i < len(self._models) - 1:
+                    logger.warning("Model %s failed (%s); failing over", name, e)
+                    last_error = e
+                    continue
+                if self._is_overloaded(e):
+                    raise ProviderRateLimited(
+                        f"All Gemini models overloaded (tried {len(self._models)}): {e}"
+                    ) from e
+                raise
+        # Unreachable: loop either returns or raises.
+        assert last_error is not None
+        raise ProviderRateLimited(f"All Gemini models overloaded: {last_error}")
 
     @handle_rate_limit
     async def transcribe_audio(self, audio_path: Path, mime_type: str) -> str:
@@ -343,10 +383,7 @@ class GeminiProvider(AIProvider):
             "Transcribe this lecture audio verbatim into clean readable English text. "
             "Use proper punctuation and paragraph breaks. Do NOT include timestamps."
         )
-        response = self._client.models.generate_content(
-            model=self._model,
-            contents=[prompt, uploaded],
-        )
+        response = self._generate(contents=[prompt, uploaded])
         return (response.text or "").strip()
 
     @handle_rate_limit
@@ -354,8 +391,7 @@ class GeminiProvider(AIProvider):
         from google.genai import types
 
         prompt = STUDY_PROMPT + transcript[:120_000]  # safety guard
-        response = self._client.models.generate_content(
-            model=self._model,
+        response = self._generate(
             contents=prompt,
             config=types.GenerateContentConfig(response_mime_type="application/json"),
         )
@@ -378,8 +414,7 @@ class GeminiProvider(AIProvider):
         from google.genai import types
 
         prompt = CHUNK_DIGEST_PROMPT + chunk_transcript[:60_000]
-        response = self._client.models.generate_content(
-            model=self._model,
+        response = self._generate(
             contents=prompt,
             config=types.GenerateContentConfig(response_mime_type="application/json"),
         )
@@ -390,8 +425,7 @@ class GeminiProvider(AIProvider):
         from google.genai import types
 
         prompt = HIERARCHICAL_MERGE_PROMPT + json.dumps(digests, ensure_ascii=False)
-        response = self._client.models.generate_content(
-            model=self._model,
+        response = self._generate(
             contents=prompt,
             config=types.GenerateContentConfig(response_mime_type="application/json"),
         )
@@ -427,9 +461,7 @@ class GeminiProvider(AIProvider):
         convo_lines.append(f"Student: {question.strip()}")
         convo_lines.append("Assistant:")
         prompt = "\n".join(convo_lines)
-        response = self._client.models.generate_content(
-            model=self._model, contents=prompt
-        )
+        response = self._generate(contents=prompt)
         return (response.text or "").strip()
 
     @handle_rate_limit
@@ -448,8 +480,7 @@ class GeminiProvider(AIProvider):
             "never keys. Output ONLY the translated JSON with no commentary.\n\n"
             f"{json.dumps(pack, ensure_ascii=False)}"
         )
-        response = self._client.models.generate_content(
-            model=self._model,
+        response = self._generate(
             contents=prompt,
             config=types.GenerateContentConfig(response_mime_type="application/json"),
         )
@@ -472,8 +503,7 @@ class GeminiProvider(AIProvider):
         """Shared helper: call Gemini with JSON mode."""
         from google.genai import types
 
-        response = self._client.models.generate_content(
-            model=self._model,
+        response = self._generate(
             contents=prompt,
             config=types.GenerateContentConfig(response_mime_type="application/json"),
         )
@@ -743,8 +773,13 @@ def get_ai_service() -> AIProvider:
                     "AI_PROVIDER=gemini but GEMINI_API_KEY is not set. "
                     "Set it in backend/.env to enable AI processing."
                 )
-            _provider = GeminiProvider(settings.GEMINI_API_KEY, settings.GEMINI_MODEL)
-            logger.info("AI provider: Gemini (%s)", settings.GEMINI_MODEL)
+            _provider = GeminiProvider(
+                settings.GEMINI_API_KEY,
+                settings.GEMINI_MODEL,
+                fallback_models=settings.GEMINI_FALLBACK_MODELS,
+            )
+            chain = ", ".join([settings.GEMINI_MODEL, *settings.GEMINI_FALLBACK_MODELS])
+            logger.info("AI provider: Gemini (%s)", chain)
 
         else:
             raise RuntimeError(

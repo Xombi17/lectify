@@ -2,15 +2,22 @@ import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { qrApi } from "@/lib/api";
+import { API, qrApi } from "@/lib/api";
 import { QrCode, ArrowClockwise, Download } from "@phosphor-icons/react";
 import { toast } from "sonner";
+
+function authHeaders() {
+    const token = typeof window !== "undefined" ? localStorage.getItem("lm_token") : null;
+    return token ? { Authorization: `Bearer ${token}` } : {};
+}
 
 export default function QRCodeCard({ classId, className }) {
     const [qr, setQr] = useState(null);
     const [analytics, setAnalytics] = useState(null);
     const [loading, setLoading] = useState(false);
     const [regenerating, setRegenerating] = useState(false);
+    const [imgUrl, setImgUrl] = useState(null);
+    const [downloading, setDownloading] = useState(false);
 
     const load = useCallback(async () => {
         if (!classId) return;
@@ -30,6 +37,31 @@ export default function QRCodeCard({ classId, className }) {
     useEffect(() => {
         if (classId) load();
     }, [classId, load]);
+
+    // The download endpoint requires auth, which a plain <img> can't send —
+    // fetch the SVG with the token and render it from a blob URL.
+    useEffect(() => {
+        if (!classId || !qr) return;
+        let cancelled = false;
+        let blobUrl = null;
+        fetch(`${API}/qr/classes/${classId}/download?format=svg`, { headers: authHeaders() })
+            .then((r) => {
+                if (!r.ok) throw new Error(`QR image failed: ${r.status}`);
+                return r.blob();
+            })
+            .then((blob) => {
+                if (cancelled) return;
+                blobUrl = URL.createObjectURL(blob);
+                setImgUrl(blobUrl);
+            })
+            .catch(() => {
+                if (!cancelled) setImgUrl(null);
+            });
+        return () => {
+            cancelled = true;
+            if (blobUrl) URL.revokeObjectURL(blobUrl);
+        };
+    }, [classId, qr]);
 
     const handleGenerate = async () => {
         try {
@@ -53,6 +85,29 @@ export default function QRCodeCard({ classId, className }) {
             toast.error("Failed to regenerate QR");
         } finally {
             setRegenerating(false);
+        }
+    };
+
+    const handleDownload = async () => {
+        setDownloading(true);
+        try {
+            const r = await fetch(`${API}/qr/classes/${classId}/download?format=svg`, {
+                headers: authHeaders(),
+            });
+            if (!r.ok) throw new Error(`Download failed: ${r.status}`);
+            const blob = await r.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `qr-${classId}.svg`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+        } catch {
+            toast.error("Failed to download QR");
+        } finally {
+            setDownloading(false);
         }
     };
 
@@ -87,12 +142,18 @@ export default function QRCodeCard({ classId, className }) {
                     <div className="flex flex-col items-center gap-4">
                         {/* QR Image */}
                         <div className="border border-border bg-white p-3 rounded">
-                            <img
-                                src={qrApi.downloadUrl(classId)}
-                                alt={`QR code for ${className}`}
-                                className="h-40 w-40"
-                                data-testid="qr-image"
-                            />
+                            {imgUrl ? (
+                                <img
+                                    src={imgUrl}
+                                    alt={`QR code for ${className}`}
+                                    className="h-40 w-40"
+                                    data-testid="qr-image"
+                                />
+                            ) : (
+                                <div className="flex h-40 w-40 items-center justify-center text-xs text-muted-foreground">
+                                    Couldn't load QR image
+                                </div>
+                            )}
                         </div>
 
                         {/* Analytics row */}
@@ -123,11 +184,15 @@ export default function QRCodeCard({ classId, className }) {
 
                         {/* Actions */}
                         <div className="flex gap-2">
-                            <Button variant="outline" size="sm" asChild data-testid="download-qr-btn">
-                                <a href={qrApi.downloadUrl(classId)} download>
-                                    <Download size={14} weight="duotone" className="mr-1" />
-                                    Download
-                                </a>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={handleDownload}
+                                disabled={downloading || !imgUrl}
+                                data-testid="download-qr-btn"
+                            >
+                                <Download size={14} weight="duotone" className="mr-1" />
+                                {downloading ? "Preparing…" : "Download"}
                             </Button>
                             <Button
                                 variant="outline"

@@ -1,4 +1,5 @@
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import {
     GraduationCap,
@@ -14,25 +15,25 @@ import { Button } from "@/components/ui/button";
 
 export default function AppShell({ children }) {
     const { user, logout } = useAuth();
-    const navigate = useNavigate();
-    const location = useLocation();
+    const router = useRouter();
+    const pathname = usePathname();
 
     const onLogout = () => {
         logout();
-        navigate("/login");
+        router.push("/login");
     };
 
     const teacherNav = [
-        { to: "/teacher", label: "Dashboard", icon: BookOpen },
+        { to: "/teacher/dashboard", label: "Dashboard", icon: BookOpen },
         { to: "/teacher/upload", label: "New Lecture", icon: Microphone },
     ];
     const studentNav = [
-        { to: "/student", label: "Library", icon: BookOpen },
+        { to: "/student/dashboard", label: "Library", icon: BookOpen },
         { to: "/student/review", label: "Review", icon: Brain },
         { to: "/student/bookmarks", label: "Bookmarks", icon: BookmarkSimple },
     ];
     const adminNav = [
-        { to: "/admin", label: "Hierarchy", icon: Buildings },
+        { to: "/admin/dashboard", label: "Hierarchy", icon: Buildings },
     ];
     const nav = user?.role === "admin" ? adminNav : user?.role === "teacher" ? teacherNav : studentNav;
 
@@ -41,12 +42,12 @@ export default function AppShell({ children }) {
             <header className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur">
                 <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
                     <Link
-                        to={
+                        href={
                             user?.role === "admin"
-                                ? "/admin"
+                                ? "/admin/dashboard"
                                 : user?.role === "teacher"
-                                ? "/teacher"
-                                : "/student"
+                                ? "/teacher/dashboard"
+                                : "/student/dashboard"
                         }
                         className="flex items-center gap-2"
                         data-testid="brand-link"
@@ -67,11 +68,11 @@ export default function AppShell({ children }) {
                     <nav className="hidden items-center gap-1 md:flex">
                         {nav.map((n) => {
                             const Icon = n.icon;
-                            const active = location.pathname === n.to;
+                            const active = pathname === n.to;
                             return (
                                 <Link
                                     key={n.to}
-                                    to={n.to}
+                                    href={n.to}
                                     data-testid={`nav-${n.label.toLowerCase().replace(/\s/g, "-")}`}
                                     className={`flex items-center gap-2 px-3 py-2 text-sm transition-colors ${
                                         active
