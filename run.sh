@@ -3,14 +3,15 @@
 # LectureMind AI — Single-Command Launcher
 # ═══════════════════════════════════════════════════════════════════════════════
 # Usage:
-#   ./run.sh                  Start backend + frontend for local dev
+#   ./run.sh                  Start backend + workers + frontend for local dev
 #   ./run.sh --docker         Start full stack via docker compose
 #   ./run.sh --help           Show this help
 #
-# Default mode (no flags): SQLite + local storage, backend on :8001, frontend
-# on :3000. Zero external services required.
+# Default mode (no flags): SQLite + local storage + SQLite queue,
+# backend on :8001, frontend on :3000. Zero external services required.
+# AI features need keys in backend/.env (GEMINI_API_KEY).
 #
-# Requirements: python3, node/npm (or yarn), ffmpeg (for audio chunking).
+# Requirements: python3 (with backend/.venv), node/npm, ffmpeg (for chunking).
 # ═══════════════════════════════════════════════════════════════════════════════
 
 set -euo pipefail
@@ -21,8 +22,10 @@ cd "$SCRIPT_DIR"
 BACKEND_PORT="${PORT:-8001}"
 FRONTEND_PORT="${FRONTEND_PORT:-3000}"
 BACKEND_LOG="${SCRIPT_DIR}/.logs/backend.log"
+WORKERS_LOG="${SCRIPT_DIR}/.logs/workers.log"
 FRONTEND_LOG="${SCRIPT_DIR}/.logs/frontend.log"
 BACKEND_PID=""
+WORKERS_PID=""
 FRONTEND_PID=""
 _CLEANED=false
 
@@ -37,7 +40,7 @@ err()   { echo -e "${RED}[✘]${NC} $*" >&2; }
 
 # ── Help ──────────────────────────────────────────────────────────────────────
 if [[ "${1:-}" == "--help" ]] || [[ "${1:-}" == "-h" ]]; then
-    sed -n '3,12p' "$0"
+    sed -n '3,13p' "$0"
     echo
     echo "Flags:"
     echo "  --docker    Start full stack via docker compose (Postgres + MinIO + app)"
@@ -53,8 +56,13 @@ if [[ "${1:-}" == "--docker" ]]; then
         exit 1
     fi
     if [[ ! -f .env ]]; then
-        cp .env.example .env
-        warn ".env file created from .env.example — edit it with your GEMINI_API_KEY and JWT_SECRET."
+        if [[ -f .env.example ]]; then
+            cp .env.example .env
+            warn ".env created from .env.example — edit it with GEMINI_API_KEY and JWT_SECRET."
+        else
+            err "No .env file. Create one with JWT_SECRET and GEMINI_API_KEY first."
+            exit 1
+        fi
     fi
     info "Starting full stack with Docker Compose..."
     exec docker compose up --build
@@ -64,160 +72,120 @@ fi
 info "Checking prerequisites..."
 
 command -v python3 &>/dev/null || { err "python3 is required."; exit 1; }
-PYTHON="$(command -v python3)"
-
-# Check for node + npm (or yarn)
-NPM=""
-YARN=""
-if command -v yarn &>/dev/null; then
-    YARN="$(command -v yarn)"
-    ok "yarn found"
-elif command -v npm &>/dev/null; then
-    NPM="$(command -v npm)"
-    ok "npm found"
-else
-    err "npm or yarn is required for the frontend."
+[[ -x backend/.venv/bin/python ]] || {
+    err "backend/.venv not found. Create it first:"
+    err "  cd backend && python3 -m venv .venv && .venv/bin/pip install -r requirements.txt"
     exit 1
-fi
+}
+command -v npm &>/dev/null || { err "npm is required for the frontend."; exit 1; }
+[[ -d frontend/node_modules ]] || {
+    err "frontend/node_modules missing. Install first: cd frontend && npm install"
+    exit 1
+}
+command -v ffmpeg &>/dev/null \
+    && ok "ffmpeg found" \
+    || warn "ffmpeg not found — long lecture chunking will be unavailable"
 
-# FFmpeg (optional — only needed for long audio chunking)
-if command -v ffmpeg &>/dev/null; then
-    ok "ffmpeg found"
-else
-    warn "ffmpeg not found — long lecture chunking will be unavailable (install with: apt install ffmpeg / brew install ffmpeg)"
-fi
-
+for port in "$BACKEND_PORT" "$FRONTEND_PORT"; do
+    if (echo >/dev/tcp/localhost/$port) &>/dev/null; then
+        err "Port $port is already in use. Stop that process first."
+        exit 1
+    fi
+done
 ok "Prerequisites satisfied"
 
-# ── Environment ───────────────────────────────────────────────────────────────
-if [[ ! -f .env ]]; then
-    cp .env.example .env
-    warn ".env file created from .env.example — edit it to set GEMINI_API_KEY for AI features."
-fi
-
-# Export vars from .env (no clobber if already set)
-set -a; source .env; set +a
-
-# Defaults that let the app boot with zero external services
-export DATABASE_BACKEND="${DATABASE_BACKEND:-postgres}"
-export DATABASE_URL="${DATABASE_URL:-sqlite+aiosqlite:///./lecturemind.db}"
-export STORAGE_BACKEND="${STORAGE_BACKEND:-local}"
-# SQLite queue so the API and worker processes share one queue file locally
-# (the memory backend is per-process; SQS is for deployed environments).
-export QUEUE_BACKEND="${QUEUE_BACKEND:-sqlite}"
-export STORAGE_LOCAL_DIR="${STORAGE_LOCAL_DIR:-./storage_data}"
+# ── Environment (local dev: zero external services) ───────────────────────────
+# NOTE: there is no root .env.example on purpose — AI keys live in
+# backend/.env (loaded by the backend itself). Everything below just works.
+export ENV=dev
+export DATABASE_BACKEND=postgres
+export DATABASE_URL="sqlite+aiosqlite:///${SCRIPT_DIR}/backend/lecturemind.db"
+export STORAGE_BACKEND=local
+export STORAGE_LOCAL_DIR="${SCRIPT_DIR}/backend/storage_data"
 export JWT_SECRET="${JWT_SECRET:-change-me-dev-local}"
 export CORS_ORIGINS="${CORS_ORIGINS:-http://localhost:3000}"
+export DB_AUTO_CREATE=true
+# SQLite queue so the API and worker processes share one queue file.
+# ("memory" is per-process; "sqs" is for deployed environments.)
+export QUEUE_BACKEND="${QUEUE_BACKEND:-sqlite}"
+export DEV_BACKEND_URL="http://localhost:${BACKEND_PORT}"
 
-# ── Backend Setup ─────────────────────────────────────────────────────────────
-info "Setting up backend..."
-
-cd backend
-
-# Create venv if needed
-if [[ ! -d .venv ]]; then
-    info "Creating Python virtual environment..."
-    "$PYTHON" -m venv .venv
-    ok "Virtual environment created"
-fi
-
-source .venv/bin/activate
-
-# Install deps — use a marker file to skip if unchanged
-REQS_HASH="$(md5sum requirements.txt 2>/dev/null | cut -d' ' -f1 || true)"
-CACHED_HASH=""
-[[ -f .requirements_hash ]] && CACHED_HASH="$(cat .requirements_hash)"
-
-if [[ "$REQS_HASH" != "$CACHED_HASH" ]]; then
-    info "Installing/updating Python dependencies..."
-    # Install core deps needed to run the server (not the full requirements.txt
-    # which has many pinned extras). Add more as needed for AI features.
-    pip install -q \
-        fastapi uvicorn sqlalchemy aiosqlite aiofiles bcrypt pyjwt \
-        pydantic pydantic-settings python-dotenv python-multipart \
-        passlib email-validator httpx python-jose \
-        neo4j reportlab tiktoken google-genai google-generativeai stripe \
-        2>&1 | tail -3
-    echo "$REQS_HASH" > .requirements_hash
-    ok "Dependencies installed"
-else
-    ok "Python dependencies up to date"
-fi
-
-cd "$SCRIPT_DIR"
-
-# ── Frontend Setup ────────────────────────────────────────────────────────────
-info "Setting up frontend..."
-
-# Write frontend .env so CRA picks up REACT_APP_BACKEND_URL at dev build time
-echo "REACT_APP_BACKEND_URL=http://localhost:${BACKEND_PORT}" > frontend/.env
-
-cd frontend
-
-# Check if node_modules exists (quick heuristic for installed deps)
-if [[ ! -d node_modules ]]; then
-    info "Installing frontend dependencies..."
-    if [[ -n "$YARN" ]]; then
-        $YARN install --frozen-lockfile 2>/dev/null || $YARN install
-    else
-        $NPM install --legacy-peer-deps --no-audit --no-fund
-    fi
-    ok "Frontend dependencies installed"
-else
-    ok "Frontend dependencies up to date"
-fi
-
-cd "$SCRIPT_DIR"
-
-# ── Start Backend ─────────────────────────────────────────────────────────────
-info "Starting backend on port ${BACKEND_PORT}..."
 mkdir -p .logs
 
-cd backend
-source .venv/bin/activate
+# ── Cleanup Handler ───────────────────────────────────────────────────────────
+cleanup() {
+    $_CLEANED && return
+    _CLEANED=true
+    echo
+    info "Shutting down..."
+    for pid in "$BACKEND_PID" "$WORKERS_PID" "$FRONTEND_PID"; do
+        if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+            kill "$pid" 2>/dev/null || true
+        fi
+    done
+    wait 2>/dev/null || true
+    ok "All processes stopped. Goodbye!"
+    exit 0
+}
+trap cleanup SIGINT SIGTERM
+trap 'cleanup' EXIT
 
-# Start uvicorn in background
-uvicorn server:app \
+# ── Start Backend ─────────────────────────────────────────────────────────────
+info "[1/3] Starting backend on port ${BACKEND_PORT}..."
+cd backend
+./.venv/bin/python -m uvicorn server:app \
     --host 0.0.0.0 \
     --port "$BACKEND_PORT" \
-    --reload \
     --log-level info \
     > "${BACKEND_LOG}" 2>&1 &
 BACKEND_PID=$!
 cd "$SCRIPT_DIR"
 
-# Wait for backend to be healthy (up to 30 seconds)
 info "Waiting for backend to become healthy..."
-for i in $(seq 1 30); do
+healthy=false
+for _ in $(seq 1 45); do
     if curl -sf "http://localhost:${BACKEND_PORT}/api/health" >/dev/null 2>&1; then
-        ok "Backend is healthy (http://localhost:${BACKEND_PORT}/api/health)"
+        healthy=true
         break
     fi
     if ! kill -0 "$BACKEND_PID" 2>/dev/null; then
-        err "Backend died during startup. Check ${BACKEND_LOG}"
+        err "Backend died during startup. Tail of ${BACKEND_LOG}:"
+        tail -20 "${BACKEND_LOG}" >&2
         exit 1
     fi
-    sleep 1
+    sleep 2
 done
+$healthy || { err "Backend never became healthy. Check ${BACKEND_LOG}"; exit 1; }
+ok "Backend is healthy (http://localhost:${BACKEND_PORT}/api/health)"
+
+# ── Start Workers ─────────────────────────────────────────────────────────────
+info "[2/3] Starting workers (transcribe + AI materials + embed)..."
+cd backend
+./.venv/bin/python -m workers all \
+    > "${WORKERS_LOG}" 2>&1 &
+WORKERS_PID=$!
+cd "$SCRIPT_DIR"
+sleep 5
+kill -0 "$WORKERS_PID" 2>/dev/null || {
+    err "Workers exited immediately. Tail of ${WORKERS_LOG}:"
+    tail -20 "${WORKERS_LOG}" >&2
+    exit 1
+}
+ok "Workers running."
 
 # ── Start Frontend ────────────────────────────────────────────────────────────
-info "Starting frontend on port ${FRONTEND_PORT}..."
-
+# NOTE: webpack, not Turbopack — Turbopack dev panics on this repo's
+# dual lockfile layout ("inferred workspace root" crash loop).
+info "[3/3] Starting frontend on port ${FRONTEND_PORT} (first compile is slow)..."
 cd frontend
-if [[ -n "$YARN" ]]; then
-    BROWSER=none PORT="$FRONTEND_PORT" $YARN start \
-        > "${FRONTEND_LOG}" 2>&1 &
-else
-    BROWSER=none PORT="$FRONTEND_PORT" $NPM start \
-        > "${FRONTEND_LOG}" 2>&1 &
-fi
+PORT="$FRONTEND_PORT" DEV_BACKEND_URL="$DEV_BACKEND_URL" npx next dev --webpack \
+    > "${FRONTEND_LOG}" 2>&1 &
 FRONTEND_PID=$!
 cd "$SCRIPT_DIR"
 
-# ── Wait for Frontend ─────────────────────────────────────────────────────────
 info "Waiting for frontend to start..."
-for i in $(seq 1 30); do
-    if curl -sf "http://localhost:${FRONTEND_PORT}" >/dev/null 2>&1; then
+for _ in $(seq 1 45); do
+    if curl -sf "http://localhost:${FRONTEND_PORT}/" >/dev/null 2>&1; then
         ok "Frontend is ready (http://localhost:${FRONTEND_PORT})"
         break
     fi
@@ -228,27 +196,6 @@ for i in $(seq 1 30); do
     sleep 2
 done
 
-# ── Cleanup Handler ───────────────────────────────────────────────────────────
-cleanup() {
-    $_CLEANED && return
-    _CLEANED=true
-    echo
-    info "Shutting down..."
-    if [[ -n "$BACKEND_PID" ]] && kill -0 "$BACKEND_PID" 2>/dev/null; then
-        kill "$BACKEND_PID" 2>/dev/null
-        wait "$BACKEND_PID" 2>/dev/null
-        ok "Backend stopped"
-    fi
-    if [[ -n "$FRONTEND_PID" ]] && kill -0 "$FRONTEND_PID" 2>/dev/null; then
-        kill "$FRONTEND_PID" 2>/dev/null
-        wait "$FRONTEND_PID" 2>/dev/null
-        ok "Frontend stopped"
-    fi
-    info "Goodbye!"
-    exit 0
-}
-trap cleanup SIGINT SIGTERM EXIT
-
 # ── Show URLs & Follow Logs ───────────────────────────────────────────────────
 echo ""
 echo -e "${GREEN}══════════════════════════════════════════════════════════════${NC}"
@@ -258,42 +205,13 @@ echo -e "  Frontend:  ${CYAN}http://localhost:${FRONTEND_PORT}${NC}"
 echo -e "  Backend:   ${CYAN}http://localhost:${BACKEND_PORT}${NC}"
 echo -e "  API Docs:  ${CYAN}http://localhost:${BACKEND_PORT}/docs${NC}"
 echo -e "  Health:    ${CYAN}http://localhost:${BACKEND_PORT}/api/health${NC}"
+echo -e "  Logs:      ${CYAN}.logs/backend.log .logs/workers.log .logs/frontend.log${NC}"
 echo ""
 echo -e "  ${YELLOW}Press Ctrl+C to stop everything${NC}"
 echo -e "${GREEN}══════════════════════════════════════════════════════════════${NC}"
 echo ""
 
-# Tail both logs interleaved with labels — follow until Ctrl+C
-# Use named pipes for clean interleaving
-tail -qf \
-    --retry \
-    -n 0 \
-    --pid="$BACKEND_PID" \
-    "$BACKEND_LOG" 2>/dev/null | sed "s/^/[backend]  /" &
-TAIL_BE=$!
-
-tail -qf \
-    --retry \
-    -n 0 \
-    --pid="$FRONTEND_PID" \
-    "$FRONTEND_LOG" 2>/dev/null | sed "s/^/[frontend] /" &
-TAIL_FE=$!
-
-# Wait for either process to exit
-while true; do
-    if ! kill -0 "$BACKEND_PID" 2>/dev/null && ! kill -0 "$FRONTEND_PID" 2>/dev/null; then
-        info "Both processes have exited."
-        break
-    fi
-    if ! kill -0 "$BACKEND_PID" 2>/dev/null; then
-        warn "Backend exited unexpectedly. Check ${BACKEND_LOG}"
-    fi
-    if ! kill -0 "$FRONTEND_PID" 2>/dev/null; then
-        warn "Frontend exited unexpectedly. Check ${FRONTEND_LOG}"
-    fi
-    sleep 2
-done
-
-# Clean up tail processes
-kill "$TAIL_BE" "$TAIL_FE" 2>/dev/null || true
-wait 2>/dev/null
+trap - EXIT
+trap cleanup SIGINT SIGTERM
+tail -F -n 0 "$BACKEND_LOG" "$WORKERS_LOG" "$FRONTEND_LOG" 2>/dev/null &
+wait
