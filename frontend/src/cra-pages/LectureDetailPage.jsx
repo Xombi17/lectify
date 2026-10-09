@@ -1,5 +1,7 @@
+"use client";
+
 import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useParams, useRouter } from "next/navigation";
 import { lectureApi, API, bookmarkApi } from "@/lib/api";
 import { STATUS_LABEL, statusPillKind } from "@/lib/lectureStatus";
 import { useAuth } from "@/lib/auth";
@@ -39,7 +41,7 @@ const STATUS_LABEL_FALLBACK = {
 
 export default function LectureDetailPage() {
     const { id } = useParams();
-    const navigate = useNavigate();
+    const router = useRouter();
     const { user } = useAuth();
     const [lecture, setLecture] = useState(null);
     const [audioToken, setAudioToken] = useState(null);
@@ -57,7 +59,7 @@ export default function LectureDetailPage() {
                 }
             } catch (err) {
                 toast.error(err?.response?.data?.detail || "Failed to load lecture");
-                navigate(-1);
+                router.back();
             }
         };
         load();
@@ -65,7 +67,7 @@ export default function LectureDetailPage() {
             cancelled = true;
             if (timer) clearTimeout(timer);
         };
-    }, [id, navigate]);
+    }, [id, router]);
 
     // Prefer presigned audio-url (no auth header); fall back to authed blob stream.
     useEffect(() => {
@@ -113,6 +115,25 @@ export default function LectureDetailPage() {
     const pillKind = statusPillKind(lecture.status);
     const pillLabel = STATUS_LABEL[lecture.status] ?? STATUS_LABEL_FALLBACK[lecture.status] ?? lecture.status;
 
+    const downloadPdf = async () => {
+        try {
+            const token = localStorage.getItem("lm_token");
+            const response = await fetch(`${API}/lectures/${lecture.id}/pdf`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            if (!response.ok) throw new Error("PDF export failed");
+            const blob = await response.blob();
+            const url = URL.createObjectURL(blob);
+            const anchor = document.createElement("a");
+            anchor.href = url;
+            anchor.download = `${lecture.title || "lecture"}.pdf`;
+            anchor.click();
+            URL.revokeObjectURL(url);
+        } catch (err) {
+            toast.error(err?.message || "PDF export failed");
+        }
+    };
+
     const togglePublish = async () => {
         try {
             const updated = lecture.published
@@ -130,16 +151,18 @@ export default function LectureDetailPage() {
         try {
             await lectureApi.remove(lecture.id);
             toast.success("Lecture deleted");
-            navigate("/teacher");
+            router.push(user?.role === "teacher" ? "/teacher/dashboard" : "/student/dashboard");
         } catch (err) {
             toast.error(err?.response?.data?.detail || "Delete failed");
         }
     };
 
     return (
-            <div className="mb-8">
-                <div className="text-overline mb-2 text-primary">Lecture</div>
-                <div className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-end">
+        <div className="animate-in">
+            <div className="page-intro">
+                <div>
+                    <div className="eyebrow text-accent">Lecture workspace</div>
+                    <div className="mt-3 flex flex-col items-start justify-between gap-4 md:flex-row md:items-end">
                     <div>
                         <h1 className="font-display text-3xl font-black tracking-tighter sm:text-4xl">
                             {lecture.title}
@@ -174,7 +197,7 @@ export default function LectureDetailPage() {
                     </div>
 
                     {isOwner && (
-                        <div className="flex gap-2">
+                        <div className="flex flex-wrap gap-2">
                             {ready && (
                                 <Button
                                     variant="outline"
@@ -211,12 +234,13 @@ export default function LectureDetailPage() {
                             </Button>
                         </div>
                     )}
+                    </div>
                 </div>
             </div>
 
             {audioToken && (
-                <div className="mb-8 border border-border bg-card p-4">
-                    <div className="text-overline mb-2 text-muted-foreground">Original recording</div>
+                <div className="surface-panel mb-8 p-5">
+                    <div className="eyebrow mb-3 text-muted-foreground">Original recording</div>
                     <audio controls src={audioToken} className="w-full" data-testid="lecture-audio" />
                 </div>
             )}
@@ -228,6 +252,7 @@ export default function LectureDetailPage() {
             ) : (
                 <ContentTabs lecture={lecture} isOwner={isOwner} onLectureUpdate={setLecture} />
             )}
+        </div>
     );
 }
 
@@ -239,12 +264,12 @@ function ProcessingState({ lecture }) {
     const isLong = (lecture.duration_seconds || 0) > 30 * 60;
 
     return (
-        <div className="border-2 border-dashed border-border bg-card p-12 text-center">
-            <div className="mx-auto mb-5 flex h-16 w-16 animate-pulse items-center justify-center bg-accent">
+        <div className="empty-panel p-10 text-center">
+            <div className="mx-auto mb-5 flex h-16 w-16 animate-pulse items-center justify-center bg-accent text-accent-foreground">
                 <Lightning size={32} weight="duotone" className="text-accent-foreground" />
             </div>
             <h3 className="font-display text-2xl font-black tracking-tighter">
-                AI is digesting your lecture
+                Preparing study material
             </h3>
             <p
                 className="mt-2 text-sm text-muted-foreground"
@@ -304,8 +329,7 @@ function ErrorState({ message, deadLetter }) {
                 </p>
             )}
             <p className="mt-2 text-xs text-muted-foreground">
-                Verify that <code className="font-mono">GEMINI_API_KEY</code> is set in
-                <code className="font-mono"> backend/.env</code> and try uploading again.
+                Your teacher can retry the upload or contact an administrator if this keeps happening.
             </p>
         </div>
     );
@@ -368,7 +392,7 @@ function ContentTabs({ lecture, isOwner, onLectureUpdate }) {
 
     return (
         <Tabs defaultValue="notes" className="w-full" data-testid="lecture-tabs">
-            <TabsList className="h-auto w-full justify-start gap-6 rounded-none border-b border-border bg-transparent p-0">
+            <TabsList className="h-auto w-full justify-start gap-5 overflow-x-auto rounded-none border-b border-border bg-transparent p-0">
                 {[
                     ["notes", "Smart Notes"],
                     ["quiz", "Quiz"],
@@ -380,7 +404,7 @@ function ContentTabs({ lecture, isOwner, onLectureUpdate }) {
                         key={v}
                         value={v}
                         data-testid={`tab-${v}`}
-                        className="rounded-none border-b-2 border-transparent bg-transparent px-1 pb-3 pt-0 font-display text-base font-bold tracking-tight text-muted-foreground shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none"
+                        className="rounded-none border-b-2 border-transparent bg-transparent px-1 pb-3 pt-0 font-display text-sm font-bold tracking-tight text-muted-foreground shadow-none data-[state=active]:border-accent data-[state=active]:bg-transparent data-[state=active]:text-accent data-[state=active]:shadow-none sm:text-base"
                     >
                         {label}
                     </TabsTrigger>
@@ -440,7 +464,7 @@ function ContentTabs({ lecture, isOwner, onLectureUpdate }) {
                 ) : (
                     <>
                         {m.summary && (
-                            <div className="mb-6 border-l-2 border-accent bg-card p-5">
+                            <div className="surface-panel mb-6 p-5">
                                 <div className="text-overline mb-2 text-primary">TL;DR</div>
                                 <p className="text-base leading-relaxed">{m.summary}</p>
                             </div>

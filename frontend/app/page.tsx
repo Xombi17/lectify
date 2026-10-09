@@ -3,12 +3,12 @@ import { Suspense } from "react";
 import LandingPage from "@/cra-pages/LandingPage";
 
 export const metadata: Metadata = {
-  title: "LectureMind AI — AI-Powered Lecture Intelligence",
+  title: "Lectify — Lecture intelligence",
   description:
-    "Upload lectures, get AI-generated notes, quizzes, and flashcards. Study smarter with automatic transcription and smart study materials.",
+    "Turn lecture recordings into structured notes, quizzes, and flashcards.",
   openGraph: {
-    title: "LectureMind AI",
-    description: "AI-powered lecture intelligence platform",
+    title: "Lectify",
+    description: "Lecture intelligence for students and teachers",
     type: "website",
   },
 };

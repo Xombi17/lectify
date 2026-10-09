@@ -1,5 +1,7 @@
+"use client";
+
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useRouter } from "next/navigation";
 import { academicApi, lectureApi, timetableApi, uploadToS3 } from "@/lib/api";
 import { FALLBACK_NOTICE, isPresignedUnavailable, uploadErrorCopy } from "@/lib/uploadTransport";
 import { Button } from "@/components/ui/button";
@@ -12,7 +14,7 @@ import { toast } from "sonner";
 const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
 export default function UploadLecturePage() {
-    const navigate = useNavigate();
+    const router = useRouter();
     const [title, setTitle] = useState("");
     const [subject, setSubject] = useState("");
     const [semester, setSemester] = useState("");
@@ -137,7 +139,7 @@ export default function UploadLecturePage() {
             try {
                 const lec = await lectureApi.upload(fd, onProgress);
                 toast.success("Uploaded — AI is processing your lecture");
-                navigate(`/teacher/lectures/${lec.id}`);
+                router.push(`/teacher/lectures/${lec.id}`);
             } catch (err) {
                 showError(err?.response?.data?.detail || "Upload failed");
             }
@@ -151,26 +153,27 @@ export default function UploadLecturePage() {
             setVerifying(true);
             const lec = await lectureApi.uploadComplete(presigned.lecture_id);
             toast.success("Upload complete — processing started");
-            navigate(`/teacher/lectures/${lec.id}`);
+            router.push(`/teacher/lectures/${lec.id}`);
         } catch (err) {
             showError(uploadErrorCopy(err));
         }
     };
 
     return (
-        <div className="mx-auto max-w-3xl">
-            <div className="text-overline mb-3 text-primary">New lecture</div>
-            <h1 className="font-display text-4xl font-black tracking-tighter sm:text-5xl">
-                Drop your recording.
-            </h1>
-            <p className="mt-3 text-muted-foreground">
-                MP3, WAV, M4A or any common audio format. Up to 200 MB.
-            </p>
+        <div className="mx-auto max-w-4xl animate-in">
+            <section className="page-intro">
+                <div>
+                    <div className="eyebrow text-accent">New lecture</div>
+                    <h1>Drop your recording.</h1>
+                    <p>Upload common audio formats up to 200 MB. We&apos;ll keep you updated while the study material is prepared.</p>
+                </div>
+                <div className="hidden border border-border bg-card px-4 py-3 font-mono text-[0.64rem] uppercase tracking-[0.1em] text-muted-foreground sm:block">browser → storage<br /><span className="text-accent">direct upload</span></div>
+            </section>
 
             {!loadingClasses && assignedClasses.length === 0 && (
                 <div
                     data-testid="no-classes-warning"
-                    className="mt-6 flex items-start gap-3 border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-700 dark:text-amber-300"
+                    className="mt-6 flex items-start gap-3 border border-[hsl(var(--warning)/.35)] bg-[hsl(var(--warning)/.08)] p-4 text-sm text-[hsl(var(--warning))]"
                 >
                     <WarningCircle size={20} weight="fill" className="shrink-0 mt-0.5 text-amber-600" />
                     <div>
@@ -182,7 +185,7 @@ export default function UploadLecturePage() {
                 </div>
             )}
 
-            <form onSubmit={submit} className="mt-8 space-y-6" data-testid="upload-form">
+            <form onSubmit={submit} className="mt-8 space-y-7" data-testid="upload-form">
                 <FileDrop file={file} onFile={onFile} disabled={submitting || (!loadingClasses && assignedClasses.length === 0)} />
 
                 <div className="grid gap-5 md:grid-cols-2">
@@ -192,7 +195,7 @@ export default function UploadLecturePage() {
                         <select
                             id="classId"
                             data-testid="class-select"
-                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                            className="flex h-11 w-full rounded-lg border border-input bg-card px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                             value={selectedClassId}
                             onChange={(e) => handleClassChange(e.target.value)}
                             required
@@ -220,7 +223,7 @@ export default function UploadLecturePage() {
                             <select
                                 id="slotId"
                                 data-testid="timetable-slot-select"
-                                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                className="flex h-11 w-full rounded-lg border border-input bg-card px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                                 value={selectedSlotId}
                                 onChange={(e) => setSelectedSlotId(e.target.value)}
                                 disabled={submitting}
@@ -269,8 +272,8 @@ export default function UploadLecturePage() {
                 </div>
 
                 {submitting && (
-                    <div className="border border-border bg-card p-4">
-                        <div className="text-overline mb-2 text-muted-foreground">
+                    <div className="surface-panel p-5">
+                        <div className="eyebrow mb-2 text-muted-foreground">
                             {verifying ? "Verifying upload…" : "Uploading to storage…"}
                         </div>
                         <Progress value={progress} className="h-2" />
@@ -283,13 +286,13 @@ export default function UploadLecturePage() {
                 )}
 
                 {fallbackNotice && (
-                    <div data-testid="fallback-notice" className="border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
+                    <div data-testid="fallback-notice" className="border border-border bg-muted/45 p-4 text-sm leading-6 text-muted-foreground">
                         {fallbackNotice}
                     </div>
                 )}
 
                 {uploadError && (
-                    <div data-testid="upload-error" role="alert" className="border border-destructive bg-destructive/10 p-3 text-sm text-destructive">
+                    <div data-testid="upload-error" role="alert" className="border border-destructive/40 bg-destructive/10 p-4 text-sm leading-6 text-destructive">
                         {uploadError}
                     </div>
                 )}
@@ -308,7 +311,7 @@ export default function UploadLecturePage() {
                     <Button
                         type="button"
                         variant="ghost"
-                        onClick={() => navigate("/teacher")}
+                        onClick={() => router.push("/teacher/dashboard")}
                         data-testid="cancel-upload-btn"
                     >
                         Cancel
@@ -334,12 +337,12 @@ function FileDrop({ file, onFile, disabled }) {
                 setDrag(false);
                 onFile({ target: { files: e.dataTransfer.files } });
             }}
-            className={`block cursor-pointer border-2 border-dashed p-10 text-center transition-all ${
+            className={`block cursor-pointer border-2 border-dashed bg-card p-10 text-center transition-all sm:p-14 ${
                 drag
-                    ? "border-primary bg-accent/20"
+                    ? "border-accent bg-accent/10"
                     : file
-                        ? "border-primary/50 bg-card"
-                        : "border-border bg-card hover:border-primary/40"
+                        ? "border-accent/60"
+                        : "border-border hover:border-accent/60"
             } ${disabled ? "pointer-events-none opacity-60" : ""}`}
         >
             <input
@@ -351,7 +354,7 @@ function FileDrop({ file, onFile, disabled }) {
             />
             {file ? (
                 <div className="flex flex-col items-center gap-3">
-                    <div className="flex h-14 w-14 items-center justify-center bg-primary text-primary-foreground">
+                    <div className="flex h-14 w-14 items-center justify-center bg-[hsl(var(--shell-rail))] text-accent">
                         <FileAudio size={28} weight="duotone" />
                     </div>
                     <div>
@@ -367,7 +370,7 @@ function FileDrop({ file, onFile, disabled }) {
                 </div>
             ) : (
                 <div className="flex flex-col items-center gap-3">
-                    <div className="flex h-14 w-14 items-center justify-center bg-accent">
+                    <div className="flex h-14 w-14 items-center justify-center bg-accent text-accent-foreground">
                         <Microphone size={28} weight="duotone" />
                     </div>
                     <div className="font-display text-xl font-bold">

@@ -11,11 +11,11 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
 
   useEffect(() => {
     if (!loading && (!user || user.role !== "student")) {
-      router.push("/");
+      router.push("/login");
     }
   }, [user, loading, router]);
 
-  if (loading) return null;
+  if (loading) return <div className="min-h-[100dvh] animate-pulse bg-muted/40" />;
   if (!user || user.role !== "student") {
     return null;
   }

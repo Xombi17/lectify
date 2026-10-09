@@ -1,76 +1,55 @@
 "use client";
 
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
-import {
-    GraduationCap,
-    Microphone,
-    Sparkle,
-    BookOpen,
-    Lightning,
-    Translate,
-    ArrowRight,
-    Play,
-    Pause,
-    Checks
-} from "@phosphor-icons/react";
-import { motion } from "framer-motion";
 import { useState } from "react";
+import { motion } from "framer-motion";
+import { ArrowRight, BookOpen, Checks, GraduationCap, Microphone, Pause, Play, Sparkle } from "@phosphor-icons/react";
+import { Button } from "@/components/ui/button";
 
-// Mock trust logos
-const TRUSTED_LOGOS = ["Stanford", "MIT", "Oxford", "Cambridge", "ETH Zurich"];
+const PIPELINE = [
+    { number: "01", title: "Capture the lecture", body: "Upload the recording when class ends. Long sessions stay asynchronous, so your browser is not the bottleneck.", icon: Microphone },
+    { number: "02", title: "Clean the signal", body: "The transcript is structured around the ideas that matter, with the original recording kept close by for context.", icon: Sparkle },
+    { number: "03", title: "Study the material", body: "Open notes, quizzes, flashcards, search, and transcript from the same lecture workspace.", icon: BookOpen },
+];
 
 function StudyPreview() {
     const [playing, setPlaying] = useState(false);
-    
+
     return (
-        <div className="relative mx-auto w-full max-w-md overflow-hidden rounded-xl border border-border bg-card shadow-2xl">
-            <div className="border-b border-border bg-muted/50 p-4 flex items-center justify-between">
+        <div className="surface-panel overflow-hidden bg-card">
+            <div className="flex items-center justify-between border-b border-border px-5 py-4">
                 <div className="flex items-center gap-3">
-                    <button 
-                        onClick={() => setPlaying(!playing)}
-                        className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground transition-all active:scale-95"
-                    >
-                        {playing ? <Pause weight="fill" /> : <Play weight="fill" className="ml-1" />}
+                    <button type="button" onClick={() => setPlaying((value) => !value)} aria-label={playing ? "Pause sample recording" : "Play sample recording"} className="flex h-10 w-10 items-center justify-center rounded-full bg-accent text-accent-foreground transition hover:scale-105 active:scale-95">
+                        {playing ? <Pause size={17} weight="fill" /> : <Play size={17} weight="fill" className="ml-0.5" />}
                     </button>
                     <div>
-                        <div className="text-sm font-bold font-mono">lec_04_neural_nets.mp3</div>
-                        <div className="text-xs text-muted-foreground font-mono">00:14:22 / 01:20:00</div>
+                        <div className="font-mono text-xs font-semibold">lecture_04 / neural networks</div>
+                        <div className="mt-1 font-mono text-[0.62rem] text-muted-foreground">14:22 / sample workspace</div>
                     </div>
                 </div>
-                <div className="flex items-center gap-1.5 rounded-full border border-border bg-background px-2.5 py-1 text-xs font-medium text-muted-foreground">
-                    <Checks size={14} className="text-accent" />
-                    Transcribed
-                </div>
+                <span className="status-chip border-[hsl(var(--success)/.35)] bg-[hsl(var(--success)/.08)] text-[hsl(var(--success))]"><Checks size={13} weight="bold" /> ready</span>
             </div>
-            
-            <div className="p-6">
-                <div className="space-y-4">
-                    <div className="flex gap-4">
-                        <div className="mt-1 font-mono text-xs text-muted-foreground">14:15</div>
-                        <div className="text-sm leading-relaxed">
-                            So when we talk about backpropagation, the key insight is the <span className="bg-accent/30 font-semibold px-1 rounded">chain rule</span> of calculus. It allows us to compute the gradient of the loss function with respect to each weight.
+
+            <div className="grid gap-0 lg:grid-cols-[1fr_0.85fr]">
+                <div className="border-b border-border p-6 lg:border-b-0 lg:border-r">
+                    <div className="eyebrow text-muted-foreground">clean transcript</div>
+                    <div className="mt-5 space-y-4">
+                        <div className="grid grid-cols-[46px_1fr] gap-4">
+                            <span className="font-mono text-[0.68rem] text-muted-foreground">14:15</span>
+                            <p className="text-sm leading-7">Backpropagation works because the <mark className="bg-accent/15 px-1 text-foreground">chain rule</mark> lets us calculate how each weight contributes to the loss.</p>
                         </div>
-                    </div>
-                    <div className="flex gap-4 opacity-50">
-                        <div className="mt-1 font-mono text-xs text-muted-foreground">14:42</div>
-                        <div className="text-sm leading-relaxed">
-                            Um, let me wipe the board... anyway, where were we? Ah right, learning rates.
+                        <div className="grid grid-cols-[46px_1fr] gap-4 opacity-45">
+                            <span className="font-mono text-[0.68rem] text-muted-foreground">14:42</span>
+                            <p className="text-sm leading-7">The board is full. Let&apos;s keep the learning rate example for the next pass.</p>
                         </div>
                     </div>
                 </div>
-                
-                <div className="mt-6 border-t border-border pt-6">
-                    <div className="mb-3 text-xs font-bold uppercase tracking-widest text-primary">Generated Asset</div>
-                    <div className="rounded-lg border border-border bg-muted/30 p-4">
-                        <div className="mb-2 flex items-center gap-2 text-sm font-semibold">
-                            <BookOpen weight="duotone" className="text-accent" />
-                            Flashcard
-                        </div>
-                        <div className="text-sm">What mathematical rule enables backpropagation?</div>
-                        <div className="mt-3 rounded border border-border/50 bg-background p-2 text-sm font-medium">
-                            The Chain Rule
-                        </div>
+                <div className="bg-muted/35 p-6">
+                    <div className="eyebrow text-accent">study asset</div>
+                    <div className="mt-5 border border-border bg-card p-4">
+                        <div className="flex items-center gap-2 text-sm font-bold"><BookOpen size={17} className="text-accent" weight="bold" /> Flashcard</div>
+                        <p className="mt-6 text-sm leading-6">What mathematical rule enables backpropagation?</p>
+                        <div className="mt-5 border-t border-border pt-3 font-mono text-xs text-muted-foreground">answer hidden · active recall</div>
                     </div>
                 </div>
             </div>
@@ -80,170 +59,64 @@ function StudyPreview() {
 
 export default function LandingPage() {
     return (
-        <div className="min-h-screen bg-background">
-            <header className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur">
-                <div className="mx-auto flex h-16 max-w-[1400px] items-center justify-between px-6">
-                    <Link href="/" className="flex items-center gap-2" data-testid="landing-brand">
-                        <div className="flex h-8 w-8 items-center justify-center bg-primary text-primary-foreground rounded-sm">
-                            <GraduationCap size={20} weight="duotone" />
-                        </div>
-                        <div className="leading-none">
-                            <div className="font-display text-base font-bold tracking-tight">LectureMind</div>
-                        </div>
+        <main className="min-h-[100dvh] bg-background">
+            <header className="sticky top-0 z-40 border-b border-border bg-background/90 backdrop-blur">
+                <div className="mx-auto flex h-[4.5rem] max-w-[1500px] items-center justify-between px-5 sm:px-8 lg:px-12">
+                    <Link href="/" className="flex items-center gap-3" data-testid="landing-brand">
+                        <span className="flex h-9 w-9 items-center justify-center bg-accent text-accent-foreground"><GraduationCap size={21} weight="bold" /></span>
+                        <span><span className="block font-display text-lg font-extrabold tracking-[-0.05em]">Lectify</span><span className="hidden font-mono text-[0.58rem] uppercase tracking-[0.16em] text-muted-foreground sm:block">lecture intelligence</span></span>
                     </Link>
-                    <div className="flex items-center gap-3">
-                        <Link href="/login" data-testid="landing-login-link">
-                            <Button variant="ghost" size="sm" className="font-semibold text-muted-foreground hover:text-foreground">Sign in</Button>
-                        </Link>
-                        <Link href="/signup" data-testid="landing-signup-link">
-                            <Button size="sm" className="font-bold">
-                                Launch Studio
-                            </Button>
-                        </Link>
-                    </div>
+                    <nav className="flex items-center gap-2 sm:gap-4" aria-label="Public navigation">
+                        <a href="#workflow" className="hidden px-2 py-2 text-sm font-semibold text-muted-foreground transition hover:text-foreground sm:block">How it works</a>
+                        <Link href="/login" data-testid="landing-login-link"><Button variant="ghost" size="sm" className="font-semibold">Sign in</Button></Link>
+                        <Link href="/signup" data-testid="landing-signup-link"><Button size="sm" className="font-bold">Create account</Button></Link>
+                    </nav>
                 </div>
             </header>
 
-            {/* Hero */}
-            <section className="relative overflow-hidden border-b border-border grid-bg">
-                <div className="mx-auto max-w-[1400px] px-6 py-20 lg:py-32">
-                    <div className="grid grid-cols-1 gap-16 lg:grid-cols-2 lg:items-center">
-                        <motion.div
-                            initial={{ opacity: 0, y: 24 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-                        >
-                            <h1 className="font-display max-w-2xl text-5xl font-black leading-[1.05] tracking-tighter md:text-7xl">
-                                Turn classroom audio into <span className="bg-accent text-accent-foreground px-2">exam intelligence.</span>
-                            </h1>
-                            <p className="mt-6 max-w-xl text-lg leading-relaxed text-muted-foreground">
-                                Upload heavy lecture recordings. We strip the professor's filler and ship structured notes, spaced-repetition flashcards, and instant quizzes directly to your dashboard.
-                            </p>
-                            <div className="mt-10 flex flex-wrap gap-4">
-                                <Link href="/signup" data-testid="hero-cta-signup">
-                                    <Button size="lg" className="h-12 px-8 text-base font-bold">
-                                        <Microphone size={20} weight="duotone" className="mr-2" />
-                                        Launch Studio
-                                    </Button>
-                                </Link>
-                                <Link href="#demo" data-testid="hero-cta-demo">
-                                    <Button variant="outline" size="lg" className="h-12 px-8 text-base font-semibold">
-                                        See how it works
-                                    </Button>
-                                </Link>
-                            </div>
-                        </motion.div>
-                        
-                        <motion.div
-                            initial={{ opacity: 0, scale: 0.95 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            transition={{ duration: 0.8, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
-                            className="relative lg:block"
-                        >
-                            <StudyPreview />
-                        </motion.div>
-                    </div>
-                </div>
-            </section>
-            
-            {/* Trust Bar */}
-            <section className="border-b border-border bg-muted/30 py-8">
-                <div className="mx-auto max-w-[1400px] px-6">
-                    <div className="flex flex-wrap items-center justify-center gap-8 text-muted-foreground/60 md:gap-16">
-                        {TRUSTED_LOGOS.map((logo) => (
-                            <div key={logo} className="font-display text-xl font-bold uppercase tracking-widest">{logo}</div>
-                        ))}
-                    </div>
+            <section className="grid-bg border-b border-border">
+                <div className="mx-auto grid min-h-[calc(100dvh-4.5rem)] max-w-[1500px] items-center gap-12 px-5 py-14 sm:px-8 lg:grid-cols-[0.9fr_1.1fr] lg:gap-20 lg:px-12 lg:py-20">
+                    <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.55, ease: [0.16, 1, 0.3, 1] }}>
+                        <div className="eyebrow text-accent">The lecture stays the source</div>
+                        <h1 className="mt-5 max-w-xl text-5xl font-extrabold leading-[0.92] tracking-[-0.075em] sm:text-6xl lg:text-7xl">Turn class time into material you can use.</h1>
+                        <p className="mt-7 max-w-xl text-lg leading-8 text-muted-foreground">Lectify keeps the recording, the clean transcript, and the study tools connected for the next time you need the idea.</p>
+                        <div className="mt-9 flex flex-wrap items-center gap-3">
+                            <Link href="/signup" data-testid="hero-cta-signup"><Button size="lg" className="h-12 px-6 font-bold">Create account <ArrowRight size={18} weight="bold" /></Button></Link>
+                            <a href="#workflow" data-testid="hero-cta-demo" className="inline-flex h-12 items-center gap-2 px-3 text-sm font-semibold text-muted-foreground underline decoration-border decoration-2 underline-offset-4 transition hover:text-foreground hover:decoration-accent">See the workflow</a>
+                        </div>
+                        <div className="mt-12 flex flex-wrap gap-x-7 gap-y-3 border-t border-border pt-5 font-mono text-[0.65rem] uppercase tracking-[0.12em] text-muted-foreground"><span className="flex items-center gap-2"><Checks size={14} className="text-accent" /> class-scoped</span><span className="flex items-center gap-2"><Checks size={14} className="text-accent" /> async by design</span><span className="flex items-center gap-2"><Checks size={14} className="text-accent" /> source-grounded</span></div>
+                    </motion.div>
+
+                    <motion.div initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.7, delay: 0.12, ease: [0.16, 1, 0.3, 1] }}>
+                        <StudyPreview />
+                    </motion.div>
                 </div>
             </section>
 
-            {/* Asymmetric Bento */}
-            <section id="demo" className="bg-background py-24 lg:py-32">
-                <div className="mx-auto max-w-[1400px] px-6">
-                    <h2 className="font-display mb-16 max-w-2xl text-4xl font-black tracking-tighter md:text-5xl">
-                        A rigorous academic pipeline. <br className="hidden md:block"/> No generic AI summaries.
-                    </h2>
-                    
-                    <div className="grid grid-cols-1 gap-6 md:grid-cols-3 lg:grid-cols-4">
-                        {/* High density notes */}
-                        <div className="col-span-1 flex flex-col justify-between rounded-xl border border-border bg-card p-8 md:col-span-2 lg:col-span-2">
-                            <div>
-                                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-                                    <Sparkle size={24} weight="duotone" />
-                                </div>
-                                <h3 className="font-display text-2xl font-bold tracking-tight">De-noised Transcripts</h3>
-                                <p className="mt-3 max-w-md leading-relaxed text-muted-foreground">
-                                    We edit out "umms", administrative rambling, and coughing. You get clean, highly-structured bullet points highlighting definitions and core exam concepts.
-                                </p>
-                            </div>
-                            <div className="mt-8 rounded-lg border border-border bg-muted/40 p-4 font-mono text-xs text-muted-foreground">
-                                &gt; processing chunk_01... <br/>
-                                &gt; identifying core_concept: Backpropagation <br/>
-                                <span className="text-accent font-bold">&gt; tagging priority: HIGH_EXAM_PROBABILITY</span>
-                            </div>
-                        </div>
-                        
-                        {/* Flashcards */}
-                        <div className="col-span-1 rounded-xl border border-border bg-primary p-8 text-primary-foreground md:col-span-1 lg:col-span-2">
-                            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-accent text-accent-foreground">
-                                <BookOpen size={24} weight="duotone" />
-                            </div>
-                            <h3 className="font-display text-2xl font-bold tracking-tight text-white">Active Recall Decks</h3>
-                            <p className="mt-3 leading-relaxed text-primary-foreground/80">
-                                Automatically generated spaced-repetition flashcards ensure you don't just read the notes—you actually retain them for the final.
-                            </p>
-                        </div>
-                        
-                        {/* Instant Quizzes */}
-                        <div className="col-span-1 rounded-xl border border-border bg-card p-8 md:col-span-1 lg:col-span-2">
-                            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-muted text-foreground">
-                                <Lightning size={24} weight="duotone" />
-                            </div>
-                            <h3 className="font-display text-2xl font-bold tracking-tight">Instant Quizzes</h3>
-                            <p className="mt-3 leading-relaxed text-muted-foreground">
-                                Test yourself immediately after the lecture. 5+ multiple-choice questions graded instantly with deep-dive explanations.
-                            </p>
-                        </div>
-                        
-                        {/* Multilingual */}
-                        <div className="col-span-1 rounded-xl border border-border bg-card p-8 md:col-span-2 lg:col-span-2">
-                            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-muted text-foreground">
-                                <Translate size={24} weight="duotone" />
-                            </div>
-                            <h3 className="font-display text-2xl font-bold tracking-tight">Global Terminology</h3>
-                            <p className="mt-3 leading-relaxed text-muted-foreground">
-                                Recognizes heavy accents and specialized academic jargon across medical, engineering, and humanities domains.
-                            </p>
-                        </div>
-                    </div>
+            <section id="workflow" className="mx-auto max-w-[1500px] px-5 py-20 sm:px-8 lg:px-12 lg:py-28">
+                <div className="max-w-2xl">
+                    <h2 className="text-4xl font-extrabold leading-none tracking-[-0.065em] sm:text-5xl">One lecture. Three useful passes.</h2>
+                    <p className="mt-5 max-w-xl text-base leading-7 text-muted-foreground">The product follows the way a lecture is actually used: capture it, make it legible, then return to the parts worth remembering.</p>
+                </div>
+                <div className="module-grid mt-12 grid-cols-1 md:grid-cols-3">
+                    {PIPELINE.map(({ number, title, body, icon: Icon }) => (
+                        <article key={number} className="module-cell min-h-[260px] transition hover:bg-muted/45">
+                            <div className="flex items-start justify-between"><span className="font-mono text-xs text-accent">{number}</span><Icon size={23} weight="bold" className="text-accent" /></div>
+                            <h3 className="mt-16 text-2xl font-extrabold leading-none tracking-[-0.05em]">{title}</h3>
+                            <p className="mt-4 text-sm leading-7 text-muted-foreground">{body}</p>
+                        </article>
+                    ))}
                 </div>
             </section>
 
-            {/* Minimal CTA */}
-            <section className="border-t border-border bg-primary text-primary-foreground">
-                <div className="mx-auto max-w-4xl px-6 py-24 text-center">
-                    <h2 className="font-display text-4xl font-black leading-tight tracking-tighter md:text-6xl text-white">
-                        Stop taking notes. <br/> Start retaining.
-                    </h2>
-                    <div className="mt-10 flex justify-center">
-                        <Link href="/signup">
-                            <Button size="lg" className="h-14 px-10 text-lg font-bold bg-accent text-accent-foreground hover:bg-accent/90">
-                                Launch Studio <ArrowRight size={20} className="ml-2" />
-                            </Button>
-                        </Link>
-                    </div>
+            <section className="border-y border-border bg-[hsl(var(--shell-rail))] text-white">
+                <div className="mx-auto grid max-w-[1500px] gap-12 px-5 py-20 sm:px-8 lg:grid-cols-[1fr_auto] lg:items-end lg:px-12 lg:py-24">
+                    <div><div className="eyebrow text-accent">A better return path</div><h2 className="mt-5 max-w-3xl text-4xl font-extrabold leading-[0.95] tracking-[-0.07em] sm:text-6xl">Stop searching through recordings. Start from the idea.</h2></div>
+                    <Link href="/signup" data-testid="footer-cta"><Button size="lg" className="h-12 bg-accent px-6 font-bold text-accent-foreground hover:bg-accent/90">Create account <ArrowRight size={18} weight="bold" /></Button></Link>
                 </div>
             </section>
 
-            <footer className="border-t border-border bg-background">
-                <div className="mx-auto flex max-w-[1400px] flex-col md:flex-row items-center justify-between px-6 py-8 text-sm font-medium text-muted-foreground">
-                    <div className="flex items-center gap-2">
-                        <GraduationCap size={16} weight="fill" className="text-primary" />
-                        © {new Date().getFullYear()} LectureMind
-                    </div>
-                    <div className="mt-4 md:mt-0 font-mono text-xs">v1.0.0-rc.1 · System Nominal</div>
-                </div>
-            </footer>
-        </div>
+            <footer className="mx-auto flex max-w-[1500px] flex-col gap-3 px-5 py-7 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between sm:px-8 lg:px-12"><div className="flex items-center gap-2 font-semibold text-foreground"><GraduationCap size={16} className="text-accent" weight="bold" /> Lectify</div><div className="font-mono uppercase tracking-[0.1em]">lecture intelligence · {new Date().getFullYear()}</div></footer>
+        </main>
     );
 }

@@ -33,7 +33,17 @@ Rules:
 ## Status
 
 Living project status, updated after every feature lands.
-**Last updated:** 2026-10-05 (Phase 16 executed — Presigned Upload & End-to-End Pipeline, all 3 plans)
+**Last updated:** 2026-10-09 (frontend redesign on `feat/frontend-redesign`)
+
+### What was added (Frontend redesign — full role-based app surface)
+
+- **Replacement visual system and shell** (`frontend/src/index.css`, `frontend/src/components/AppShell.jsx`, `frontend/tailwind.config.js`): introduced the compact academic index system with Noto Sans, signal-red focus/state, graphite shell rail, responsive mobile navigation, visible focus states, selection/scrollbar styling, and shared panel/data-row primitives.
+- **Public and role-based surfaces** (`frontend/src/cra-pages/LandingPage.jsx`, `AuthPage.jsx`, `StudentDashboard.jsx`, `TeacherDashboard.jsx`, `UploadLecturePage.jsx`, `LectureDetailPage.jsx`, `ReviewPage.jsx`, `BookmarksPage.jsx`, `AdminDashboard.jsx`): redesigned the landing, auth, student, teacher, admin, upload, lecture study, review, and saved-item flows while preserving API calls, roles, test IDs, async states, and class-scoped behavior.
+- **Flow hardening** (`frontend/app/layout.tsx`, auth/protected layouts, `frontend/src/lib/auth.jsx`, lecture metadata route, `frontend/next.config.mjs`): moved auth context to the root, removed React Router/Next Router mixing from active App Router pages, preserved login redirect targets, fixed invalid JSX wrappers, added PDF export handling, and added a branded favicon.
+- **Test and design artifacts** (`PRODUCT.md`, `DESIGN.md`, `.impeccable/`, `frontend/vitest.config.mjs`): recorded product truth and visual direction, configured stable single-worker Vitest execution, and ran the mechanical Impeccable detector with no findings.
+- **Test counts (new green / total green):** 0 new frontend tests / 15 frontend tests passing; production build passing; public/protected route smoke checks passing (protected routes correctly redirect to `/login?redirect=...`).
+- **New graph nodes:** graphify updated to 3,384 nodes / 8,111 edges / 172 communities; `graphify explain "AppShell"` and `graphify explain "Button"` confirm the redesigned shell and control primitive are indexed.
+- **Next card in queue:** Phase 16 verification (human UAT of the live upload-to-ready flow and DLQ redrive), followed by Phase 17.
 
 ### What was added (Phase 16 — Presigned Upload & End-to-End Pipeline, Plans 01-03)
 

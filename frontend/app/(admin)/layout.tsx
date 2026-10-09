@@ -11,11 +11,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   useEffect(() => {
     if (!loading && (!user || user.role !== "admin")) {
-      router.push("/");
+      router.push("/login");
     }
   }, [user, loading, router]);
 
-  if (loading) return null;
+  if (loading) return <div className="min-h-[100dvh] animate-pulse bg-muted/40" />;
   if (!user || user.role !== "admin") {
     return null;
   }

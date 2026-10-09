@@ -3,6 +3,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: "standalone",
+  turbopack: {
+    root: process.cwd(),
+  },
   async rewrites() {
     if (process.env.NODE_ENV === "production") {
       return [];
