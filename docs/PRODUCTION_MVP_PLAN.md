@@ -18,9 +18,9 @@ Deliver a stable system that can:
 
 ## 2) Architecture (MVP Production-Ready)
 - API: FastAPI
-- Queue: RabbitMQ or Redis Queue
+- Queue: SQS Standard, 3 stage queues + shared DLQ, idempotency in Postgres jobs table
 - Workers: Python workers (AI pipeline)
-- Storage: S3/MinIO
+- Storage: S3 (AWS; presigned browser upload)
 - DB: Postgres (primary)
 - Monitoring: Prometheus + Grafana (basic)
 
@@ -45,7 +45,7 @@ Phase B: Recording + Upload Flow
 - Teacher Start/Stop button
 - Upload after stop
 - Audio chunking (long sessions)
-- Store in S3/MinIO immediately
+- Store in S3 immediately
 - Status tracking for lecture processing
 
 Phase C: Queue + Worker System

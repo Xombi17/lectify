@@ -33,7 +33,18 @@ Rules:
 ## Status
 
 Living project status, updated after every feature lands.
-**Last updated:** 2026-10-06 (Phase 17 executed — Observability & Scaling, Plans 01-04; live checkpoint pending)
+**Last updated:** 2026-10-09 (Phase 18 live runs done; pending verify-work)
+
+### What was added (Phase 18 - Load Test, Capacity Report, Runbook & Docs)
+
+- **StubProvider gate (18-01)** (`backend/services/ai_service.py`): `STUB_PROVIDERS=1` honoured only in aws/demo/staging; only transcription sleeps `STUB_DELAY_S`.
+- **`infra/cdk/scripts/scale-demo.sh`**: stub-on / run / stub-off for the VER-03 scale-out demo, logs to `cdk.out/`.
+- **Load tooling (18-02)**: `backend/scripts/load_users.py` (seed/mint), `loadtest/browse.js`, `loadtest/login_storm.js`, `docs/CAPACITY_REPORT.md` template.
+- **Docs (18-03)**: `docs/AWS_RUNBOOK.md`, stale-doc sweep (Mongo, Rabbit queue, Redis and MinIO no longer described as production architecture; Python versions stated).
+- **Test counts:** 38 passed (stub providers + presign), 8 passed (load_users + seed_demo).
+- **Scale-out demo (18-04, live):** stubbed 31-job backlog took the worker ASG 1 -> 3 in about 2 min and back to 1 about 19 min after the backlog drained (scale-in confirmed from ASG activities and alarm history; the script's 40 min timeout was too short). Live run found and fixed two defects: wrong assignments URL in `scale-demo.sh`, and the API role lacked `sqs:GetQueueAttributes` (`upload-complete` returned 500).
+- **Load test (18-05):** Load test: 20 concurrent users sustained at p95 < 1 s vs ~2,000 target (not met, ~100x short; 25 users already p95 2.3 s). First bottleneck: API DB connection pool (RDS connections peaked at 7 = pool 5 + overflow 2) while web CPU max 11% and RDS CPU max 8%. Login storm (5/s for 2 min) separately: p95 31.7 s, 10.6% errors. Details in `docs/CAPACITY_REPORT.md`.
+- **Next card in queue:** verify-work for Phase 18.
 
 ### What was added (ChatGPT-adjudicated schema fixes: progression + teaching instances)
 
@@ -292,11 +303,11 @@ See [.planning/PROJECT.md](.planning/PROJECT.md) for full project context — re
 
 ## Technology Stack
 
-- **Backend:** Python 3.14, FastAPI, SQLAlchemy (async), Pydantic
+- **Backend:** Python 3.11 on AWS instances (3.14 local dev), FastAPI, SQLAlchemy (async), Pydantic
 - **Frontend:** React 19 + TypeScript
 - **Database:** PostgreSQL (Neon), SQLite for tests
-- **Storage:** MinIO (S3-compatible)
-- **Queue:** Redis/RabbitMQ (Phase 5 — not yet implemented)
+- **Storage:** S3 (AWS) / local filesystem or MinIO (local dev)
+- **Queue:** SQS (AWS) / SQL-table backend (local), Postgres jobs-table idempotency (Phase 13/14)
 - **AI:** Google Gemini 3.7 Flash (transcription, summarization, quiz/flashcard gen)
 - **Auth:** Custom JWT with role-based access (admin, teacher, student)
 - **Search:** Lexical + cosine similarity
@@ -331,7 +342,7 @@ The backend follows a layered architecture:
 5. **Core** (`core/`) — Config, security, DB session, dependency providers
 
 Key integrations:
-- **MinIO** for lecture audio file storage
+- **S3** (AWS) / MinIO (local) for lecture audio file storage
 - **Neon (Postgres)** via SQLAlchemy async engine
 - **Gemini 3.7 Flash** for all AI tasks
 - **Graphify** for codebase knowledge graph

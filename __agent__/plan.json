@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "items": [
+    {
+      "title": "Load phase execution workflow and inspect Phase 12 plans",
+      "status": "done"
+    },
+    {
+      "title": "Analyze plan dependencies and execute plans by wave",
+      "status": "done"
+    },
+    {
+      "title": "Run phase verification and update project state",
+      "status": "in-progress"
+    },
+    {
+      "title": "Update CLAUDE.md status and report results",
+      "status": "pending"
+    }
+  ],
+  "updated_at": "2026-10-09T16:21:05.445Z",
+  "session_id": "01a12172-06f9-73af-af12-cdf4cb0e8542"
+}

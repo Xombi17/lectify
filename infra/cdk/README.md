@@ -1,5 +1,7 @@
 # Lectify CDK
 
+Operator entry point: [docs/AWS_RUNBOOK.md](../../docs/AWS_RUNBOOK.md).
+
 BudgetStack + NetworkStack + DataStack + ComputeStack. Region default ap-southeast-2.
 
 ## 1. Prerequisites
@@ -221,7 +223,7 @@ Worker ASG min 1, max 3, with `DesiredCapacity` removed from the template (redep
 - `WorkerScaleOut`: backlog >= 5 adds 1, >= 20 adds 2; instance warmup 300 s.
 - `WorkerScaleIn`: backlog <= 1 for 15 consecutive 1-minute datapoints removes 1. Step scaling has no cooldown, so this long evaluation is the scale-in damping.
 
-Verify live: `aws autoscaling describe-auto-scaling-groups` and `aws autoscaling describe-policies --auto-scaling-group-name <name>`. The scale-out demo is deferred to Phase 18.
+Verify live: `aws autoscaling describe-auto-scaling-groups` and `aws autoscaling describe-policies --auto-scaling-group-name <name>`. The scale-out demo is in the runbook, section 9 ([docs/AWS_RUNBOOK.md](../../docs/AWS_RUNBOOK.md)).
 
 ## 12. Pause and resume (save credits)
 

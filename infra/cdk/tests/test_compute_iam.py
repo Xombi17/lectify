@@ -122,6 +122,7 @@ def test_api_role_permissions(t_compute):
     assert "s3:GetObject" in all_actions
     assert "s3:AbortMultipartUpload" in all_actions
     assert "sqs:SendMessage" in all_actions
+    assert "sqs:GetQueueAttributes" in all_actions  # enqueue_job reads queue depth
     assert "secretsmanager:GetSecretValue" in all_actions
     assert "ssm:GetParametersByPath" in all_actions
 

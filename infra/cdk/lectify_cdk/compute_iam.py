@@ -74,11 +74,11 @@ def build_api_role(
         )
     )
 
-    # 2. SQS: Send message to stage queues only
+    # 2. SQS: Send message + read depth (enqueue_job calls get_queue_attributes) on stage queues only
     stage_queue_arns = [q.queue_arn for q in data.queues.values()]
     role.add_to_policy(
         iam.PolicyStatement(
-            actions=["sqs:SendMessage"],
+            actions=["sqs:SendMessage", "sqs:GetQueueAttributes"],
             resources=stage_queue_arns,
         )
     )

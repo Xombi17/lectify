@@ -22,7 +22,7 @@ Phase 13 (offline queue/storage seams), Phase 13.1 (offline class-scoped access 
 - [x] **Phase 15: Compute Tier & Delivery** - ALB, API/web ASG, worker ASG, per-tier IAM, unattended bootstrap, schema bootstrap on RDS (completed 2026-10-05)
 - [ ] **Phase 16: Presigned Upload & End-to-End Pipeline** - Browser-direct S3 upload and one real lecture through every stage, plus the forced-failure DLQ proof
 - [ ] **Phase 17: Observability & Scaling** - CloudWatch logs, alarms, dashboard, ops SNS topic, and queue-backlog step scaling
-- [ ] **Phase 18: Load Test, Capacity Report, Runbook & Docs** - Scale-out demo, load test with honest capacity numbers, runbook and doc updates
+- [x] **Phase 18: Load Test, Capacity Report, Runbook & Docs** - Scale-out demo, load test with honest capacity numbers, runbook and doc updates (completed 2026-10-09)
 
 ## Phase Details
 
@@ -248,7 +248,24 @@ Plans:
   3. `docs/AWS_RUNBOOK.md` lets an operator deploy, run the secrets put-script, bootstrap the schema, redrive the DLQ, tear down, and understand cost notes
   4. CLAUDE.md Status/Stack and stale docs (Python 3.11, queue, storage) reflect the AWS architecture
 
-**Plans**: TBD
+**Plans**: 5 plans
+Plans:
+**Wave 1**
+
+- [x] 18-01-PLAN.md — Env-gated StubProvider + scale-demo.sh (stub-on/stub-off/run) (VER-03)
+- [x] 18-02-PLAN.md — load_users.py seed/mint, k6 browse + login storm scripts, CAPACITY_REPORT template (VER-04)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [x] 18-03-PLAN.md — docs/AWS_RUNBOOK.md + stale-doc sweep + CLAUDE.md Stack/Status (VER-05)
+
+**Wave 3** *(non-autonomous, live AWS)*
+
+- [x] 18-04-PLAN.md — Live provider-stubbed scale-out/in demo, evidence into report (VER-03)
+
+**Wave 4** *(non-autonomous, live AWS)*
+
+- [x] 18-05-PLAN.md — k6 install gate, live load test + login storm, complete capacity report + CLAUDE.md (VER-04, VER-05)
 
 ## Progress
 
@@ -261,4 +278,4 @@ Plans:
 | 15. Compute Tier & Delivery | 0/TBD | Not started | - |
 | 16. Presigned Upload & End-to-End Pipeline | 0/TBD | Not started | - |
 | 17. Observability & Scaling | 0/TBD | Not started | - |
-| 18. Load Test, Capacity Report, Runbook & Docs | 0/TBD | Not started | - |
+| 18. Load Test, Capacity Report, Runbook & Docs | 5/5 | Complete    | 2026-10-09 |

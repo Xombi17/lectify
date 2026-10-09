@@ -8,10 +8,13 @@ Also supports NVIDIA NIM (OpenAI-compatible) for text generation and embeddings.
 Select provider via AI_PROVIDER env var ("nim" | "gemini").
 """
 
+import asyncio
 import email.utils
 import functools
 import json
 import logging
+import math
+import os
 import re
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone
@@ -734,6 +737,59 @@ def _valid_card(c: dict) -> bool:
     )
 
 
+# ── Stub Provider (scale-out demo, VER-03) ─────────────────────────────────────
+
+
+def stub_providers_enabled() -> bool:
+    """True only for STUB_PROVIDERS=1 AND ENV in aws/demo/staging (inert in production)."""
+    return os.environ.get("STUB_PROVIDERS") == "1" and os.environ.get(
+        "ENV", "production"
+    ).lower() in ("aws", "demo", "staging")
+
+
+_STUB_MATERIALS = StudyMaterials(
+    summary="Stub summary for scale-out demo.",
+    smart_notes=["Stub note one.", "Stub note two."],
+    key_concepts=["stub concept a", "stub concept b"],
+    quiz=[
+        QuizQuestion(
+            question="Stub question?",
+            options=["A", "B", "C", "D"],
+            answer_index=0,
+            explanation="Stub.",
+        )
+    ],
+    flashcards=[Flashcard(front="Stub front", back="Stub back")],
+)
+
+
+class StubProvider(AIProvider):
+    """Canned, free provider. Only transcribe sleeps, to keep the SQS backlog alive."""
+
+    async def transcribe_audio(self, audio_path: Path, mime_type: str) -> str:
+        await asyncio.sleep(float(os.environ.get("STUB_DELAY_S", "60")))
+        return "This is a stub transcript used for the scale-out demo."
+
+    async def generate_study_materials(self, transcript: str) -> StudyMaterials:
+        return _STUB_MATERIALS.model_copy(deep=True)
+
+    async def digest_chunk(self, chunk_transcript: str) -> dict:
+        return {"summary": "stub", "key_concepts": ["stub"]}
+
+    async def merge_chunk_digests(self, digests: list[dict]) -> StudyMaterials:
+        return _STUB_MATERIALS.model_copy(deep=True)
+
+    async def chat(self, transcript: str, history: list[dict], question: str) -> str:
+        return "Stub answer."
+
+    async def translate_pack(self, pack: dict, target_language: str) -> dict:
+        return pack
+
+    async def embed(self, text: str) -> list[float]:
+        # unit vector, 768 dims to match text-embedding-004 rows
+        return [1 / math.sqrt(768)] * 768
+
+
 # ── Factory ────────────────────────────────────────────────────────────────────
 
 _provider: Optional[AIProvider] = None
@@ -746,6 +802,12 @@ def get_ai_service() -> AIProvider:
     - "gemini" (default) → GeminiProvider (requires GEMINI_API_KEY)
     """
     global _provider
+    if _provider is None and stub_providers_enabled():
+        _provider = StubProvider()
+        logger.warning(
+            "AI provider: STUB (STUB_PROVIDERS=1, ENV=%s) - no real provider calls",
+            os.environ.get("ENV"),
+        )
     if _provider is None:
         provider_name = settings.AI_PROVIDER.lower()
 

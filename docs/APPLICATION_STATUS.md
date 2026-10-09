@@ -1,18 +1,20 @@
 # Application Status — Lectify
 
-**Last updated:** 2026-06-08
+**Last updated:** 2026-10-09
+
+CLAUDE.md Status is the source of truth; this table is a summary.
 
 ## Build State vs PRODUCTION_MVP_PLAN
 
 | Phase | Scope | Status | Notes |
 |-------|-------|--------|-------|
-| **A — Academic hierarchy** | Institution/Year/Branch/Semester/Subject/Division/Class + admin CRUD + RBAC + QR enrollment | **PARTIAL** | Data layer done (Card 1). Admin APIs + UI pending. |
+| **A — Academic hierarchy** | Institution/Year/Branch/Semester/Subject/Division/Class + admin CRUD + RBAC + QR enrollment | **DONE** | Admin APIs + UI, assignments, QR enrollment (Phases 1-4). |
 | **B — Recording + upload** | Upload, store, transcribe | **DONE** | `routes/lectures.py` + `services/storage_service.py` |
-| **C — Queue + worker** | Redis queue, retry, DLQ, priority | **NOT STARTED** | Processing currently inline (violates non-negotiable) |
+| **C — Queue + worker** | SQS queues, retry, DLQ, idempotency | **DONE** | SQS workers, Phases 13/14; DLQ redrive in Phase 16 |
 | **D — AI pipeline** | Hierarchical chunking, embeddings, summary, notes, quiz, flashcards, exam-tag | **DONE** | `services/ai_service.py` (Gemini 3.7 Flash) |
 | **E — Student features** | Dashboard, search, study, bookmarks, chat | **DONE** | `routes/study.py`, `routes/search.py`, `routes/dashboard.py` |
-| **F — Monitoring** | Prometheus, /metrics, Grafana, SLA tracking | **NOT STARTED** | "95% lectures same-day" SLA unmeasurable today |
-| **H — QR enrollment** | QR per class, scan-to-enroll | **NOT STARTED** | Card 4 |
+| **F — Monitoring** | Prometheus, CloudWatch alarms, dashboard | **DONE** | Prometheus Phase 7; CloudWatch alarms + dashboard Phase 17 |
+| **H — QR enrollment** | QR per class, scan-to-enroll | **DONE** | Phase 3 |
 | **I — Auth polish** | Admin role enforcement, RBAC across all routes | **PARTIAL** | `core/deps.py` has admin/teacher/student guards |
 
 ## Card Status
@@ -35,8 +37,6 @@
 
 ## Immediate Blockers
 
-1. **Phase C (Queue + worker)** — Not started; currently violates "queue-driven pipelines for scale" rule
-2. **Phase A.2–A.5** — Admin APIs, teacher assignments, QR enrollment, admin UI all pending
-3. **Phase F (Monitoring)** — No observability; SLA unmeasurable
+None blocking. Phase 18 live runs (scale-out demo, load test) are pending; see CLAUDE.md Status.
 
-The data layer and AI pipeline are solid. The main gaps are **queue infrastructure** and **admin-facing features**.
+Queue, admin features and observability are in place; remaining work is live verification.

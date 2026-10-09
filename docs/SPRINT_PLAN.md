@@ -11,7 +11,7 @@ Deliverables:
 - Finalized PRODUCTION_MVP_PLAN.md (already created)
 - Data model draft (ERD in docs or diagram later)
 - Env config plan (.env.example to be added in next sprint)
-- Queue selection decision (RabbitMQ or Redis Queue)
+- Queue selection decision (RabbitMQ or Redis Queue) (decided: SQS + S3, see docs/AWS_RUNBOOK.md)
 
 
 ## Sprint 1 (Week 3–4): Admin Hierarchy Core (Phase A)
@@ -56,7 +56,7 @@ Features:
 
 Deliverables:
 - Teacher recording flow UI
-- Upload pipeline (S3/MinIO)
+- Upload pipeline (S3; MinIO for local dev) (decided: SQS + S3, see docs/AWS_RUNBOOK.md)
 - Processing status screen
 
 

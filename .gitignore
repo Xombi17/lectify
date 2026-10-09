@@ -135,3 +135,5 @@ prisma/generated/
 
 *.mp3
 *.wav
+# Load test outputs (tokens, summaries)
+loadtest/out/

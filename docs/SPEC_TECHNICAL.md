@@ -3,8 +3,8 @@
 ## 1) Architecture
 - API: FastAPI
 - DB: Postgres
-- Storage: S3/MinIO
-- Queue: RabbitMQ or Redis Queue
+- Storage: S3 (AWS; presigned browser upload)
+- Queue: SQS Standard, 3 stage queues + shared DLQ, idempotency in Postgres jobs table
 - Workers: Python AI workers
 
 ## 2) Core Services

@@ -8,18 +8,17 @@
 
 ```
 lectify/
-├── backend/          # FastAPI application (Python 3.11+)
+├── backend/          # FastAPI application (Python 3.11 on AWS instances; local dev tested on 3.14)
 │   ├── core/          # Config, DB connections, auth, security
 │   ├── models/        # Pydantic + SQLAlchemy ORM models
-│   ├── repositories/  # Data-access layer (Mongo ↔ SQL dispatcher)
-│   │   ├── _mongo/    # MongoDB implementations
+│   ├── repositories/  # Data-access layer (thin dispatchers)
 │   │   └── _sql/      # SQLAlchemy async implementations
 │   ├── routes/        # API endpoints (auth, lectures, chat, search, study, analytics)
 │   ├── services/      # Business logic (AI, storage, PDF export, spaced repetition)
 │   └── tests/         # pytest suite
 ├── frontend/          # React 19 app (CRA + CRACO + Tailwind + Radix UI)
 │   └── src/           # Components, pages, API client
-├── docker-compose.yml # Production-like stack (Postgres + MinIO + backend + frontend)
+├── docker-compose.yml # Local-only stack (Postgres + MinIO + backend + frontend)
 ├── run.sh             # Single-command launcher for local dev
 └── .env.example       # Environment variable template
 ```
@@ -28,12 +27,19 @@ lectify/
 
 | Layer       | Technology                                                           |
 |-------------|----------------------------------------------------------------------|
-| Backend     | Python 3.11+, FastAPI, SQLAlchemy 2.0 (async), Motor (Mongo)         |
+| Backend     | Python 3.11 on AWS instances (3.14 local dev), FastAPI, SQLAlchemy 2.0 (async) |
 | AI          | Google Gemini 3.7 Flash (transcription, summarisation, quiz gen)     |
-| Database    | PostgreSQL 16 (prod) / SQLite (dev) or MongoDB                       |
-| Storage     | MinIO / S3 (prod) or local filesystem (dev)                          |
+| Database    | PostgreSQL 16 (prod) / SQLite (dev)                                  |
+| Storage     | S3 (AWS) / local filesystem or MinIO via docker-compose (local)      |
+| Queue       | SQS stage queues + DLQ (AWS) / SQL-table backend (local); job idempotency in Postgres |
 | Frontend    | React 19, CRACO, Tailwind CSS, Radix UI, TanStack Query, Recharts   |
 | Auth        | JWT (bcrypt + PyJWT)                                                 |
+
+---
+
+## Deploying to AWS
+
+See [docs/AWS_RUNBOOK.md](docs/AWS_RUNBOOK.md) (deploy, operate, teardown) and [docs/CAPACITY_REPORT.md](docs/CAPACITY_REPORT.md) (load-test results).
 
 ---
 
@@ -87,9 +93,9 @@ npm install && npm start
 
 ---
 
-## Docker (Production-like Stack)
+## Docker (Local-only Stack)
 
-For a full stack with PostgreSQL, MinIO, Neo4j:
+For a full local stack with PostgreSQL, MinIO, Neo4j:
 
 ```bash
 docker compose up --build -d
@@ -111,9 +117,8 @@ Before running, copy `.env.example` to `.env` and fill in the required values (`
 
 | Variable                 | Default                  | Description                            |
 |--------------------------|--------------------------|----------------------------------------|
-| `DATABASE_BACKEND`       | `mongo`                  | `postgres` (SQL) or `mongo`            |
+| `DATABASE_BACKEND`       | `postgres`               | `postgres` or `sqlite` (SQL only)      |
 | `DATABASE_URL`           | —                        | SQL connection string                  |
-| `MONGO_URL`              | —                        | MongoDB connection string              |
 | `JWT_SECRET`             | `change-me`              | HMAC secret for JWT tokens             |
 | `JWT_ALGORITHM`          | `HS256`                  | JWT signing algorithm                  |
 | `JWT_EXPIRE_MINUTES`     | `10080` (7 days)         | Token expiry                           |
@@ -180,7 +185,7 @@ cat graphify-out/GRAPH_REPORT.md
 
 ### Code Conventions
 - **AGENTS.md** and **CLAUDE.md** are the source of truth for AI agents
-- Repository pattern with dispatcher: `DATABASE_BACKEND` env var switches between Mongo and SQL implementations
+- Repository pattern with thin dispatchers over SQL implementations (SQL only)
 - All async where possible
 - Tests use monkeypatched env vars for backend selection
 
