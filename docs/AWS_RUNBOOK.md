@@ -44,11 +44,11 @@ make deploy BUDGET_EMAIL=you@example.com READY_EMAILS=you@example.com
 ## 4. Secrets
 
 ```bash
-make put-secrets            # JWT_SECRET, GROQ_API_KEY, GEMINI_API_KEY -> /lectify/* SecureString
+make put-secrets            # JWT_SECRET, GROQ_API_KEY, GEMINI_API_KEY, DEEPGRAM_API_KEY, NAGA_AI_API_KEY, NIM_API_KEY -> /lectify/* SecureString
 bash scripts/put-secrets.sh --overwrite   # replace existing values
 ```
 
-Values come from env vars or a silent prompt and are never printed. Never commit them or type them inline in shell history. Restart services (or let ASG instances refresh) after changing a value.
+Values come from env vars or a silent prompt and are never printed. Never commit them or type them inline in shell history. Restart services (or let ASG instances refresh) after changing a value. The SSM overlay maps `/lectify/<NAME>` to env `NAME` with no code change.
 
 ## 5. Schema bootstrap and seed
 
@@ -77,6 +77,8 @@ curl -i http://<AlbDnsName>/api/healthz    # api
 ```
 
 Then log in with a seeded account and run the live upload-to-ready checklist (VER-01) and DLQ proof (VER-02) in [SPEC_UPLOAD.md](SPEC_UPLOAD.md). README section 9 has the target group and systemd checks.
+
+Provider smoke (from `backend/`, keys in env): `LIVE_PROVIDER_TESTS=1 python -m scripts.smoke_providers [--audio PATH] [--skip-naga]`. Each Naga check spends 1 of the 100/day free requests; `--skip-naga` avoids it.
 
 ## 7. Operate
 
@@ -154,6 +156,7 @@ All figures are estimates as of 2026-10; verify in the Billing console.
 
 ## 14. Troubleshooting
 
+- All providers rate limited: worker logs "All STT providers failed or rate limited"; check the Naga daily budget (100/day) and Deepgram credit.
 - Scale-in never observed: stuck in-flight messages keep backlog above 1; check the queues and DLQ.
 - Scale-out slow: new worker instances need several minutes to boot and bootstrap.
 - Empty log group on first deploy: `sudo systemctl restart amazon-cloudwatch-agent` on the instance.

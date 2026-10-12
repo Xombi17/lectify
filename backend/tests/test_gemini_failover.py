@@ -9,11 +9,13 @@ sys.path.insert(0, "/app/backend")
 
 
 def _load_ai_service():
-    """Import ai_service with a stubbed google.genai (lazy import inside methods)."""
-    import importlib
+    """Import ai_service with a stubbed google.genai (lazy import inside methods).
+
+    Keep the module identity stable so exception classes remain compatible with
+    tests that import ProviderRateLimited during collection.
+    """
     import services.ai_service as m
 
-    importlib.reload(m)
     return m
 
 

@@ -76,7 +76,7 @@ class Settings:
             "NIM_BASE_URL", "https://integrate.api.nvidia.com/v1"
         )
         self.NIM_CHAT_MODEL: str = os.environ.get(
-            "NIM_CHAT_MODEL", "meta/llama-3.1-405b-instruct"
+            "NIM_CHAT_MODEL", "nvidia/nemotron-3-super-120b-a12b"
         )
         self.NIM_EMBED_MODEL: str = os.environ.get(
             "NIM_EMBED_MODEL", "nvidia/nv-embed-v1"
@@ -102,6 +102,40 @@ class Settings:
         self.TRANSCRIPTION_FALLBACK_PROVIDER: str = os.environ.get(
             "TRANSCRIPTION_FALLBACK_PROVIDER", "gemini"
         )
+
+        # Phase 19 providers
+        self.DEEPGRAM_API_KEY: str = os.environ.get("DEEPGRAM_API_KEY", "")
+        self.DEEPGRAM_MODEL: str = os.environ.get("DEEPGRAM_MODEL", "nova-3")
+        self.DEEPGRAM_LANGUAGE: str = os.environ.get("DEEPGRAM_LANGUAGE", "multi")
+        self.DEEPGRAM_KEYTERMS: list = [
+            k.strip() for k in os.environ.get("DEEPGRAM_KEYTERMS", "").split(",") if k.strip()
+        ]
+        self.DEEPGRAM_COST_PER_MINUTE: float = float(
+            os.environ.get("DEEPGRAM_COST_PER_MINUTE", "0.0043")
+        )
+        self.DEEPGRAM_TIMEOUT_S: float = float(os.environ.get("DEEPGRAM_TIMEOUT_S", "600"))
+        self.NAGA_AI_API_KEY: str = os.environ.get("NAGA_AI_API_KEY", "")
+        self.NAGA_BASE_URL: str = os.environ.get("NAGA_BASE_URL", "https://api.naga.ac/v1")
+        self.NAGA_CHAT_MODEL: str = os.environ.get(
+            "NAGA_CHAT_MODEL", "nemotron-3-super-120b-a12b:free"
+        )
+        self.NAGA_WHISPER_MODEL: str = os.environ.get(
+            "NAGA_WHISPER_MODEL", "whisper-large-v3:free"
+        )
+        self.TRANSCRIPTION_PROVIDERS: list = [
+            p.strip().lower()
+            for p in os.environ.get("TRANSCRIPTION_PROVIDERS", "deepgram,naga,gemini").split(",")
+            if p.strip()
+        ]
+        self.LLM_PROVIDERS: list = [
+            p.strip().lower()
+            for p in os.environ.get("LLM_PROVIDERS", "naga,nim,gemini").split(",")
+            if p.strip()
+        ]
+        self.PROVIDER_COOLDOWN_SECONDS: float = float(
+            os.environ.get("PROVIDER_COOLDOWN_SECONDS", "60")
+        )
+        self.LLM_TIMEOUT_S: float = float(os.environ.get("LLM_TIMEOUT_S", "120"))
 
         # Queue
         self.QUEUE_BACKEND: str = os.environ.get("QUEUE_BACKEND", "memory")

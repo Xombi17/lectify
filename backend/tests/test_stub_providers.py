@@ -59,3 +59,49 @@ def test_canned_output(monkeypatch):
     assert m.summary and m.key_concepts and m.flashcards
     assert m.quiz and len(m.quiz[0].options) == 4
     assert len(v) == 768 and math.isclose(math.sqrt(sum(x * x for x in v)), 1.0)
+
+
+@pytest.mark.asyncio
+async def test_worker_stub_path_never_calls_http(monkeypatch):
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    import httpx
+
+    from core.config import get_settings
+    from models.job import JobDB
+    from services.transcription_service import build_transcription_chain
+    from workers.base import JobContext
+    from workers.transcription import TranscriptionWorker
+
+    monkeypatch.setenv("STUB_PROVIDERS", "1")
+    monkeypatch.setenv("ENV", "aws")
+    monkeypatch.setenv("STUB_DELAY_S", "0")
+    s = get_settings()
+    monkeypatch.setattr(s, "DEEPGRAM_API_KEY", "dummy", raising=False)
+    monkeypatch.setattr(s, "NAGA_AI_API_KEY", "dummy", raising=False)
+    reset_ai_service()
+
+    chain = build_transcription_chain(get_ai_service())
+    assert [p.name for p in chain] == ["gemini"]
+
+    expected = await ai_service.StubProvider().transcribe_audio(Path("x"), "audio/wav")
+
+    class _ACM:
+        async def __aenter__(self):
+            return Path("x.mp3")
+
+        async def __aexit__(self, *a):
+            pass
+
+    repo = AsyncMock()
+    repo.get_by_id.return_value = MagicMock(audio_object_key="k", audio_mime="audio/mpeg")
+    post = AsyncMock()
+    job = JobDB(id="j", lecture_id="lec-1", stage="transcribe", version=1, status="processing")
+    with patch("workers.transcription.LectureRepository", return_value=repo), \
+         patch("workers.transcription.get_storage", return_value=MagicMock(open_local=lambda k: _ACM())), \
+         patch("workers.transcription.get_duration_seconds", AsyncMock(return_value=10.0)), \
+         patch.object(httpx.AsyncClient, "post", post):
+        await TranscriptionWorker(max_jobs=1).process_job(job, JobContext("j", 1, None, "transcribe", "r", 300))
+    stored = {k: v for c in repo.update_fields.call_args_list for k, v in c.args[1].items()}
+    assert stored["transcript"] == expected
+    post.assert_not_awaited()

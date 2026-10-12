@@ -21,6 +21,11 @@ from services.lecture_service import (
     CHUNK_THRESHOLD_SECONDS,
 )
 from services.storage_service import get_storage
+from services.transcription_service import (
+    build_transcription_chain,
+    flag_low_confidence_segments,
+    transcribe_with_failover,
+)
 
 from workers.base import BaseWorker, JobContext
 
@@ -45,7 +50,8 @@ class TranscriptionWorker(BaseWorker):
 
     - Downloads audio from storage
     - Probes duration, routes to single-shot or chunked path
-    - Transcribes using AI provider
+    - Deepgram whole-file first (no chunking); on failure the chunked chain
+      (Naga whisper per chunk, then Gemini) runs
     - Stores transcript on LectureDB
     - Returns next stage (generate_materials) to be enqueued
     """
@@ -84,7 +90,9 @@ class TranscriptionWorker(BaseWorker):
             if not lecture:
                 raise ValueError(f"Lecture {lecture_id} not found")
 
-            ai = get_ai_service()
+            chain = build_transcription_chain(get_ai_service())
+            whole = [p for p in chain if p.whole_file]
+            rest = [p for p in chain if not p.whole_file]
 
             # Download audio locally for processing
             async with storage.open_local(lecture.audio_object_key) as audio_path:
@@ -99,24 +107,51 @@ class TranscriptionWorker(BaseWorker):
 
                 await repo.update_fields(lecture_id, {"duration_seconds": duration})
 
-                if duration and duration > CHUNK_THRESHOLD_SECONDS:
-                    transcript = await self._transcribe_chunked(
-                        lecture_id,
-                        audio_path,
-                        duration,
-                        ai,
-                        repo,
-                        chunks_made,
-                        job.version,
-                    )
-                else:
-                    transcript = await self._transcribe_single(
-                        lecture_id,
-                        audio_path,
-                        lecture.audio_mime,
-                        ai,
-                        repo,
-                    )
+                transcript = ""
+                if whole:
+                    try:
+                        result = await transcribe_with_failover(
+                            whole, audio_path, lecture.audio_mime, lecture_id
+                        )
+                    except Exception as e:
+                        if not rest:
+                            raise  # ProviderRateLimited must reach workers/base.py
+                        logger.warning(
+                            "Whole-file STT failed for lecture %s (%s); falling back to chunked chain",
+                            lecture_id,
+                            type(e).__name__,
+                        )
+                    else:
+                        transcript = result.text
+                        meta = {
+                            "transcription_confidence": result.confidence,
+                            "transcription_language": result.language[:10],
+                            "transcription_cost_usd": result.cost_usd,
+                            "low_confidence_segments": flag_low_confidence_segments(result),
+                        }
+                        if not duration:
+                            meta["duration_seconds"] = result.duration_seconds
+                        await repo.update_fields(lecture_id, meta)
+
+                if not transcript:
+                    if duration and duration > CHUNK_THRESHOLD_SECONDS:
+                        transcript = await self._transcribe_chunked(
+                            lecture_id,
+                            audio_path,
+                            duration,
+                            rest,
+                            repo,
+                            chunks_made,
+                            job.version,
+                        )
+                    else:
+                        transcript = await self._transcribe_single(
+                            lecture_id,
+                            audio_path,
+                            lecture.audio_mime,
+                            rest,
+                            repo,
+                        )
 
             if not transcript:
                 raise RuntimeError("Empty transcript from AI provider")
@@ -151,20 +186,19 @@ class TranscriptionWorker(BaseWorker):
         lecture_id: str,
         audio_path: Path,
         mime: str,
-        ai,
+        providers,
         repo,
     ) -> str:
         """Transcribe a short lecture in a single pass."""
         logger.info("Single-shot transcription for lecture %s", lecture_id)
-        transcript = await ai.transcribe_audio(audio_path, mime)
-        return transcript
+        return (await transcribe_with_failover(providers, audio_path, mime, lecture_id)).text
 
     async def _transcribe_chunked(
         self,
         lecture_id: str,
         audio_path: Path,
         duration: float,
-        ai,
+        providers,
         repo,
         chunks_sink: list[Path],
         version: int,
@@ -206,7 +240,9 @@ class TranscriptionWorker(BaseWorker):
             )
 
             try:
-                chunk_text = await ai.transcribe_audio(chunk_path, CHUNK_MIME)
+                chunk_text = (
+                    await transcribe_with_failover(providers, chunk_path, CHUNK_MIME, lecture_id)
+                ).text
                 formatted_text = f"[Chunk {idx + 1} · {format_timestamp(offset)}]\n{chunk_text.strip()}"
                 await chunk_repo.mark_done(lecture_id, version, idx, formatted_text)
             except Exception as e:

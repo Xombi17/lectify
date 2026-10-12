@@ -33,7 +33,18 @@ Rules:
 ## Status
 
 Living project status, updated after every feature lands.
-**Last updated:** 2026-10-09 (Phase 18 live runs done; pending verify-work)
+**Last updated:** 2026-10-12 (Phase 19 code complete; pending verify-work)
+
+### What was added (Phase 19 - Fast transcription providers)
+
+- **STT providers** (`backend/services/transcription_service.py`): `DeepgramProvider` (Nova-3, whole file), `NagaWhisperProvider` (<= 20 MiB), `build_transcription_chain` + `transcribe_with_failover` (cooldown-aware).
+- **Worker** (`backend/workers/transcription.py`): Deepgram-first whole-file path with no ffmpeg split; failover to chunked Naga/Gemini.
+- **LLM failover** (`backend/services/ai_service.py`): `FailoverAIProvider` (naga, nim, gemini), `EmptyCompletion`, NIM default model fix, shared per-provider cooldown.
+- **Config/secrets**: `DEEPGRAM_*`, `NAGA_*`, `TRANSCRIPTION_PROVIDERS`, `LLM_PROVIDERS`, `PROVIDER_COOLDOWN_SECONDS`, `LLM_TIMEOUT_S`; `put-secrets.sh` now writes DEEPGRAM_API_KEY, NAGA_AI_API_KEY, NIM_API_KEY.
+- **Smoke**: `backend/scripts/smoke_providers.py` (opt-in `LIVE_PROVIDER_TESTS=1`). Docs: `docs/SPEC_AI.md`, `docs/AWS_RUNBOOK.md`, `infra/cdk/README.md`.
+- **Spike**: `DEEPGRAM_LANGUAGE=multi` won on a Hinglish lecture (`19-LANGUAGE-SPIKE.md`).
+- **Test counts:** 24 provider tests, LLM failover tests, 5 new worker tests; 303 passed, 3 skipped.
+- **Next card in queue:** verify-work for Phase 19 (live upload-to-ready timing vs Gemini baseline).
 
 ### What was added (Phase 18 - Load Test, Capacity Report, Runbook & Docs)
 
@@ -83,7 +94,8 @@ Living project status, updated after every feature lands.
 - **ObservabilityStack (17-03)** (`infra/cdk/lectify_cdk/observability_stack.py`): `/lectify/{api,web,worker}` log groups (7d), dead-letter metric filter, 7 ops alarms + 2 scaling alarms, `WorkerScaleOut`/`WorkerScaleIn` step policies (max 3), `lectify-overview` dashboard.
 - **Docs (17-04)**: `infra/cdk/README.md` section 11 (topic confirmation, test alarm, alarms, logs, dashboard, scaling); `make destroy` removes ObservabilityStack, BudgetStack persists.
 - **Test counts:** CDK 65 passed (53 -> 57 -> 65); backend 36 passed in the touched worker/presign suites.
-- **Next card in queue:** Phase 17 live verification (17-04 Task 2: confirm subscription, test alarm, logs, dashboard, policies), then verify-work, then Phase 18.
+- **Live verification:** Phase 17 UAT passed all 8 checks, including confirmed ops alarm delivery, dashboard rendering, logs, and worker scaling; `17-SECURITY.md` records `threats_open: 0`.
+- **Next card in queue:** Phase 16 live UAT (`/gsd-verify-work 16`) for upload-to-ready, DLQ recovery, and playback; Phase 17 is verified.
 
 ### What was added (Phase 16 — Presigned Upload & End-to-End Pipeline, Plans 01-03)
 
@@ -96,8 +108,9 @@ Living project status, updated after every feature lands.
   - Ready/Processing/Failed pills per UI-SPEC, extended 4s poll to uploading/queued/retrying, presigned audio preferred with blob fallback, dead_letter hides player.
 - **DLQ proof + redrive + docs (16-03)** (`backend/workers/transcription.py`, `POST /lectures/{id}/retry`, `infra/cdk/scripts/redrive-dlq.sh`, `infra/cdk/README.md` §10, `docs/SPEC_UPLOAD.md`):
   - Env-gated `FORCE_FAIL_LECTURE_ID` hook (aws/demo/staging only), `receive_count` 5 dead_letter unit proof, admin-only retry with version-bumped job, executable redrive script via `start-message-move-task`, SPEC contract + VER-01/VER-02 operator checklist.
+  - Gap closure: upload-complete now rejects non-upload re-entry (including `dead_letter`/`error`) before storage inspection, and all redrive docs enforce one recovery mechanism per lecture.
 - **Test counts (new green / total green):**
-  - Backend: 20 new (test_upload_presign.py) / 213 passed, 3 skipped full suite.
+  - Backend: 24 upload tests; 250 passed, 3 skipped full suite after Phase 16 gap closure and Phase 13 test-isolation refresh.
   - Frontend: 9 new (uploadS3.test.js) / 15 passed full suite.
   - CDK: 10 passed (test_data.py + test_secrets_hygiene.py, unchanged).
 - **Next card in queue:** Phase 16 pending verify-work (human UAT: live ALB upload-to-ready + DLQ redrive); then Phase 17.
@@ -153,16 +166,18 @@ Living project status, updated after every feature lands.
   - Workers poll stage-keyed queues (`transcribe`, `generate_materials`, `embed`) matching what `enqueue_job` sends to.
   - `ENV` now defaults to `production` (set `ENV=dev` for local runs; `DEV_ENVS = dev/test/local`).
   - Live-HTTP test files ignored at collection unless `REACT_APP_BACKEND_URL` is set.
-- **Test counts:** 142 passed, 3 skipped in backend offline suite (all tests green on memory backend).
-- **New graph nodes:** (Graph update skipped; graphify not installed)
-- **Next card in queue:** Phase 13.1 — Class-Scoped Access & Timetable
+- **Test counts:** 250 passed, 3 skipped in the backend offline suite after the gap-closure refresh.
+- **Verification:** `13-VERIFICATION.md` now passes 7/7 roadmap criteria; Phase 13 requirements QUEUE-04/06/07/08 remain Complete.
+- **New graph nodes:** no source graph changes in this refresh; graphify metadata is unchanged.
+- **Next card in queue:** Phase 16 human UAT (`/gsd-verify-work 16`) for live upload, ready notification, DLQ recovery, and playback.
 
 ### What was added (Phase 12 — Account Gate, Budget, CDK Skeleton & Network)
 
 - **CDK Infrastructure Foundation** — Self-contained AWS CDK app in `infra/cdk/` (`app.py`, `budget_stack.py`, `network_stack.py`) with zero-NAT VPC, 4 subnets, S3 gateway endpoint, 4 security groups, and cost budget alarms ($50 default with 4 threshold alerts excluding credits).
 - **Automation & Operator Tooling** — `infra/cdk/Makefile` with one-command deploy/destroy/preflight/orphans targets, `scripts/preflight.sh` with automated account/region/CDK/bootstrap verification.
 - **Live AWS Verification** — Preflight passed, CDK bootstrap created `CDKToolkit` in `ap-southeast-2`, `BudgetStack` deployed before `NetworkStack`, teardown verified with zero orphaned resources.
-- **Test counts:** 19/19 new CDK tests green (`test_budget.py`, `test_network.py`, `test_app.py`).
+- **Test counts:** 19/19 original CDK tests green (`test_budget.py`, `test_network.py`, `test_app.py`); 22 focused Phase 12 checks green in the current tree.
+- **Verification:** `12-VERIFICATION.md` and `12-SECURITY.md` added; roadmap goal passed. Code review recorded 0 critical, 5 warning, and 1 informational follow-up.
 - **New graph nodes:** `infra/cdk/app.py`, `infra/cdk/lectify_cdk/budget_stack.py`, `infra/cdk/lectify_cdk/network_stack.py`.
 - **Next card in queue:** Phase 13 — Code Seams & Phase 14 — Data & Messaging Infrastructure
 
@@ -308,7 +323,7 @@ See [.planning/PROJECT.md](.planning/PROJECT.md) for full project context — re
 - **Database:** PostgreSQL (Neon), SQLite for tests
 - **Storage:** S3 (AWS) / local filesystem or MinIO (local dev)
 - **Queue:** SQS (AWS) / SQL-table backend (local), Postgres jobs-table idempotency (Phase 13/14)
-- **AI:** Google Gemini 3.7 Flash (transcription, summarization, quiz/flashcard gen)
+- **AI:** STT Deepgram Nova-3 (fallback Naga whisper, Gemini); generation Naga/NIM Nemotron free with Gemini fallback; embeddings Gemini
 - **Auth:** Custom JWT with role-based access (admin, teacher, student)
 - **Search:** Lexical + cosine similarity
 - **IaC:** AWS CDK (Python 3.12 venv) in infra/cdk: BudgetStack + NetworkStack (Phase 12) + DataStack/ComputeStack + ObservabilityStack (Phase 17); see infra/cdk/README.md

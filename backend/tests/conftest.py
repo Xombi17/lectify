@@ -122,3 +122,21 @@ async def reset_queue():
     reset_queue_backend()
     yield
     reset_queue_backend()
+
+
+_PROVIDER_KEYS = ("DEEPGRAM_API_KEY", "NAGA_AI_API_KEY", "NIM_API_KEY")
+
+
+@pytest.fixture(autouse=True)
+def _no_live_provider_keys(monkeypatch):
+    """backend/.env is loaded under pytest; never let real provider keys reach tests."""
+    from core.config import get_settings
+    from services.ai_service import reset_cooldowns
+
+    st = get_settings()
+    for k in _PROVIDER_KEYS:
+        monkeypatch.setattr(st, k, "", raising=False)
+        monkeypatch.delenv(k, raising=False)
+    reset_cooldowns()
+    yield
+    reset_cooldowns()

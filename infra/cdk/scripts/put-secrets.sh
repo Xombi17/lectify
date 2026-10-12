@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Create SSM SecureString params /lectify/{JWT_SECRET,GROQ_API_KEY,GEMINI_API_KEY}.
+# Create SSM SecureString params /lectify/{JWT_SECRET,GROQ_API_KEY,GEMINI_API_KEY,DEEPGRAM_API_KEY,NAGA_AI_API_KEY,NIM_API_KEY}.
 # Values come from env vars of the same name, else a silent prompt. Never printed.
 # Usage: put-secrets.sh [--overwrite] [--help]
 #   --overwrite  replace parameters that already exist (default: skip existing)
@@ -12,7 +12,7 @@ for a in "$@"; do
     *) echo "unknown option: $a" >&2; exit 1 ;;
   esac
 done
-for KEY in JWT_SECRET GROQ_API_KEY GEMINI_API_KEY; do
+for KEY in JWT_SECRET GROQ_API_KEY GEMINI_API_KEY DEEPGRAM_API_KEY NAGA_AI_API_KEY NIM_API_KEY; do
   NAME="/lectify/$KEY"
   if [ -z "$OW" ] && aws ssm get-parameter --name "$NAME" >/dev/null 2>&1; then
     echo "SKIP $NAME (exists; use --overwrite)"; continue

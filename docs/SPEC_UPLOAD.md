@@ -67,6 +67,9 @@ deferred to v2. In-app status remains the primary ready signal.
 3. Force a failure: set `FORCE_FAIL_LECTURE_ID=<lecture-id>` on the worker
    (non-prod env), upload again, confirm the lecture/job reach `dead_letter`
    after 5 deliveries.
-4. Redrive: `bash scripts/redrive-dlq.sh --dest lectify-transcribe`, then
-   `POST /lectures/{id}/retry` as admin; confirm depth zero and the lecture
+4. Redrive: `bash scripts/redrive-dlq.sh --dest lectify-transcribe`.
+   Use **one recovery mechanism per lecture**: if the message move restored the
+   original message, wait for the worker and do not call `/retry`; only call
+   `POST /lectures/{id}/retry` as admin when no message was restored (verify
+   stage/DLQ depth and job version first). Confirm depth zero and the lecture
    reprocesses to `ready`.

@@ -21,7 +21,7 @@ Phase 13 (offline queue/storage seams), Phase 13.1 (offline class-scoped access 
 - [x] **Phase 14: Data & Messaging Infrastructure** - RDS, S3 bucket policy/CORS/lifecycle, SQS queues + DLQ, SNS lecture-ready topic, secrets (completed 2026-10-05)
 - [x] **Phase 15: Compute Tier & Delivery** - ALB, API/web ASG, worker ASG, per-tier IAM, unattended bootstrap, schema bootstrap on RDS (completed 2026-10-05)
 - [ ] **Phase 16: Presigned Upload & End-to-End Pipeline** - Browser-direct S3 upload and one real lecture through every stage, plus the forced-failure DLQ proof
-- [ ] **Phase 17: Observability & Scaling** - CloudWatch logs, alarms, dashboard, ops SNS topic, and queue-backlog step scaling
+- [x] **Phase 17: Observability & Scaling** - CloudWatch logs, alarms, dashboard, ops SNS topic, and queue-backlog step scaling (completed 2026-10-09)
 - [x] **Phase 18: Load Test, Capacity Report, Runbook & Docs** - Scale-out demo, load test with honest capacity numbers, runbook and doc updates (completed 2026-10-09)
 
 ## Phase Details
@@ -221,20 +221,20 @@ Plans:
   3. One CloudWatch dashboard shows queue depth, worker count, CPU, DLQ and failures
   4. Queue backlog (visible + in-flight across transcribe and materials) drives the worker ASG to scale out and back in via step scaling, with a long scale-in cooldown and max capacity of 2-3
 
-**Plans**: 4 plans
+**Plans**: 4/4 plans complete
 Plans:
 **Wave 1**
 
-- [ ] 17-01-PLAN.md — Ops SNS topic (CMK) + Budget SNS subscriber in BudgetStack; JOB_DEAD_LETTER worker log line (wave 1)
-- [ ] 17-02-PLAN.md — Scoped log IAM, worker ASG scaling-ready (no desired, group metrics), CloudWatch agent + unit file logging (wave 1)
+- [x] 17-01-PLAN.md — Ops SNS topic (CMK) + Budget SNS subscriber in BudgetStack; JOB_DEAD_LETTER worker log line (wave 1)
+- [x] 17-02-PLAN.md — Scoped log IAM, worker ASG scaling-ready (no desired, group metrics), CloudWatch agent + unit file logging (wave 1)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 17-03-PLAN.md — ObservabilityStack: log groups, metric filter, 7 alarms, step scaling, lectify-overview dashboard, app.py wiring (wave 2)
+- [x] 17-03-PLAN.md — ObservabilityStack: log groups, metric filter, 7 alarms, step scaling, lectify-overview dashboard, app.py wiring (wave 2)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 17-04-PLAN.md — README section 11, CLAUDE.md status, live verification checkpoint (wave 3)
+- [x] 17-04-PLAN.md — README section 11, CLAUDE.md status, live verification checkpoint (wave 3)
 
 ### Phase 18: Load Test, Capacity Report, Runbook & Docs
 
@@ -277,5 +277,20 @@ Plans:
 | 14. Data & Messaging Infrastructure | 3/3 | Complete    | 2026-10-05 |
 | 15. Compute Tier & Delivery | 0/TBD | Not started | - |
 | 16. Presigned Upload & End-to-End Pipeline | 0/TBD | Not started | - |
-| 17. Observability & Scaling | 0/TBD | Not started | - |
+| 17. Observability & Scaling | 4/4 | Complete    | 2026-10-09 |
 | 18. Load Test, Capacity Report, Runbook & Docs | 5/5 | Complete    | 2026-10-09 |
+
+### Phase 19: Fast transcription providers: Deepgram Nova-3 STT and NagaAI LLM provider
+
+**Goal:** Cut lecture transcription and AI-generation latency by adding Deepgram Nova-3 (pre-recorded STT) and NagaAI (OpenAI-compatible LLM gateway) behind the existing provider seam in `backend/services/ai_service.py`, env-selected with failover to Gemini. Lectures are mixed Hindi+English (Nova-3 multi); generation uses free models only (Naga/NIM Nemotron). See 19-RESEARCH.md. Self-hosted Whisper/NVIDIA GPU on EC2 evaluated and rejected (no GPU on free tier / credit-account quota).
+**Requirements**: P19-CONFIG, P19-SPIKE, P19-STT, P19-LLM, P19-WORKER, P19-TEST, P19-DOCS (phase-local)
+**Depends on:** Phase 18
+**Plans:** 6/6 plans complete
+
+Plans:
+- [x] 19-01-PLAN.md — Settings, shared provider cooldown, hermetic test keys, SSM put-secrets keys (wave 1)
+- [x] 19-02-PLAN.md — Hinglish language spike: Nova-3 multi vs hi vs en-IN, user picks winner (wave 1, checkpoints)
+- [x] 19-03-PLAN.md — DeepgramProvider + NagaWhisperProvider + ordered STT failover chain (wave 2)
+- [x] 19-04-PLAN.md — Free LLM chain Naga -> NIM -> Gemini, content=None + 429 cooldown, NIM default fix (wave 2)
+- [x] 19-05-PLAN.md — TranscriptionWorker: Deepgram whole-file first, chunked chain fallback, stub regression (wave 3)
+- [x] 19-06-PLAN.md — Live smoke script, spike winner applied, docs + CLAUDE.md Status, graphify (wave 4)

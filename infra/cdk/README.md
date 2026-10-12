@@ -49,7 +49,8 @@ Required context (or env): `app_origin` / `APP_ORIGIN` (no wildcards), `ready_em
 The ready topic emails operator addresses only (`ready_emails`); each recipient must click the AWS subscription confirmation email. Per-student notifications are deferred to v2.
 
 ### Secrets
-`make put-secrets` (or `bash scripts/put-secrets.sh`) writes SSM SecureString params `/lectify/JWT_SECRET`, `/lectify/GROQ_API_KEY`, `/lectify/GEMINI_API_KEY`.
+`make put-secrets` (or `bash scripts/put-secrets.sh`) writes SSM SecureString params `/lectify/JWT_SECRET`, `/lectify/GROQ_API_KEY`, `/lectify/GEMINI_API_KEY`, `/lectify/DEEPGRAM_API_KEY`, `/lectify/NAGA_AI_API_KEY`, `/lectify/NIM_API_KEY`.
+The SSM overlay maps `/lectify/<NAME>` to env `NAME` with no code change.
 Values come from env vars or a silent prompt, are never printed; existing params are only replaced with `--overwrite`. Never commit secrets.
 
 ## 8. Tests

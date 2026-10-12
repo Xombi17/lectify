@@ -16,6 +16,7 @@ import logging
 import math
 import os
 import re
+import time
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone
 from pathlib import Path
@@ -53,6 +54,8 @@ Rules:
 - Generate 8-12 flashcards covering core terms.
 - Use clear, student-friendly language.
 
+The transcript may mix Hindi (Devanagari or romanised) and English; understand both and write all output in English.
+
 TRANSCRIPT:
 """
 
@@ -70,6 +73,8 @@ Rules:
 - 6-10 chunk_notes covering definitions, examples, and explanations IN THIS CHUNK ONLY.
 - 3-7 key_concepts.
 - Skip filler/jokes/off-topic side conversations.
+
+The transcript may mix Hindi (Devanagari or romanised) and English; understand both and write all output in English.
 
 CHUNK TRANSCRIPT:
 """
@@ -97,6 +102,8 @@ Rules:
 - 12-18 flashcards.
 - Use clear, student-friendly language.
 
+The transcript may mix Hindi (Devanagari or romanised) and English; understand both and write all output in English.
+
 CHUNK DIGESTS (JSON array, in chronological order):
 """
 
@@ -120,6 +127,8 @@ Rules:
 - Prioritise definitions, formulas, theorems, and cause-effect chains.
 - Do NOT include conversational filler.
 
+The transcript may mix Hindi (Devanagari or romanised) and English; understand both and write all output in English.
+
 TRANSCRIPT:
 """
 
@@ -138,6 +147,8 @@ Rules:
 - Close with a memorable takeaway or study tip.
 - Use short sentences and natural transitions suitable for text-to-speech.
 - Avoid acronyms that aren't spelled out; avoid complex formulas in speech form.
+
+The transcript may mix Hindi (Devanagari or romanised) and English; understand both and write all output in English.
 
 TRANSCRIPT:
 """
@@ -169,6 +180,8 @@ Rules:
 - Each question must have a clear topic (1-3 words).
 - For fill_blank: the question should contain "____" where the answer goes.
 
+The transcript may mix Hindi (Devanagari or romanised) and English; understand both and write all output in English.
+
 TRANSCRIPT:
 """
 
@@ -195,11 +208,17 @@ Rules:
 - related_concepts should reference other concepts in this list where possible.
 - Order by importance (exam_importance first).
 
+The transcript may mix Hindi (Devanagari or romanised) and English; understand both and write all output in English.
+
 TRANSCRIPT:
 """
 
 
 # ── ABC ─────────────────────────────────────────────────────────────────────────
+
+
+class EmptyCompletion(RuntimeError):
+    """Model returned no usable content (e.g. reasoning model with content=None)."""
 
 
 class ProviderRateLimited(Exception):
@@ -245,6 +264,23 @@ def parse_retry_after(value: str | None) -> float | None:
     except Exception:
         pass
     return None
+
+
+# ponytail: per-process cooldown; shared store (DB/Redis) only if multiple worker hosts must coordinate Naga's 100/day budget
+_COOLDOWNS: dict[str, float] = {}
+
+
+def mark_cooldown(name: str, retry_after: float | None) -> None:
+    secs = retry_after if retry_after is not None else get_settings().PROVIDER_COOLDOWN_SECONDS
+    _COOLDOWNS[name] = max(_COOLDOWNS.get(name, 0.0), time.monotonic() + secs)
+
+
+def cooldown_remaining(name: str) -> float:
+    return max(0.0, _COOLDOWNS.get(name, 0.0) - time.monotonic())
+
+
+def reset_cooldowns() -> None:
+    _COOLDOWNS.clear()
 
 
 def handle_rate_limit(func):
@@ -531,16 +567,30 @@ class GeminiProvider(AIProvider):
 
 
 class NIMProvider(AIProvider):
-    """OpenAI-compatible provider using NVIDIA NIM API.
+    """OpenAI-compatible provider (NVIDIA NIM and NagaAI share this one class).
 
     Handles text generation and embeddings. Delegates transcription to
     the Gemini fallback provider (NIM has no audio models).
     """
 
-    def __init__(self, api_key: str, base_url: str, chat_model: str, embed_model: str):
+    def __init__(
+        self,
+        api_key: str,
+        base_url: str,
+        chat_model: str,
+        embed_model: str,
+        label: str = "nim",
+    ):
         from openai import AsyncOpenAI  # lazy import
 
-        self._client = AsyncOpenAI(api_key=api_key, base_url=base_url)
+        self.name = label
+        # max_retries=0: failover is ours; SDK retries would burn Naga's free daily budget
+        self._client = AsyncOpenAI(
+            api_key=api_key,
+            base_url=base_url,
+            timeout=settings.LLM_TIMEOUT_S,
+            max_retries=0,
+        )
         self._chat_model = chat_model
         self._embed_model = embed_model
         self._gemini: GeminiProvider | None = None
@@ -569,18 +619,29 @@ class NIMProvider(AIProvider):
 
     @handle_rate_limit
     async def _chat_completion(
-        self, prompt: str, json_mode: bool = False, max_tokens: int = 4096
+        self,
+        prompt: str,
+        json_mode: bool = False,
+        max_tokens: int = 4096,
+        messages: list[dict] | None = None,
     ) -> str:
-        """Shared helper: call NIM chat completion."""
+        """Shared helper: chat completion; raises EmptyCompletion on blank content."""
         kwargs: dict = {
             "model": self._chat_model,
-            "messages": [{"role": "user", "content": prompt}],
+            "messages": messages or [{"role": "user", "content": prompt}],
             "max_tokens": max_tokens,
         }
         if json_mode:
             kwargs["response_format"] = {"type": "json_object"}
         response = await self._client.chat.completions.create(**kwargs)
-        return (response.choices[0].message.content or "").strip()
+        choice = response.choices[0]
+        content = (choice.message.content or "").strip()
+        if not content:
+            raise EmptyCompletion(
+                f"{self.name} returned empty content (model={self._chat_model}, "
+                f"finish_reason={getattr(choice, 'finish_reason', None)})"
+            )
+        return content
 
     async def generate_study_materials(self, transcript: str) -> StudyMaterials:
         prompt = STUDY_PROMPT + transcript[:120_000]
@@ -639,12 +700,7 @@ class NIMProvider(AIProvider):
                 {"role": m.get("role", "user"), "content": m.get("content", "").strip()}
             )
         messages.append({"role": "user", "content": question.strip()})
-        response = await self._client.chat.completions.create(
-            model=self._chat_model,
-            messages=messages,
-            max_tokens=1024,
-        )
-        return (response.choices[0].message.content or "").strip()
+        return await self._chat_completion("", messages=messages, max_tokens=1024)
 
     async def translate_pack(self, pack: dict, target_language: str) -> dict:
         prompt = (
@@ -790,17 +846,83 @@ class StubProvider(AIProvider):
         return [1 / math.sqrt(768)] * 768
 
 
+class FailoverAIProvider(AIProvider):
+    """Tries LLM members in order; embed/transcribe stay on the embedder (no re-embed)."""
+
+    def __init__(self, members: list[tuple[str, AIProvider]], embedder: AIProvider):
+        self._members = members
+        self._embedder = embedder
+
+    async def _call(self, method: str, *args):
+        rate_limited = False
+        last: Exception | None = None
+        for name, p in self._members:
+            if cooldown_remaining(name) > 0:
+                rate_limited = True
+                continue
+            try:
+                return await getattr(p, method)(*args)
+            except ProviderRateLimited as e:
+                mark_cooldown(name, e.retry_after)
+                rate_limited = True
+            except NotImplementedError:
+                continue
+            except Exception as e:
+                logger.warning(
+                    "LLM provider %s failed on %s (%s: %s); failing over",
+                    name, method, type(e).__name__, str(e)[:200],
+                )
+                last = e
+        if rate_limited:
+            waits = [r for n, _ in self._members if (r := cooldown_remaining(n)) > 0]
+            raise ProviderRateLimited(
+                "All LLM providers failed or rate limited",
+                retry_after=min(waits) if waits else None,
+            )
+        raise last or NotImplementedError(f"{method} not supported by any provider")
+
+    async def transcribe_audio(self, audio_path: Path, mime_type: str) -> str:
+        return await self._embedder.transcribe_audio(audio_path, mime_type)
+
+    async def embed(self, text: str) -> list[float]:
+        return await self._embedder.embed(text)
+
+    async def generate_study_materials(self, transcript: str) -> StudyMaterials:
+        return await self._call("generate_study_materials", transcript)
+
+    async def digest_chunk(self, chunk_transcript: str) -> dict:
+        return await self._call("digest_chunk", chunk_transcript)
+
+    async def merge_chunk_digests(self, digests: list[dict]) -> StudyMaterials:
+        return await self._call("merge_chunk_digests", digests)
+
+    async def chat(self, transcript: str, history: list[dict], question: str) -> str:
+        return await self._call("chat", transcript, history, question)
+
+    async def translate_pack(self, pack: dict, target_language: str) -> dict:
+        return await self._call("translate_pack", pack, target_language)
+
+    async def generate_cheatsheet(self, transcript: str) -> dict:
+        return await self._call("generate_cheatsheet", transcript)
+
+    async def generate_podcast_script(self, transcript: str) -> dict:
+        return await self._call("generate_podcast_script", transcript)
+
+    async def generate_quiz_v2(self, transcript: str) -> list[dict]:
+        return await self._call("generate_quiz_v2", transcript)
+
+    async def generate_concepts_v2(self, transcript: str) -> list[dict]:
+        return await self._call("generate_concepts_v2", transcript)
+
+
 # ── Factory ────────────────────────────────────────────────────────────────────
 
 _provider: Optional[AIProvider] = None
 
 
 def get_ai_service() -> AIProvider:
-    """Lazy singleton — selects provider based on AI_PROVIDER env var.
-
-    - "nim"  → NIMProvider (requires NIM_API_KEY; GEMINI_API_KEY for transcription fallback)
-    - "gemini" (default) → GeminiProvider (requires GEMINI_API_KEY)
-    """
+    """Lazy singleton. LLM calls follow settings.LLM_PROVIDERS (naga, nim, gemini)
+    with failover; embeddings/transcription stay on AI_PROVIDER."""
     global _provider
     if _provider is None and stub_providers_enabled():
         _provider = StubProvider()
@@ -809,44 +931,61 @@ def get_ai_service() -> AIProvider:
             os.environ.get("ENV"),
         )
     if _provider is None:
-        provider_name = settings.AI_PROVIDER.lower()
-
-        if provider_name == "nim":
-            if not settings.NIM_API_KEY:
-                raise RuntimeError(
-                    "AI_PROVIDER=nim but NIM_API_KEY is not set. "
-                    "Set it in backend/.env or switch to AI_PROVIDER=gemini."
-                )
-            _provider = NIMProvider(
-                api_key=settings.NIM_API_KEY,
-                base_url=settings.NIM_BASE_URL,
-                chat_model=settings.NIM_CHAT_MODEL,
-                embed_model=settings.NIM_EMBED_MODEL,
-            )
-            logger.info(
-                "AI provider: NVIDIA NIM (chat=%s, embed=%s)",
-                settings.NIM_CHAT_MODEL,
-                settings.NIM_EMBED_MODEL,
-            )
-
-        elif provider_name == "gemini":
-            if not settings.GEMINI_API_KEY:
-                raise RuntimeError(
-                    "AI_PROVIDER=gemini but GEMINI_API_KEY is not set. "
-                    "Set it in backend/.env to enable AI processing."
-                )
-            _provider = GeminiProvider(
-                settings.GEMINI_API_KEY,
-                settings.GEMINI_MODEL,
-                fallback_models=settings.GEMINI_FALLBACK_MODELS,
-            )
-            chain = ", ".join([settings.GEMINI_MODEL, *settings.GEMINI_FALLBACK_MODELS])
-            logger.info("AI provider: Gemini (%s)", chain)
-
-        else:
+        embed_name = settings.AI_PROVIDER.lower()
+        if embed_name not in ("nim", "gemini"):
             raise RuntimeError(
-                f"Unknown AI_PROVIDER '{provider_name}'. Must be 'nim' or 'gemini'."
+                f"Unknown AI_PROVIDER '{embed_name}'. Must be 'nim' or 'gemini'."
             )
+        if embed_name == "nim" and not settings.NIM_API_KEY:
+            raise RuntimeError(
+                "AI_PROVIDER=nim but NIM_API_KEY is not set. "
+                "Set it in backend/.env or switch to AI_PROVIDER=gemini."
+            )
+        if embed_name == "gemini" and not settings.GEMINI_API_KEY:
+            raise RuntimeError(
+                "AI_PROVIDER=gemini but GEMINI_API_KEY is not set. "
+                "Set it in backend/.env to enable AI processing."
+            )
+
+        builders = {
+            "naga": lambda: settings.NAGA_AI_API_KEY
+            and NIMProvider(
+                settings.NAGA_AI_API_KEY, settings.NAGA_BASE_URL,
+                settings.NAGA_CHAT_MODEL, "", label="naga",
+            ),
+            "nim": lambda: settings.NIM_API_KEY
+            and NIMProvider(
+                settings.NIM_API_KEY, settings.NIM_BASE_URL,
+                settings.NIM_CHAT_MODEL, settings.NIM_EMBED_MODEL, label="nim",
+            ),
+            "gemini": lambda: settings.GEMINI_API_KEY
+            and GeminiProvider(
+                settings.GEMINI_API_KEY, settings.GEMINI_MODEL,
+                fallback_models=settings.GEMINI_FALLBACK_MODELS,
+            ),
+        }
+        built: dict[str, AIProvider] = {}
+
+        def get(name: str):
+            if name not in built:
+                b = builders.get(name)
+                if b is None:
+                    logger.warning("Unknown LLM provider '%s' in LLM_PROVIDERS; skipping", name)
+                    return None
+                built[name] = b() or None
+            return built[name]
+
+        embedder = get(embed_name)
+        members = [(n, p) for n in settings.LLM_PROVIDERS if (p := get(n))]
+        if not members:
+            members = [(embed_name, embedder)]
+        if len(members) == 1 and members[0][1] is embedder:
+            _provider = embedder
+        else:
+            _provider = FailoverAIProvider(members, embedder)
+        logger.info(
+            "AI provider chain: %s (embed=%s)", [n for n, _ in members], embed_name
+        )
     return _provider
 
 

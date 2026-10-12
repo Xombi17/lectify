@@ -171,3 +171,22 @@ async def test_whisper_provider_500_raises_runtime_error(tmp_path: Path):
             await provider.transcribe(audio, "audio/mpeg")
 
         assert "Groq Whisper API error 500" in str(exc_info.value)
+
+
+def test_provider_cooldown():
+    from unittest.mock import patch
+    from core.config import get_settings
+    from services import ai_service as ai
+    ai.reset_cooldowns()
+    assert ai.cooldown_remaining("naga") == 0.0
+    ai.mark_cooldown("naga", 30.0)
+    assert 29 < ai.cooldown_remaining("naga") <= 30
+    assert ai.cooldown_remaining("nim") == 0.0
+    ai.reset_cooldowns()
+    ai.mark_cooldown("naga", None)
+    assert 0 < ai.cooldown_remaining("naga") <= get_settings().PROVIDER_COOLDOWN_SECONDS
+    import time
+    with patch.object(ai.time, "monotonic", return_value=time.monotonic() + 1000):
+        assert ai.cooldown_remaining("naga") == 0.0
+    ai.reset_cooldowns()
+    assert ai.cooldown_remaining("naga") == 0.0
