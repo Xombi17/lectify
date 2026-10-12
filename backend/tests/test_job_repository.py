@@ -71,3 +71,16 @@ async def test_concurrent_claims():
     results = await asyncio.gather(*[repo.claim(job.id) for _ in range(5)])
     successes = [r for r in results if r is not None]
     assert len(successes) == 1
+
+
+async def test_span_seconds():
+    repo = JobRepository()
+    assert await repo.span_seconds("nojobs") is None
+    j1, _ = await repo.create_if_absent("lspan", "transcribe")
+    j2, _ = await repo.create_if_absent("lspan", "embed")
+    t0 = datetime.now(timezone.utc)
+    async with session_maker()() as s:
+        await s.execute(text("UPDATE jobs SET created_at=:c, updated_at=:c"), {"c": t0})
+        await s.execute(text("UPDATE jobs SET updated_at=:u WHERE id=:i"), {"u": t0 + timedelta(seconds=12.5), "i": j2.id})
+        await s.commit()
+    assert await repo.span_seconds("lspan") == pytest.approx(12.5, abs=0.1)

@@ -12,6 +12,7 @@ import asyncio
 import email.utils
 import functools
 import json
+import tempfile
 import logging
 import math
 import os
@@ -414,10 +415,17 @@ class GeminiProvider(AIProvider):
         from google.genai import types
 
         logger.info("Uploading audio to Gemini: %s (%s)", audio_path, mime_type)
-        uploaded = self._client.files.upload(
-            file=str(audio_path),
-            config=types.UploadFileConfig(mime_type=mime_type),
-        )
+        # The SDK sends the file name in an HTTP header (ASCII only); lecture
+        # filenames can hold any unicode, so upload via an ASCII-named symlink.
+        with tempfile.TemporaryDirectory() as tmp:
+            src = audio_path
+            if not audio_path.name.isascii():
+                src = Path(tmp) / f"audio{audio_path.suffix}"
+                src.symlink_to(audio_path.resolve())
+            uploaded = self._client.files.upload(
+                file=str(src),
+                config=types.UploadFileConfig(mime_type=mime_type),
+            )
         prompt = (
             "Transcribe this lecture audio verbatim into clean readable English text. "
             "Use proper punctuation and paragraph breaks. Do NOT include timestamps."
@@ -528,9 +536,12 @@ class GeminiProvider(AIProvider):
     @handle_rate_limit
     async def embed(self, text: str) -> list[float]:
         """Lightweight text embedding for semantic search."""
+        from google.genai import types
+
         resp = self._client.models.embed_content(
-            model="text-embedding-004",
+            model=get_settings().GEMINI_EMBED_MODEL,
             contents=text[:8_000],
+            config=types.EmbedContentConfig(output_dimensionality=768),
         )
         # google-genai returns .embeddings (list) each with .values
         emb = resp.embeddings[0]
@@ -842,7 +853,7 @@ class StubProvider(AIProvider):
         return pack
 
     async def embed(self, text: str) -> list[float]:
-        # unit vector, 768 dims to match text-embedding-004 rows
+        # unit vector, 768 dims to match stored rows (Gemini output_dimensionality=768)
         return [1 / math.sqrt(768)] * 768
 
 

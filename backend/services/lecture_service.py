@@ -20,7 +20,7 @@ from services.audio_chunker import (
     get_duration_seconds,
     split_into_chunks,
 )
-from services.neo4j_service import get_neo4j_service
+from services.neo4j_service import get_neo4j_service, Neo4jUnavailable
 from services.storage_service import get_storage
 
 logger = logging.getLogger(__name__)
@@ -120,6 +120,8 @@ async def _extract_and_store_knowledge_graph(lecture_id: str, lecture: LectureDB
         
         logger.info("Stored knowledge graph for lecture %s in Neo4j", lecture_id)
         
+    except Neo4jUnavailable:
+        logger.debug("Neo4j unavailable; skipping knowledge graph for %s", lecture_id)
     except Exception as e:
         logger.exception("Failed to store knowledge graph for lecture %s: %s", lecture_id, e)
         # Don't fail the entire pipeline if knowledge graph storage fails

@@ -62,6 +62,7 @@ class Settings:
 
         # Gemini
         self.GEMINI_API_KEY: str = os.environ.get("GEMINI_API_KEY", "")
+        self.GEMINI_EMBED_MODEL: str = os.environ.get("GEMINI_EMBED_MODEL", "gemini-embedding-001")
         self.GEMINI_MODEL: str = os.environ.get("GEMINI_MODEL", "gemini-3.7-flash")
         # Ordered failover chain (comma-separated). When the primary model
         # 429s/503s, calls fall through to the next model instead of sleeping

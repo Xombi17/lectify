@@ -33,7 +33,14 @@ Rules:
 ## Status
 
 Living project status, updated after every feature lands.
-**Last updated:** 2026-10-12 (Phase 19 code complete; pending verify-work)
+**Last updated:** 2026-10-12 (Phase 19 UAT gap fixes; pending verify-work)
+
+### What was added (Phase 19 UAT gap fixes)
+
+- **Embedding 404:** `GeminiProvider.embed` now uses `GEMINI_EMBED_MODEL` (default `gemini-embedding-001`) with `output_dimensionality=768` (live call verified, 768-dim). Old `text-embedding-004` vectors are in a different space; existing lectures may need re-embedding (no script exists).
+- **Processing time:** `LectureDB.processing_seconds` (computed, not persisted) from `JobRepository.span_seconds`; lecture detail shows "Processed in 12.4 s / 1m 05s" next to Ready.
+- **Neo4j log noise:** `get_neo4j_service` raises `Neo4jUnavailable` with a 60 s cooldown and one WARNING; callers skip quietly.
+- **Test counts:** backend 306 passed, 3 skipped; frontend 16 passed.
 
 ### What was added (Phase 19 - Fast transcription providers)
 

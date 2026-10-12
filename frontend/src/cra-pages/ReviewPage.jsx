@@ -130,7 +130,8 @@ export default function ReviewPage() {
                         animate={{ rotateY: flipped ? 180 : 0 }}
                         transition={{ duration: 0.45, ease: "easeInOut" }}
                     >
-                        <div className="backface-hidden absolute inset-0 flex flex-col items-center justify-center border-2 border-border bg-card p-8 text-center">
+                        <div className="backface-hidden absolute inset-0 flex flex-col items-center justify-center border-2 border-border bg-card p-8 text-center"
+                        style={{ opacity: flipped ? 0 : 1, transition: "opacity 0s linear 0.225s", pointerEvents: flipped ? "none" : "auto" }}>
                             <div className="text-overline mb-3 text-primary">Question</div>
                             <div className="font-display text-2xl font-bold leading-snug tracking-tight">
                                 {card.front}
@@ -139,7 +140,8 @@ export default function ReviewPage() {
                                 <ArrowsClockwise size={14} weight="duotone" /> Click to reveal
                             </div>
                         </div>
-                        <div className="backface-hidden rotate-y-180 absolute inset-0 flex flex-col items-center justify-center border-2 border-primary bg-accent/20 p-8 text-center">
+                        <div className="backface-hidden rotate-y-180 absolute inset-0 flex flex-col items-center justify-center border-2 border-primary bg-accent/20 p-8 text-center"
+                        style={{ opacity: flipped ? 1 : 0, transition: "opacity 0s linear 0.225s", pointerEvents: flipped ? "auto" : "none" }}>
                             <div className="text-overline mb-3 text-primary">Answer</div>
                             <div className="font-display text-xl leading-snug tracking-tight">
                                 {card.back}

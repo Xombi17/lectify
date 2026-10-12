@@ -18,6 +18,8 @@
 - Cache outputs
 - Never fabricate facts (transcript grounded)
 - Fallback to lexical search if embeddings fail
+- Gemini embeddings: `GEMINI_EMBED_MODEL` (default `gemini-embedding-001`, `output_dimensionality=768`). Vectors are NOT in the same space as the retired `text-embedding-004`; lectures embedded earlier need re-embedding (no re-embed script exists; re-enqueue the `embed` stage per lecture) for good semantic search. Neo4j outages log one WARNING per 60 s and never fail the pipeline.
+- `GET /lectures/{id}` returns `processing_seconds` (ready only; first job created_at -> last job updated_at, fallback lecture created_at -> updated_at).
 
 ## 4) Providers (Phase 19)
 Transcripts may be mixed Hindi+English; study output is English. `STUB_PROVIDERS` bypasses all of this.

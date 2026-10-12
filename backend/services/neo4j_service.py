@@ -1,5 +1,6 @@
 """Neo4j service for knowledge graph operations."""
 import os
+import time
 import logging
 from typing import List, Dict, Any, Optional
 from neo4j import GraphDatabase, Driver, Session
@@ -24,8 +25,9 @@ class Neo4jService:
             try:
                 cls._instance._driver.verify_connectivity()
                 logger.info("Connected to Neo4j at %s", NEO4J_URI)
-            except Exception as e:
-                logger.error("Failed to connect to Neo4j: %s", e)
+            except Exception:
+                # Don't cache a half-built instance; get_neo4j_service handles reporting.
+                cls._instance.close()
                 raise
         return cls._instance
 
@@ -148,5 +150,25 @@ class Neo4jService:
             return [{"name": record["name"]} for record in result]
 
 # Singleton instance getter
+class Neo4jUnavailable(RuntimeError):
+    """Neo4j is unreachable (non-fatal for callers)."""
+
+
+_COOLDOWN_S = 60.0
+_down_until = 0.0
+
+
 def get_neo4j_service() -> Neo4jService:
-    return Neo4jService()
+    """Return the service; after a failed connect, fail fast for a cooldown (one WARNING)."""
+    global _down_until
+    if Neo4jService._instance is not None:
+        return Neo4jService._instance
+    if time.monotonic() < _down_until:
+        raise Neo4jUnavailable("Neo4j unreachable (cooldown)")
+    try:
+        return Neo4jService()
+    except Exception as e:
+        _down_until = time.monotonic() + _COOLDOWN_S
+        logger.warning("Neo4j unreachable at %s (%s); skipping graph sync for %ds",
+                       NEO4J_URI, type(e).__name__, _COOLDOWN_S)
+        raise Neo4jUnavailable(str(e)) from e

@@ -2,7 +2,7 @@
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 
 from core.sql_db import session_maker
@@ -49,6 +49,22 @@ class JobRepository:
                 result = await session.execute(stmt)
                 existing = result.scalar_one()
                 return JobDB.model_validate(existing), False
+
+    async def span_seconds(self, lecture_id: str) -> float | None:
+        """First job created_at -> last job updated_at (None when the lecture has no jobs)."""
+        async with self.session_factory() as session:
+            row = (await session.execute(
+                select(func.min(JobORM.created_at), func.max(JobORM.updated_at))
+                .where(JobORM.lecture_id == lecture_id)
+            )).one()
+        if row[0] is None or row[1] is None:
+            return None
+        a, b = row
+        if a.tzinfo is None:
+            a = a.replace(tzinfo=timezone.utc)
+        if b.tzinfo is None:
+            b = b.replace(tzinfo=timezone.utc)
+        return max((b - a).total_seconds(), 0.0)
 
     async def get(self, job_id: str) -> JobDB | None:
         async with self.session_factory() as session:

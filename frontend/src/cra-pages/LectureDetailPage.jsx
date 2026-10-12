@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { lectureApi, API, bookmarkApi } from "@/lib/api";
 import { STATUS_LABEL, statusPillKind } from "@/lib/lectureStatus";
+import { formatProcessing } from "@/lib/formatDuration";
 import { useAuth } from "@/lib/auth";
 import FlashcardDeck from "@/components/FlashcardDeck";
 import QuizRunner from "@/components/QuizRunner";
@@ -196,6 +197,11 @@ export default function LectureDetailPage() {
                                 )}
                                 {pillLabel}
                             </Badge>
+                            {ready && formatProcessing(lecture.processing_seconds) && (
+                                <span data-testid="processing-time" className="text-xs">
+                                    Processed in {formatProcessing(lecture.processing_seconds)}
+                                </span>
+                            )}
                             {lecture.published && (
                                 <Badge className="bg-accent text-accent-foreground">Published</Badge>
                             )}

@@ -68,6 +68,8 @@ class LectureDB(BaseModel):
     published: bool = False
     class_id: Optional[str] = None
     timetable_slot_id: Optional[str] = None
+    # Computed on read (GET /lectures/{id}) when ready; not persisted.
+    processing_seconds: Optional[float] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 

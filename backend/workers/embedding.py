@@ -7,7 +7,7 @@ from core.config import get_settings
 from models.job import JobCreate, JobDB
 from repositories.lecture_repository import LectureRepository
 from services.ai_service import get_ai_service
-from services.neo4j_service import get_neo4j_service
+from services.neo4j_service import get_neo4j_service, Neo4jUnavailable
 
 from workers.base import BaseWorker, JobContext
 
@@ -135,6 +135,8 @@ class EmbeddingWorker(BaseWorker):
                 lecture_id,
                 len(concepts),
             )
+        except Neo4jUnavailable:
+            logger.debug("Neo4j unavailable; skipping sync for %s", lecture_id)
         except Exception as e:
             logger.warning("Neo4j sync failed for %s: %s (non-fatal)", lecture_id, e)
             # Non-fatal: lecture processing continues without knowledge graph

@@ -1,6 +1,7 @@
 """Lecture routes — upload, list, detail, publish, quiz attempt, Phase 9 content."""
 import logging
 import os
+from urllib.parse import quote
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -39,6 +40,7 @@ from models.lecture import (
 )
 from models.user import UserPublic
 from pydantic import BaseModel
+from repositories.job_repository import JobRepository
 from repositories.attempt_repository import AttemptRepository
 from repositories.lecture_repository import LectureRepository
 from repositories.teacher_assignment_repository import TeacherAssignmentRepository
@@ -373,7 +375,16 @@ async def get_audio_url(
 
 @router.get("/{lecture_id}", response_model=LectureDB)
 async def get_lecture(lecture_id: str, user: UserPublic = Depends(get_current_user)):
-    return await verify_lecture_access(lecture_id, user)
+    lecture = await verify_lecture_access(lecture_id, user)
+    if lecture.status == "ready":
+        try:
+            secs = await JobRepository().span_seconds(lecture_id)
+        except Exception:  # informational field; never break the detail page
+            secs = None
+        if secs is None:  # legacy lectures without jobs
+            secs = max((lecture.updated_at - lecture.created_at).total_seconds(), 0.0)
+        lecture = lecture.model_copy(update={"processing_seconds": round(secs, 1)})
+    return lecture
 
 
 @router.post("/{lecture_id}/publish", response_model=LectureDB)
@@ -498,7 +509,12 @@ async def stream_audio(lecture_id: str, user: UserPublic = Depends(get_current_u
         raise HTTPException(status_code=404, detail="Audio file missing")
 
     headers = {
-        "Content-Disposition": f'inline; filename="{lecture.audio_filename}"',
+        # RFC 5987: header values must be latin-1, so ascii fallback + utf-8 filename*
+        "Content-Disposition": (
+            "inline; filename=\""
+            + lecture.audio_filename.encode("ascii", "replace").decode().replace('"', "_")
+            + "\"; filename*=UTF-8''" + quote(lecture.audio_filename)
+        ),
     }
     if size is not None:
         headers["Content-Length"] = str(size)
