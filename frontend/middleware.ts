@@ -12,7 +12,7 @@ function decodeToken(token: string): { sub?: string; role?: string } | null {
   }
 }
 
-const PUBLIC_ROUTES = ["/", "/login", "/signup", "/healthz", "/forgot-password", "/reset-password", "/enroll"];
+const PUBLIC_ROUTES = ["/", "/login", "/signup", "/healthz", "/forgot-password", "/reset-password", "/enroll", "/site.webmanifest"];
 
 const ROLE_ROUTES: Record<string, string> = {
   "/teacher": "teacher",
@@ -22,6 +22,15 @@ const ROLE_ROUTES: Record<string, string> = {
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  // Allow static files
+  if (
+    pathname === "/site.webmanifest" ||
+    pathname === "/favicon.ico" ||
+    pathname.match(/\.(?:svg|png|jpg|jpeg|gif|webp|ico|webmanifest)$/)
+  ) {
+    return NextResponse.next();
+  }
 
   // Allow public routes
   if (PUBLIC_ROUTES.includes(pathname)) {
@@ -70,5 +79,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!api|_next/static|_next/image|favicon.ico|.*\\.svg).*)"],
+  matcher: ["/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|webmanifest)$).*)"],
 };
