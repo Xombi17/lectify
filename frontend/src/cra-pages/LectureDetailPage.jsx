@@ -368,6 +368,7 @@ function ContentTabs({ lecture, isOwner, onLectureUpdate }) {
     const [language, setLanguage] = useState("original");
     const [translating, setTranslating] = useState(false);
     const [translated, setTranslated] = useState(null);
+    const [activeTab, setActiveTab] = useState("notes");
     const m = translated || baseMaterials;
     const showOriginal = language === "original";
 
@@ -419,7 +420,7 @@ function ContentTabs({ lecture, isOwner, onLectureUpdate }) {
     };
 
     return (
-        <Tabs defaultValue="notes" className="w-full" data-testid="lecture-tabs">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full" data-testid="lecture-tabs">
             <TabsList className="read-tabs">
                 {[
                     ["notes", "Smart Notes"],
@@ -439,94 +440,61 @@ function ContentTabs({ lecture, isOwner, onLectureUpdate }) {
             </TabsList>
 
             <TabsContent value="notes" className="mt-8" data-testid="notes-tab-content">
-                <div className="mb-6 flex flex-wrap items-center gap-3 border-b border-border pb-3">
-                    <Translate size={16} weight="regular" className="text-primary" />
-                    <span className="text-overline text-muted-foreground">View in</span>
-                    <Select value={language} onValueChange={onLanguage} disabled={translating}>
-                        <SelectTrigger data-testid="translate-language-select" className="w-48">
-                            <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="original">Original</SelectItem>
-                            <SelectItem value="Hindi">Hindi (हिन्दी)</SelectItem>
-                            <SelectItem value="Marathi">Marathi (मराठी)</SelectItem>
-                            <SelectItem value="Tamil">Tamil (தமிழ்)</SelectItem>
-                            <SelectItem value="Spanish">Spanish</SelectItem>
-                            <SelectItem value="French">French</SelectItem>
-                            <SelectItem value="German">German</SelectItem>
-                            <SelectItem value="Arabic">Arabic</SelectItem>
-                            <SelectItem value="Chinese">Chinese (简体)</SelectItem>
-                        </SelectContent>
-                    </Select>
-                    {translating && <span className="text-sm text-muted-foreground">Translating…</span>}
+                <div className="mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-border pb-3">
+                    <div className="flex flex-wrap items-center gap-3">
+                        <Translate size={16} weight="regular" className="text-primary" />
+                        <span className="text-overline text-muted-foreground">View in</span>
+                        <Select value={language} onValueChange={onLanguage} disabled={translating}>
+                            <SelectTrigger data-testid="translate-language-select" className="w-48">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="original">Original</SelectItem>
+                                <SelectItem value="Hindi">Hindi (हिन्दी)</SelectItem>
+                                <SelectItem value="Marathi">Marathi (मराठी)</SelectItem>
+                                <SelectItem value="Tamil">Tamil (தமிழ்)</SelectItem>
+                                <SelectItem value="Spanish">Spanish</SelectItem>
+                                <SelectItem value="French">French</SelectItem>
+                                <SelectItem value="German">German</SelectItem>
+                                <SelectItem value="Arabic">Arabic</SelectItem>
+                                <SelectItem value="Chinese">Chinese (简体)</SelectItem>
+                            </SelectContent>
+                        </Select>
+                        {translating && <span className="text-sm text-muted-foreground">Translating…</span>}
+                    </div>
                 </div>
 
-                {showOriginal ? (
-                    <EditableNotes
-                        lecture={lecture}
-                        isOwner={!!isOwner}
-                        onSaved={onLectureUpdate}
-                        renderNoteExtras={(i, text) => (
-                            <BookmarkButton
-                                lectureId={lecture.id}
-                                kind="note"
-                                refIndex={i}
-                                text={text}
-                                existing={findBookmark("note", i)}
-                                onToggle={(bm) => onBookmarkToggle("note", i, bm)}
-                            />
-                        )}
-                        renderConceptExtras={(i, text) => (
-                            <BookmarkButton
-                                lectureId={lecture.id}
-                                kind="concept"
-                                refIndex={i}
-                                text={text}
-                                size={14}
-                                existing={findBookmark("concept", i)}
-                                onToggle={(bm) => onBookmarkToggle("concept", i, bm)}
-                            />
-                        )}
-                    />
-                ) : (
-                    <>
-                        {m.summary && (
-                            <div className="notes mb-8 rounded-[var(--radius)] border border-border bg-card p-5 sm:p-6">
-                                <div className="text-overline mb-2 text-primary">TL;DR</div>
-                                <p className="text-base">{m.summary}</p>
-                            </div>
-                        )}
-                        <h3 className="text-overline mb-4 text-muted-foreground">Smart notes</h3>
-                        <ul className="notes !pl-0 space-y-3">
-                            {(m.smart_notes || []).map((n, i) => (
-                                <li
-                                    key={i}
-                                    className="flex gap-3 border-b border-border pb-3 text-base"
-                                >
-                                    <span className="font-mono mt-1 text-sm text-primary">
-                                        {String(i + 1).padStart(2, "0")}
-                                    </span>
-                                    <span>{n}</span>
-                                </li>
-                            ))}
-                        </ul>
-                        {m.key_concepts?.length > 0 && (
-                            <div className="mt-8">
-                                <h3 className="text-overline mb-3 text-muted-foreground">Key concepts</h3>
-                                <div className="flex flex-wrap gap-2">
-                                    {m.key_concepts.map((c, i) => (
-                                        <span
-                                            key={i}
-                                            className="rounded-full border border-border bg-card px-3 py-1 text-sm"
-                                        >
-                                            {c}
-                                        </span>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-                    </>
-                )}
+                <EditableNotes
+                    lecture={lecture}
+                    materials={m}
+                    isOwner={showOriginal ? !!isOwner : false}
+                    onSaved={onLectureUpdate}
+                    onTabChange={setActiveTab}
+                    quizCount={(baseMaterials.quiz || []).length}
+                    flashcardsCount={(m.flashcards || baseMaterials.flashcards || []).length}
+                    hasTranscript={!!lecture.transcript}
+                    renderNoteExtras={showOriginal ? (i, text) => (
+                        <BookmarkButton
+                            lectureId={lecture.id}
+                            kind="note"
+                            refIndex={i}
+                            text={text}
+                            existing={findBookmark("note", i)}
+                            onToggle={(bm) => onBookmarkToggle("note", i, bm)}
+                        />
+                    ) : undefined}
+                    renderConceptExtras={showOriginal ? (i, text) => (
+                        <BookmarkButton
+                            lectureId={lecture.id}
+                            kind="concept"
+                            refIndex={i}
+                            text={text}
+                            size={14}
+                            existing={findBookmark("concept", i)}
+                            onToggle={(bm) => onBookmarkToggle("concept", i, bm)}
+                        />
+                    ) : undefined}
+                />
             </TabsContent>
 
             <TabsContent value="quiz" className="mt-8" data-testid="quiz-tab-content">
@@ -542,9 +510,19 @@ function ContentTabs({ lecture, isOwner, onLectureUpdate }) {
             </TabsContent>
 
             <TabsContent value="transcript" className="mt-8" data-testid="transcript-tab-content">
-                <pre className="notes whitespace-pre-wrap text-base">
-                    {lecture.transcript || "No transcript available."}
-                </pre>
+                <div className="rounded-xl border border-border bg-card p-6 sm:p-8 max-w-4xl shadow-sm">
+                    <div className="mb-4 flex items-center justify-between border-b border-border pb-3">
+                        <span className="text-overline text-muted-foreground uppercase">
+                            Verbatim Lecture Transcript
+                        </span>
+                        <span className="font-mono text-sm text-muted-foreground">
+                            {lecture.transcript ? `${lecture.transcript.split(/\s+/).filter(Boolean).length} words` : "0 words"}
+                        </span>
+                    </div>
+                    <pre className="notes whitespace-pre-wrap font-sans text-base leading-relaxed text-foreground/90">
+                        {lecture.transcript || "No transcript available."}
+                    </pre>
+                </div>
             </TabsContent>
         </Tabs>
     );

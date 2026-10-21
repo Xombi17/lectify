@@ -47,16 +47,21 @@ Living project status, updated after every feature lands.
 
 **Open items:** Phase 20 visual UAT; VER-01 live run with SNS email (subscription is confirmed); NIM model fix or removal; Radox credit; legacy lectures with `class_id IS NULL` visible to all students; capacity (DB pool, login storm); no emailed password reset (admin reset links instead); react-query not adopted. Gotchas: frontend vitest needs `--pool=threads` on Node 24; a GateGuard hook demands "importers / affected API / data / user instruction" facts before the first edit of each file (state them, then retry the edit).
 
-### What was added (Phase 20 - Field Notebook frontend redesign)
+### What was added (Lecture Detail Responsive 2-Column Layout & Study Companion)
 
-- **Tokens and themes** (`frontend/src/index.css`, `tailwind.config.js`, `app/providers.tsx`, `ThemeToggle.jsx`): Day desk / Night desk via `data-theme`, next-themes with a pre-paint script (`lectify-theme`, `suppressHydrationWarning` in `app/layout.tsx`); lime removed; tokens and AA contrast checked in `tokens.test.js`.
-- **Fonts** (`app/layout.tsx`): `next/font/google` Bricolage Grotesque, Newsreader, Caveat (400/700) and Geist Mono, self-hosted at build; no third-party CDN references.
-- **Primitives**: Button variants paper/pen/quiet with legacy aliases, restyled ui fields and read-tabs, `StatusStamp` ("Ready / Writing up / Retry processing"), `ConfirmDialog`, `PenPlayer`.
-- **Surfaces restyled**: landing, auth, student dashboard/review/bookmarks, lecture detail, teacher dashboard/upload, admin on a plain page (no holes or tape). `lectureApi.retry` client added for the admin retry action.
-- **Guards**: `tokens`, `designGuards` (banned fonts/CDNs plus a surface-wide gate: weights 400/700 only, 4 sizes, no palette classes, no duotone, no standalone `text-accent`, no `dark:`, framer-motion requires `useReducedMotion`), `testids` baseline, `modules`.
-- **Concurrent UX-audit changes** (separate session, noted as facts): new ForgotPassword, ResetPassword, Enroll, Account, AdminUsers pages, `AuthCard`, `PasswordInput`, `not-found`/`error`/`global-error`, Account link and Users nav in `AppShell`, filters and load-more in `StudentDashboard`. Their old Tailwind sizes and weights were swept into the Field Notebook tokens (logic and testids unchanged).
-- **Test counts:** frontend vitest 18 files, 283 passed; `next build` passes. Backend untouched.
-- **Still open:** human visual UAT (375px and 1280px, day and night, reduced motion, admin without holes or tape); VER-01 live run.
+- **Favicon & App Icon Suite** (`frontend/public/icon.svg`, `frontend/public/favicon.ico`, `frontend/public/apple-touch-icon.png`, `frontend/public/icon-192.png`, `frontend/public/icon-512.png`, `frontend/public/site.webmanifest`, `frontend/app/icon.svg`, `frontend/app/favicon.ico`, `frontend/app/apple-icon.png`, `frontend/app/layout.tsx`):
+  - Replaced the blank terracotta SVG data-URI with a proper branded icon suite matching Lectify's warm terracotta palette (`#cc785c`) and signature fountain pen mark (`PenNib`).
+  - Added multi-resolution `favicon.ico` (16x16, 32x32, 48x48, 64x64) and vector `icon.svg` with high-contrast inner border for crispness on both dark and light browser chrome.
+  - Added `apple-touch-icon.png` (180x180), PWA icons (`icon-192.png`, `icon-512.png`), and `site.webmanifest`.
+  - Wired into Next.js App Router metadata in `layout.tsx`.
+- **Lecture Detail Page & Notes Layout** (`frontend/src/cra-pages/LectureDetailPage.jsx`, `frontend/src/components/EditableNotes.jsx`, `frontend/src/index.css`):
+  - Solved unused right-hand screen void by introducing a responsive 12-column grid (`grid-cols-1 lg:grid-cols-12`).
+  - Left column (`lg:col-span-8`): Focused reading area with reading time estimate, polished TL;DR executive summary card, and numbered smart notes with clean bookmarks. Paragraph reading length comfortably bounded at `72ch` without locking the entire page container to `68ch`.
+  - Right companion sidebar (`lg:col-span-4`, sticky on desktop): Features prominent Key Concepts badges, Lecture Insights counters, and interactive Study Companion shortcuts that switch directly to Quiz, Flashcards, or Doubt Chat tabs with one click.
+  - Full mobile responsiveness: smoothly collapses to single-column on smaller viewports with mobile-optimized key concepts flow.
+  - Strict compliance with `designGuards` (no banned sizes/weights/palette classes) and preservation of all `data-testid` baselines.
+- **Test counts:** frontend vitest 19 files, 384 passed; `next build` passed. Backend 339 passed, 3 skipped.
+- **Still open:** human visual UAT; VER-01 live run.
 - **Next card in queue:** Phase 20 UAT sign-off, then redeploy ComputeStack and run VER-01.
 
 ### What was added (UX audit fixes: accounts, enrollment, QR, paging)

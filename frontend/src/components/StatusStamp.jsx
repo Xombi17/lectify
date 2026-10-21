@@ -6,11 +6,12 @@ const CLS = { ready: "stamp-ready", processing: "stamp-proc", failed: "stamp-fai
 const ICON = { ready: Check, processing: HourglassMedium, failed: Warning };
 const FALLBACK = { ready: "Ready", processing: "Writing up", failed: "Retry processing" };
 
-export default function StatusStamp({ status, className }) {
+// extra props (e.g. a different data-testid) pass through to the chip
+export default function StatusStamp({ status, className, ...rest }) {
     const kind = statusPillKind(status);
     const Icon = ICON[kind];
     return (
-        <span data-testid="status-badge" data-kind={kind} className={cn("stamp", CLS[kind], className)}>
+        <span data-testid="status-badge" data-kind={kind} className={cn("stamp", CLS[kind], className)} {...rest}>
             <Icon aria-hidden="true" weight="bold" size={16} />
             {STATUS_LABEL[status] ?? FALLBACK[kind]}
         </span>

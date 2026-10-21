@@ -12,10 +12,15 @@ export const metadata: Metadata = {
   title: "Lectify",
   description: "Lecture notes, quizzes and flashcards, written up from every class.",
   icons: {
-    icon: {
-      url: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='16' fill='%23cc785c'/></svg>",
-    },
+    icon: [
+      { url: "/icon.svg", type: "image/svg+xml" },
+      { url: "/favicon.ico", sizes: "32x32" },
+    ],
+    apple: [
+      { url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+    ],
   },
+  manifest: "/site.webmanifest",
 };
 
 export const viewport: Viewport = {
