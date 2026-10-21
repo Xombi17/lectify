@@ -89,7 +89,34 @@ def _compute_conversion_rate(scan_count: int, enrollment_count: int) -> float:
     return round(enrollment_count / scan_count, 4)
 
 
-async def _create_qr_internal(class_id: str, user_id: str) -> QRCodePublic:
+def _app_base_url(request: Request) -> str:
+    """Public URL students open. Explicit APP_URL wins; otherwise the browser's own origin, so a
+    QR generated on the deployed site never points at localhost."""
+    configured = (settings.APP_URL or "").rstrip("/")
+    if configured:
+        return configured
+    origin = request.headers.get("origin")
+    if origin:
+        return origin.rstrip("/")
+    host = request.headers.get("x-forwarded-host") or request.headers.get("host")
+    proto = request.headers.get("x-forwarded-proto") or request.url.scheme
+    return f"{proto}://{host}" if host else "http://localhost:3000"
+
+
+async def _assert_can_manage_class(class_id: str, user: UserPublic) -> None:
+    """Class must exist; non-admins must hold an active assignment to it."""
+    if not await ClassRepository().get_by_id(class_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Class not found")
+    if user.role != "admin":
+        assignments = await TeacherAssignmentRepository().list_for_teacher(user.id)
+        if class_id not in {a.class_id for a in assignments if a.active}:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Teacher not assigned to this class",
+            )
+
+
+async def _create_qr_internal(class_id: str, user_id: str, base_url: str) -> QRCodePublic:
     """Internal helper to generate a QR code for a class. Does not verify permissions."""
     import uuid
 
@@ -98,7 +125,7 @@ async def _create_qr_internal(class_id: str, user_id: str) -> QRCodePublic:
     # Create enrollment URL
     from core.security import create_enrollment_token
     jwt_token = create_enrollment_token(class_id, token_secret)
-    enrollment_url = f"{settings.APP_URL}/enroll?token={jwt_token}"
+    enrollment_url = f"{base_url}/enroll?token={jwt_token}"
 
     # Generate SVG QR code
     qr_img = qrcode.make(enrollment_url, image_factory=SvgImage)
@@ -109,7 +136,8 @@ async def _create_qr_internal(class_id: str, user_id: str) -> QRCodePublic:
     # Create QR code DB record
     qr_repo = QRCodeRepository()
     qr_id = qr_repo.new_id()
-    svg_key = f"qr-codes/{class_id}/{qr_id}.svg"
+    # Under classes/ so the API role (scoped to classes/*) can write and stream it
+    svg_key = f"classes/{class_id}/qr/{qr_id}.svg"
 
     # Upload SVG to storage service
     storage = get_storage()
@@ -134,6 +162,7 @@ async def _create_qr_internal(class_id: str, user_id: str) -> QRCodePublic:
 )
 async def generate_qr(
     class_id: str,
+    request: Request,
     user: UserPublic = Depends(require_teacher_or_admin),
     _ = Depends(rate_limit_qr_generate),
 ):
@@ -159,7 +188,7 @@ async def generate_qr(
                 detail="Teacher not assigned to this class",
             )
 
-    qr_result = await _create_qr_internal(class_id, user.id)
+    qr_result = await _create_qr_internal(class_id, user.id, _app_base_url(request))
 
     await log_audit(
         action=AUDIT_GENERATE_QR,
@@ -179,10 +208,12 @@ async def generate_qr(
 )
 async def regenerate_qr(
     class_id: str,
+    request: Request,
     user: UserPublic = Depends(require_teacher_or_admin),
     _ = Depends(rate_limit_qr_generate),
 ):
     """Regenerate QR code for a class. Deactivates the old QR and creates a new one."""
+    await _assert_can_manage_class(class_id, user)
     qr_repo = QRCodeRepository()
 
     # Deactivate current active QR
@@ -191,7 +222,7 @@ async def regenerate_qr(
         await qr_repo.deactivate(current.id)
 
     # Generate new QR
-    return await _create_qr_internal(class_id, user.id)
+    return await _create_qr_internal(class_id, user.id, _app_base_url(request))
 
 
 @router.get(
@@ -379,11 +410,12 @@ async def enroll_via_qr(
     # Increment scan count
     await qr_repo.increment_scan(qr.id)
 
-    # Return enrichment info
+    cls = await ClassRepository().get_by_id(class_id)
     return {
         "valid": True,
         "class_id": class_id,
-        "redirect_url": f"/enroll/confirm?class_id={class_id}&token={token}",
+        "class_name": cls.name if cls and cls.name else "this class",
+        "redirect_url": f"/enroll?token={token}",
     }
 
 
@@ -399,6 +431,12 @@ async def enroll_via_qr_post(
     then enrolls the student in the class.
     """
     from core.security import decode_enrollment_token
+
+    if user.role != "student":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only student accounts can enroll in a class",
+        )
 
     # Decode and validate token
     payload = decode_enrollment_token(token)

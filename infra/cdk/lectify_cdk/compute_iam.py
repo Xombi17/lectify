@@ -62,15 +62,25 @@ def build_api_role(
         arn_format=ArnFormat.SLASH_RESOURCE_NAME,
     )
 
-    # 1. S3 class objects: Get, Put, Abort
+    # 1. S3 class objects: Get, Put, Abort, Delete (storage.delete on 413 / lecture delete)
     role.add_to_policy(
         iam.PolicyStatement(
             actions=[
                 "s3:PutObject",
                 "s3:GetObject",
                 "s3:AbortMultipartUpload",
+                "s3:DeleteObject",
             ],
             resources=[data.bucket.arn_for_objects("classes/*")],
+        )
+    )
+
+    # 1b. S3 ListBucket: without it head_object on a missing key returns 403, not 404 (-> 500 not 409)
+    role.add_to_policy(
+        iam.PolicyStatement(
+            actions=["s3:ListBucket"],
+            resources=[data.bucket.bucket_arn],
+            conditions={"StringLike": {"s3:prefix": ["classes/*"]}},
         )
     )
 

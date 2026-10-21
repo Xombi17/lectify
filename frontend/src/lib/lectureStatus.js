@@ -1,20 +1,24 @@
 /**
- * Lecture status → pill mapping (Phase 16 UI-SPEC).
+ * Lecture status to stamp mapping (Phase 20 UI-SPEC).
  *
- * ready → Ready (content enabled)
- * uploading / queued / processing / retrying / uploaded → Processing
- * error / dead_letter → Failed (player hidden, contact-teacher copy)
+ * ready -> Ready (content enabled)
+ * uploading / queued / processing / retrying / uploaded / verifying -> Writing up
+ * error / dead_letter -> Retry processing (player hidden)
  */
 export const STATUS_LABEL = {
     ready: "Ready",
-    uploading: "Processing",
-    queued: "Processing",
-    processing: "Processing",
-    retrying: "Processing",
-    uploaded: "Processing",
-    error: "Processing failed — contact your teacher",
-    dead_letter: "Processing failed — contact your teacher",
+    uploading: "Writing up",
+    queued: "Writing up",
+    processing: "Writing up",
+    retrying: "Writing up",
+    uploaded: "Writing up",
+    verifying: "Writing up",
+    error: "Retry processing",
+    dead_letter: "Retry processing",
 };
+
+export const FAILED_MESSAGE =
+    "This lecture could not be processed. Retry, or ask an admin if it keeps failing.";
 
 export function statusPillKind(status) {
     if (status === "ready") return "ready";

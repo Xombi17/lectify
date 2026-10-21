@@ -72,29 +72,37 @@ Plans:
 **Plans**: 13 plans
 Plans:
 **Wave 1**
+
 - [x] 13-01-PLAN.md — Test baseline, security gate (SEC-04), config flags/pools/SSM overlay
 
 **Wave 2** *(blocked on Wave 1)*
+
 - [x] 13-02-PLAN.md — S3Storage instance-profile creds, presign POST/GET, head_object
 - [x] 13-03-PLAN.md — jobs table (ORM + Prisma parity), JobRepository idempotency + atomic claim
 
 **Wave 3** *(blocked on Wave 2)*
+
 - [x] 13-04-PLAN.md — QueueBackend seam (memory/SQS) + queue_client facade rewrite
 
 **Wave 4** *(blocked on Wave 3)*
+
 - [x] 13-05-PLAN.md — Worker loop: claim/commit/enqueue/delete, backoff, dead_letter
 
 **Wave 5** *(blocked on Wave 4)*
+
 - [x] 13-06-PLAN.md — Provider 429 handling, SIGTERM drain, worker entrypoint
 
 **Wave 6** *(blocked on Wave 5)*
+
 - [x] 13-07-PLAN.md — Chunk-level transcription state (job_chunks)
 - [x] 13-08-PLAN.md — Lecture-ready SNS publish hook
 
 **Wave 7** *(blocked on Wave 6)*
+
 - [x] 13-09-PLAN.md — Remove redis/arq, drop Redis health probe, docs/status close-out
 
 **Gap closure** *(from 13-VERIFICATION.md)*
+
 - [ ] 13-10-PLAN.md — (wave 1) ProviderRateLimited carries Retry-After from Gemini/NIM/Groq 429s; REQUIREMENTS rows reset to Pending
 - [ ] 13-11-PLAN.md — (wave 1) Clean offline test collection + dispatcher isolation; ENV fail-closed security gate; drop dead SNS helper
 - [ ] 13-12-PLAN.md — (wave 2) Crash-safe enqueue-before-complete ordering; worker honors Retry-After
@@ -113,6 +121,7 @@ Plans:
   4. A seed mirroring the college (4 years × Comps A/B/C, CSE A/B/C, Electronics & Computer, Mechanical) exists, and an automated cross-class isolation suite passes against it
 
 **Plans**: 7/7 plans executed
+
   - [x] 13.1-01: Data Model, Schema Parity, and Migrations / Models (D-02, D-05)
   - [x] 13.1-02: Lecture Upload & Teacher Assignment Verification (D-01, SCOPE-01, SCOPE-03)
   - [x] 13.1-03: Student Fail-Closed Access & Direct Item Retrieval Protection (D-03, SCOPE-02)
@@ -139,12 +148,15 @@ Plans:
 **Plans**: 3/3 plans complete
 
 **Wave 1**
+
 - [x] 14-01-PLAN.md — DataStack Core: S3 bucket, 3 SQS stage queues + shared DLQ, SNS lecture-ready topic + email subscriptions
 
 **Wave 2** *(blocked on Wave 1)*
+
 - [x] 14-02-PLAN.md — RDS PostgreSQL 16 on db.t4g.micro, ParameterGroup (force_ssl=1), Secrets Manager secret, CfnOutputs
 
 **Wave 3** *(blocked on Wave 2)*
+
 - [x] 14-03-PLAN.md — SSM put-secrets.sh, repo secrets scanner & cost trap tests, Makefile deploy/destroy updates, README documentation
 
 ### Phase 15: Compute Tier & Delivery
@@ -163,17 +175,21 @@ Plans:
 **Plans**: 6/6 plans complete
 
 **Wave 1**
+
 - [x] 15-01-PLAN.md — Backend seams: shallow `/healthz`, DB URL from Secrets Manager, `workers all` (3 loops, 1 process), `DB_AUTO_CREATE` gate
 - [x] 15-03-PLAN.md — Frontend same-origin `/api`, Next `/healthz`, off-instance `build-web.sh`
 - [x] 15-04-PLAN.md — ComputeStack skeleton: ALB + target groups + `/api/*` rule, per-tier least-privilege IAM roles
 
 **Wave 2** *(blocked on Wave 1)*
+
 - [x] 15-02-PLAN.md — `bootstrap_db` (advisory lock) + idempotent `seed_demo`
 
 **Wave 3** *(blocked on Waves 1-2)*
+
 - [x] 15-05-PLAN.md — Launch templates (IMDSv2), web/worker ASGs (worker max 3), unattended bootstrap, systemd units, CFN signals, app.py wiring
 
 **Wave 4** *(blocked on Wave 3)*
+
 - [x] 15-06-PLAN.md — Makefile targets, ffmpeg vendoring, README runbook (two-step deploy), hygiene scan, CLAUDE.md status
 
 **UI hint**: yes
@@ -288,9 +304,44 @@ Plans:
 **Plans:** 6/6 plans complete
 
 Plans:
+
 - [x] 19-01-PLAN.md — Settings, shared provider cooldown, hermetic test keys, SSM put-secrets keys (wave 1)
 - [x] 19-02-PLAN.md — Hinglish language spike: Nova-3 multi vs hi vs en-IN, user picks winner (wave 1, checkpoints)
 - [x] 19-03-PLAN.md — DeepgramProvider + NagaWhisperProvider + ordered STT failover chain (wave 2)
 - [x] 19-04-PLAN.md — Free LLM chain Naga -> NIM -> Gemini, content=None + 429 cooldown, NIM default fix (wave 2)
 - [x] 19-05-PLAN.md — TranscriptionWorker: Deepgram whole-file first, chunked chain fallback, stub regression (wave 3)
 - [x] 19-06-PLAN.md — Live smoke script, spike winner applied, docs + CLAUDE.md Status, graphify (wave 4)
+
+### Phase 20: Frontend redesign: new design system and full UI refresh (replace neon scheme; power-design + taste + impeccable)
+
+**Goal:** Replace the neon lime scheme and the current UI with the "Field Notebook" design language (ruled paper, ink-blue actions, highlighter marks, red-pen margin/errors, stamp statuses, handwritten margin notes; Bricolage Grotesque + Newsreader + Caveat; day and night desk themes) across landing, auth, student, teacher and admin surfaces. Admin screens use the same palette and type without binding holes or tape.
+**Design reference:** `.planning/phases/20-frontend-redesign-new-design-system-and-full-ui-refresh-repl/20-DESIGN-PREVIEW.html` (approved). The unmerged `feat/frontend-redesign` branch ("Swiss Academic", red accent) is rejected and superseded.
+**Requirements**: TBD
+**Depends on:** Phase 19
+**Plans:** 9/10 plans executed
+
+Plans:
+**Wave 1**
+
+- [x] 20-01-PLAN.md — Foundation: Wave 0 tests (tokens/contrast, design guards, testid baseline, module imports, ported admin tests), Field Notebook tokens + utilities, Tailwind, next/font, theme provider + toggle, Lectify metadata
+- [x] 20-02-PLAN.md — Primitives: StatusStamp (Ready / Writing up / Retry processing) + test, ConfirmDialog, Button/field/tabs/dialog/table restyle
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [x] 20-03-PLAN.md — Notebook AppShell (desk bar, ruled page, index tabs, admin plain page) + ruled loading skeletons
+- [x] 20-04-PLAN.md — Landing and login/signup restyle
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [x] 20-05-PLAN.md — Student dashboard (slip, contents, planner, due deck, week), review, bookmarks
+- [x] 20-06-PLAN.md — Lecture detail: PenPlayer, stamp, read-tabs, notes, failed state + admin retry; flashcards/quiz/chat/notes/bookmark components
+- [x] 20-07-PLAN.md — Teacher dashboard + upload form with inline field errors
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [x] 20-08-PLAN.md — Admin dashboard + HierarchyTree on plain page with delete confirmation
+- [x] 20-09-PLAN.md — Admin dialogs/panels: remove-teacher and regenerate-QR confirmations, enrollment table
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 20-10-PLAN.md — Design contract gate, a11y/reduced-motion audit, docs, graphify, human visual UAT

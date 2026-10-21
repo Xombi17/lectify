@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends
 
-from core.deps import get_current_user
+from core.deps import get_current_user, lecture_in_scope, student_class_scope
 from models.chat import StudentAnalytics, WeakLecture
 from models.user import UserPublic
 from repositories.attempt_repository import AttemptRepository
@@ -32,10 +32,11 @@ async def my_analytics(user: UserPublic = Depends(get_current_user)):
         by_lecture[a.lecture_id].append(a.percentage)
 
     lec_repo = LectureRepository()
+    scope = await student_class_scope(user)
     rows: list[WeakLecture] = []
     for lid, scores in by_lecture.items():
         lec = await lec_repo.get_by_id(lid)
-        if not lec:
+        if not lec or not lecture_in_scope(lec, scope):
             continue
         rows.append(WeakLecture(
             lecture_id=lid,

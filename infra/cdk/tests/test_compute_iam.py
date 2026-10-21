@@ -121,6 +121,8 @@ def test_api_role_permissions(t_compute):
     assert "s3:PutObject" in all_actions
     assert "s3:GetObject" in all_actions
     assert "s3:AbortMultipartUpload" in all_actions
+    assert "s3:DeleteObject" in all_actions  # storage.delete after 413 / lecture delete
+    assert "s3:ListBucket" in all_actions  # head_object must see 404, not 403, for missing keys
     assert "sqs:SendMessage" in all_actions
     assert "sqs:GetQueueAttributes" in all_actions  # enqueue_job reads queue depth
     assert "secretsmanager:GetSecretValue" in all_actions
@@ -130,7 +132,6 @@ def test_api_role_permissions(t_compute):
     assert "sqs:ReceiveMessage" not in all_actions
     assert "sqs:DeleteMessage" not in all_actions
     assert "sns:Publish" not in all_actions
-    assert "s3:ListBucket" not in all_actions
 
 
 def test_worker_role_permissions(t_compute):

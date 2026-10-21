@@ -14,8 +14,10 @@ from lectify_cdk.observability_stack import ObservabilityStack
 
 def _require_artifacts(cdk_dir: Path):
     backend_dir = cdk_dir.parent.parent / "backend"
-    web_dir = cdk_dir / "build" / "web"
-    bootstrap_dir = cdk_dir / "bootstrap"
+    # LECTIFY_ARTIFACT_ROOT lets tests point the fail-fast checks at a temp tree
+    root = Path(os.environ.get("LECTIFY_ARTIFACT_ROOT") or cdk_dir)
+    web_dir = root / "build" / "web"
+    bootstrap_dir = root / "bootstrap"
     ffmpeg_archive = bootstrap_dir / "vendor" / "ffmpeg-release-amd64-static.tar.xz"
     sha_file = bootstrap_dir / "ffmpeg.sha256"
 

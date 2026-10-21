@@ -2,7 +2,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import {
-    GraduationCap,
+    PenNib,
     SignOut,
     Microphone,
     BookOpen,
@@ -10,8 +10,10 @@ import {
     Brain,
     BookmarkSimple,
     Buildings,
-} from "@phosphor-icons/react";
+    UsersThree,
+} from "@/components/icons";
 import { Button } from "@/components/ui/button";
+import ThemeToggle from "@/components/ThemeToggle";
 
 export default function AppShell({ children }) {
     const { user, logout } = useAuth();
@@ -34,88 +36,85 @@ export default function AppShell({ children }) {
     ];
     const adminNav = [
         { to: "/admin/dashboard", label: "Hierarchy", icon: Buildings },
+        { to: "/admin/users", label: "Users", icon: UsersThree },
     ];
     const nav = user?.role === "admin" ? adminNav : user?.role === "teacher" ? teacherNav : studentNav;
 
+    const home =
+        user?.role === "admin" ? "/admin/dashboard" : user?.role === "teacher" ? "/teacher/dashboard" : "/student/dashboard";
+
     return (
         <div className="min-h-screen bg-background">
-            <header className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur">
-                <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
-                    <Link
-                        href={
-                            user?.role === "admin"
-                                ? "/admin/dashboard"
-                                : user?.role === "teacher"
-                                ? "/teacher/dashboard"
-                                : "/student/dashboard"
-                        }
-                        className="flex items-center gap-2"
-                        data-testid="brand-link"
-                    >
-                        <div className="flex h-8 w-8 items-center justify-center bg-primary text-primary-foreground">
-                            <GraduationCap size={20} weight="duotone" />
-                        </div>
-                        <div className="leading-none">
-                            <div className="font-display text-base font-bold tracking-tight">
-                                LectureMind
-                            </div>
-                            <div className="text-overline text-muted-foreground">
-                                AI Academic OS
-                            </div>
-                        </div>
+            <header className="topbar">
+                <div className="desk-bar">
+                    <Link href={home} className="brand" data-testid="brand-link">
+                        <span className="brand-mark" aria-hidden="true">
+                            <PenNib size="1em" weight="bold" />
+                        </span>
+                        Lectify
                     </Link>
 
-                    <nav className="hidden items-center gap-1 md:flex">
+                    <nav aria-label="Sections" className="tabs">
                         {nav.map((n) => {
                             const Icon = n.icon;
-                            const active = pathname === n.to;
+                            const active = pathname === n.to || pathname?.startsWith(n.to + "/");
                             return (
                                 <Link
                                     key={n.to}
                                     href={n.to}
                                     data-testid={`nav-${n.label.toLowerCase().replace(/\s/g, "-")}`}
-                                    className={`flex items-center gap-2 px-3 py-2 text-sm transition-colors ${
-                                        active
-                                            ? "border-b-2 border-primary font-semibold text-primary"
-                                            : "border-b-2 border-transparent text-muted-foreground hover:text-foreground"
-                                    }`}
+                                    aria-current={active ? "page" : undefined}
                                 >
-                                    <Icon size={16} weight="duotone" />
+                                    <Icon size={18} aria-hidden="true" />
                                     {n.label}
                                 </Link>
                             );
                         })}
                     </nav>
 
-                    <div className="flex items-center gap-3">
+                    <div className="shell-actions">
+                        <ThemeToggle />
                         {user && (
-                            <div className="flex items-center gap-2 text-sm">
-                                <div className="flex h-8 w-8 items-center justify-center bg-accent/30 text-accent-foreground">
-                                    <User size={16} weight="duotone" />
-                                </div>
-                                <div className="hidden text-right leading-tight sm:block">
-                                    <div className="font-medium" data-testid="user-name">
+                            <Link
+                                href="/account"
+                                aria-label={`Account settings for ${user.name}`}
+                                aria-current={pathname === "/account" ? "page" : undefined}
+                                data-testid="account-link"
+                                className="flex min-h-11 items-center gap-2 rounded-[var(--r)] px-2 text-sm transition-colors hover:bg-muted aria-[current=page]:bg-muted"
+                            >
+                                <span className="flex h-8 w-8 items-center justify-center rounded-full border border-border bg-muted">
+                                    <User size={16} aria-hidden="true" />
+                                </span>
+                                <span className="hidden text-left leading-tight lg:block">
+                                    <span className="block font-medium text-foreground" data-testid="user-name">
                                         {user.name}
-                                    </div>
-                                    <div className="text-overline text-muted-foreground">
-                                        {user.role}
-                                    </div>
-                                </div>
-                            </div>
+                                    </span>
+                                    <span className="block text-sm capitalize text-muted-foreground">{user.role}</span>
+                                </span>
+                            </Link>
                         )}
                         <Button
-                            variant="ghost"
+                            variant="quiet"
                             size="sm"
                             onClick={onLogout}
                             data-testid="logout-btn"
+                            className="min-w-11"
                         >
-                            <SignOut size={16} weight="duotone" />
-                            <span className="ml-2 hidden sm:inline">Sign out</span>
+                            <SignOut size={16} aria-hidden="true" />
+                            <span className="sr-only sm:not-sr-only">Log out</span>
                         </Button>
                     </div>
                 </div>
             </header>
-            <main className="mx-auto max-w-7xl px-6 py-10">{children}</main>
+            <main
+                id="main"
+                tabIndex={-1}
+                className={user?.role === "admin" ? "book page page--plain" : "book page"}
+            >
+                <div key={pathname} className="turn">
+                    {children}
+                </div>
+            </main>
         </div>
     );
 }

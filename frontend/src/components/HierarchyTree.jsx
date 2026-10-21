@@ -1,5 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
-import { motion } from "framer-motion";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
     CaretRight,
     CaretLeft,
@@ -16,7 +15,7 @@ import {
     CheckCircle,
     Circle,
     QrCode,
-} from "@phosphor-icons/react";
+} from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -25,6 +24,7 @@ import { adminApi } from "@/lib/api";
 import { toast } from "sonner";
 import CreateEntityDialog from "@/components/CreateEntityDialog";
 import TeacherAssignmentPanel from "@/components/TeacherAssignmentPanel";
+import ConfirmDialog from "@/components/ConfirmDialog";
 import QRCodeCard from "@/components/QRCodeCard";
 import EnrollmentTable from "@/components/EnrollmentTable";
 
@@ -59,6 +59,16 @@ const LEVEL_CONFIG = {
                 listFn: (id) => adminApi.listInstitutionBatches(id),
                 childType: "batch",
                 hint: "Graduating cohorts — divisions can differ per batch",
+            },
+            {
+                key: "classes",
+                label: "Classes",
+                icon: ChalkboardTeacher,
+                listFn: () => adminApi.listClasses(),
+                childType: "class",
+                hint: "Every class in the college. Open one to assign teachers, share the QR and check enrollment.",
+                // a class needs a division + subject, so it is created from a division page
+                noAdd: true,
             },
         ],
     },
@@ -183,10 +193,10 @@ function displayMeta(type, data) {
     if (type === "branch" && data.code) return data.code;
     if (type === "subject" && data.code) return `${data.code}${data.credits ? ` · ${data.credits} credits` : ""}`;
     if (type === "division" && data.capacity) return `Capacity ${data.capacity}`;
-    if (type === "semester" && data.label && data.number != null) return data.label;
+    if (type === "semester" && data.number != null && displayName(type, data) !== `Semester ${data.number}`) return `Semester ${data.number}`;
     if (type === "batch" && data.admission_year != null && data.graduating_year != null)
         return `Admitted ${data.admission_year} · Graduating ${data.graduating_year}`;
-    if (type === "year" && data.name && data.number != null) return data.name;
+    if (type === "year" && data.number != null && displayName(type, data) !== `Year ${data.number}`) return `Year ${data.number}`;
     return "";
 }
 
@@ -218,6 +228,8 @@ export default function HierarchyTree() {
     const [createOptions, setCreateOptions] = useState({});
     const [createInitial, setCreateInitial] = useState({});
     const [rev, setRev] = useState(0);
+    const [pendingDelete, setPendingDelete] = useState(null);
+    const confirming = useRef(false);
     // Rename state: `${type}:${id}` -> draft name
     const [renaming, setRenaming] = useState(null);
     const [renameValue, setRenameValue] = useState("");
@@ -410,8 +422,17 @@ export default function HierarchyTree() {
         refresh();
     };
 
-    const handleDelete = async (type, data) => {
-        if (!window.confirm(`Delete "${displayName(type, data)}"? This cannot be undone.`)) return;
+    // Resolves after the user confirms (and delete finishes) or cancels.
+    const handleDelete = (type, data) =>
+        new Promise((resolve) => setPendingDelete({ type, data, resolve }));
+
+    const cancelDelete = () => {
+        if (confirming.current) return;
+        pendingDelete?.resolve();
+        setPendingDelete(null);
+    };
+
+    const runDelete = async ({ type, data }) => {
         try {
             await DELETE_FNS[type](data.id);
             toast.success(`${LEVEL_CONFIG[type].label} deleted`);
@@ -424,6 +445,15 @@ export default function HierarchyTree() {
         } catch {
             toast.error(`Failed to delete ${LEVEL_CONFIG[type].label}`);
         }
+    };
+
+    const confirmDelete = async () => {
+        const p = pendingDelete;
+        confirming.current = true;
+        setPendingDelete(null);
+        await runDelete(p);
+        confirming.current = false;
+        p.resolve();
     };
 
     const startRename = (type, data) => {
@@ -589,10 +619,11 @@ export default function HierarchyTree() {
                             type="button"
                             onClick={() => goToCrumb(i)}
                             data-testid={i === 0 ? "breadcrumb-root" : `breadcrumb-${node.type}-${node.data.id}`}
-                            className={`px-2 py-1 font-display font-bold transition-colors ${
+                            aria-current={i === path.length - 1 ? "page" : undefined}
+                            className={`inline-flex min-h-11 items-center rounded-[var(--r)] px-2 font-medium transition-colors ${
                                 i === path.length - 1
-                                    ? "text-primary underline underline-offset-4"
-                                    : "text-muted-foreground hover:text-foreground"
+                                    ? "text-foreground"
+                                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
                             }`}
                         >
                             {displayName(node.type, node.data)}
@@ -603,17 +634,17 @@ export default function HierarchyTree() {
 
             {/* Current level */}
             {loadingRoot || !current ? (
-                <div className="space-y-3 rounded-lg border border-border bg-card p-6">
+                <div aria-busy="true" aria-label="Loading" className="space-y-3 rounded-[var(--radius)] border border-border bg-card p-6">
                     <Skeleton className="h-8 w-64" />
                     <Skeleton className="h-6 w-48" />
                     <Skeleton className="h-6 w-56" />
                 </div>
             ) : institutions.length === 0 ? (
-                <div className="rounded-lg border border-dashed border-border bg-card p-12 text-center">
-                    <Buildings size={40} weight="duotone" className="mx-auto mb-3 text-muted-foreground/50" />
-                    <h2 className="font-display text-2xl font-bold tracking-tight">No institution configured</h2>
+                <div className="rounded-[var(--radius)] border border-dashed border-input/60 bg-muted/50 p-12 text-center">
+                    <Buildings size={40} weight="regular" className="mx-auto mb-3 text-muted-foreground/50" />
+                    <h2 className="font-display text-2xl">A blank page</h2>
                     <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
-                        This app is set up for one college. Ask your administrator to create it.
+                        No institution exists yet. Ask your administrator to create the college first.
                     </p>
                 </div>
             ) : (
@@ -636,6 +667,16 @@ export default function HierarchyTree() {
                     setShowTeachers={setShowTeachers}
                 />
             )}
+
+            <ConfirmDialog
+                open={!!pendingDelete}
+                onOpenChange={(v) => { if (!v && pendingDelete) cancelDelete(); }}
+                title={pendingDelete ? `Delete ${displayName(pendingDelete.type, pendingDelete.data)}? This removes it and cannot be undone.` : ""}
+                confirmLabel={pendingDelete ? `Delete ${pendingDelete.type}` : "Delete"}
+                cancelLabel="Keep it"
+                onConfirm={confirmDelete}
+                testId="confirm-delete"
+            />
 
             {/* Shared create dialog */}
             {createType && (
@@ -667,9 +708,9 @@ function Overview({ stats, loading, nextStep, allDone, jumping, onStep, stepDone
         ]
         : [];
     return (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
+        <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-5">
             {/* Counts */}
-            <div className="rounded-lg border border-border bg-card p-5 lg:col-span-3">
+            <div className="rounded-[var(--radius)] border border-border bg-card p-5 sm:p-6 lg:col-span-3">
                 <div className="text-overline mb-4 text-muted-foreground">At a glance</div>
                 {loading ? (
                     <div className="grid grid-cols-3 gap-4">
@@ -678,27 +719,27 @@ function Overview({ stats, loading, nextStep, allDone, jumping, onStep, stepDone
                         ))}
                     </div>
                 ) : (
-                    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3">
                         {counts.map((c) => (
                             <div key={c.key} data-testid={`stat-${c.key}`}>
-                                <div className="font-display text-3xl font-black tracking-tighter tabular-nums">
+                                <div className="text-section tabular-nums">
                                     {c.value}
                                 </div>
-                                <div className="text-overline text-muted-foreground">{c.label}</div>
+                                <div className="mt-1 text-sm text-muted-foreground">{c.label}</div>
                             </div>
                         ))}
                     </div>
                 )}
             </div>
             {/* Guided setup */}
-            <div className="rounded-lg border border-border bg-primary p-5 text-primary-foreground lg:col-span-2">
-                <div className="text-overline mb-1 text-accent">
+            <div className="rounded-[var(--radius)] border border-border bg-muted p-5 sm:p-6 lg:col-span-2">
+                <div className="text-overline mb-1 text-primary">
                     {allDone ? "Setup complete" : "Setup guide"}
                 </div>
-                <div className="font-display text-xl font-bold tracking-tight">
+                <div className="font-display text-2xl">
                     {allDone ? "Ready to teach." : "Get to your first class."}
                 </div>
-                <p className="mt-1 text-sm text-primary-foreground/70">
+                <p className="mt-1 text-sm text-muted-foreground">
                     {allDone
                         ? "Teachers can upload, students can enroll with the class QR."
                         : "Follow the steps. Each one takes you where the work happens."}
@@ -714,27 +755,27 @@ function Overview({ stats, loading, nextStep, allDone, jumping, onStep, stepDone
                                     onClick={() => onStep(s.key)}
                                     disabled={jumping || done}
                                     data-testid={`checklist-step-${s.key}`}
-                                    className={`flex w-full items-center gap-3 px-2 py-2 text-left transition-colors ${
+                                    className={`flex min-h-11 w-full items-center gap-3 rounded-[var(--r)] px-3 py-2 text-left transition-colors ${
                                         done
-                                            ? "opacity-70"
+                                            ? "text-muted-foreground"
                                             : isNext
-                                                ? "bg-accent/20 outline outline-1 outline-accent/50"
-                                                : "opacity-90 hover:bg-primary-foreground/5"
+                                                ? "border border-border bg-card"
+                                                : "hover:bg-card"
                                     }`}
                                 >
                                     {done ? (
-                                        <CheckCircle size={18} weight="fill" className="shrink-0 text-accent" />
+                                        <CheckCircle size={18} weight="fill" className="shrink-0 text-primary" />
                                     ) : (
-                                        <Circle size={18} className="shrink-0 text-primary-foreground/50" />
+                                        <Circle size={18} className="shrink-0 text-muted-foreground" />
                                     )}
                                     <span>
                                         <span className="block text-sm font-bold">
                                             {i + 1}. {s.label}
                                         </span>
-                                        <span className="block text-xs text-primary-foreground/60">{s.detail}</span>
+                                        <span className="block text-sm text-muted-foreground">{s.detail}</span>
                                     </span>
                                     {isNext && !done && (
-                                        <CaretRight size={14} className="ml-auto shrink-0 text-accent" />
+                                        <CaretRight size={14} className="ml-auto shrink-0 text-primary" />
                                     )}
                                 </button>
                             </li>
@@ -747,6 +788,8 @@ function Overview({ stats, loading, nextStep, allDone, jumping, onStep, stepDone
 }
 
 function NodeLevel({ node, institutionId, childrenCache, loading, renaming, renameValue, onRenameValue, onStartRename, onSaveRename, onCancelRename, onOpen, onDelete, onAdd, showTeachers, setShowTeachers }) {
+    // Declared before any early return (hook rules): per-group search text for long lists
+    const [groupQuery, setGroupQuery] = useState({});
     const { type, data } = node;
     const config = LEVEL_CONFIG[type];
     const groups = config.childGroups || [];
@@ -775,7 +818,7 @@ function NodeLevel({ node, institutionId, childrenCache, loading, renaming, rena
     }
     if (groups.length === 0) {
         return (
-            <div className="rounded-lg border border-border bg-card p-6">
+            <div className="rounded-[var(--radius)] border border-border bg-card p-6">
                 <EntityCard
                     type={type}
                     data={data}
@@ -800,11 +843,11 @@ function NodeLevel({ node, institutionId, childrenCache, loading, renaming, rena
     return (
         <div className="space-y-6">
             {/* Current node header */}
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius)] border border-border bg-card p-5">
                 <div className="flex min-w-0 items-center gap-3">
                     {(() => {
                         const Icon = config.icon;
-                        return <Icon size={24} weight="duotone" className="shrink-0 text-primary" />;
+                        return <Icon size={24} weight="regular" className="shrink-0 text-primary" />;
                     })()}
                     <div className="min-w-0">
                         <div className="text-overline text-muted-foreground">{config.label}</div>
@@ -823,7 +866,7 @@ function NodeLevel({ node, institutionId, childrenCache, loading, renaming, rena
                         onClick={() => onStartRename(type, data)}
                         data-testid={`rename-${type}-${data.id}`}
                     >
-                        <PencilSimple size={14} weight="duotone" className="mr-1" />
+                        <PencilSimple size={14} weight="regular" className="mr-1" />
                         Rename
                     </Button>
                     {type !== "institution" && (
@@ -834,7 +877,7 @@ function NodeLevel({ node, institutionId, childrenCache, loading, renaming, rena
                         data-testid={`delete-${type}-${data.id}`}
                         className="text-destructive hover:text-destructive"
                     >
-                        <Trash size={14} weight="duotone" className="mr-1" />
+                        <Trash size={14} weight="regular" className="mr-1" />
                         Delete
                     </Button>
                     )}
@@ -855,38 +898,59 @@ function NodeLevel({ node, institutionId, childrenCache, loading, renaming, rena
 
             {/* Child groups */}
             {groups.map((group) => {
-                const items = childrenCache?.[group.key] || [];
+                const all = childrenCache?.[group.key] || [];
+                const needle = (groupQuery[group.key] || "").trim().toLowerCase();
+                const items = needle
+                    ? all.filter((c) => String(displayName(group.childType, c)).toLowerCase().includes(needle))
+                    : all;
                 const GroupIcon = group.icon;
                 return (
                     <section key={group.key} aria-label={group.label}>
                         <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-border pb-2">
                             <div className="flex items-center gap-2">
-                                <GroupIcon size={18} weight="duotone" className="text-primary" />
-                                <h2 className="font-display text-xl font-bold tracking-tight">{group.label}</h2>
-                                <Badge variant="secondary" className="tabular-nums">{items.length}</Badge>
+                                <GroupIcon size={18} weight="regular" className="text-primary" />
+                                <h2 className="font-display text-2xl">{group.label}</h2>
+                                <Badge variant="secondary" className="tabular-nums">{all.length}</Badge>
                             </div>
+                            {!group.noAdd && (
                             <Button
                                 variant="outline"
                                 size="sm"
                                 onClick={() => onAdd(group.childType, data.id)}
                                 data-testid={`add-${group.childType}-btn`}
                             >
-                                <Plus size={14} weight="duotone" className="mr-1" />
+                                <Plus size={14} weight="regular" className="mr-1" />
                                 {`New ${LEVEL_CONFIG[group.childType].label}`}
                             </Button>
+                            )}
                         </div>
                         <p className="mb-3 text-sm text-muted-foreground">{group.hint}</p>
+                        {all.length > 8 && (
+                            <Input
+                                value={groupQuery[group.key] || ""}
+                                onChange={(e) => setGroupQuery((prev) => ({ ...prev, [group.key]: e.target.value }))}
+                                placeholder={`Search ${group.label.toLowerCase()}`}
+                                aria-label={`Search ${group.label.toLowerCase()}`}
+                                className="mb-3 max-w-sm"
+                                data-testid={`search-${group.key}`}
+                            />
+                        )}
                         {loading && !childrenCache ? (
                             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                                 {[1, 2, 3].map((i) => (
                                     <Skeleton key={i} className="h-28" />
                                 ))}
                             </div>
+                        ) : all.length > 0 && items.length === 0 ? (
+                            <p className="py-4 text-sm text-muted-foreground" data-testid={`no-match-${group.key}`}>
+                                No {group.label.toLowerCase()} match &ldquo;{groupQuery[group.key]}&rdquo;.
+                            </p>
                         ) : items.length === 0 ? (
-                            <div className="rounded-lg border border-dashed border-border bg-card p-8 text-center">
+                            <div className="rounded-[var(--radius)] border border-dashed border-input/60 bg-muted/50 p-8 text-center">
                                 <p className="text-sm text-muted-foreground">
                                     No {group.label.toLowerCase()} yet.
                                 </p>
+                                {!group.noAdd && (
                                 <Button
                                     variant="outline"
                                     size="sm"
@@ -894,19 +958,15 @@ function NodeLevel({ node, institutionId, childrenCache, loading, renaming, rena
                                     className="mt-3"
                                     data-testid={`add-${group.childType}-empty-btn`}
                                 >
-                                    <Plus size={14} weight="duotone" className="mr-1" />
+                                    <Plus size={14} weight="regular" className="mr-1" />
                                     {`Add the first ${LEVEL_CONFIG[group.childType].label.toLowerCase()}`}
                                 </Button>
+                                )}
                             </div>
                         ) : (
                             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                                 {items.map((child, i) => (
-                                    <motion.div
-                                        key={child.id}
-                                        initial={{ opacity: 0, y: 8 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        transition={{ delay: Math.min(i * 0.04, 0.3) }}
-                                    >
+                                    <div key={child.id}>
                                         <EntityCard
                                             type={group.childType}
                                             data={child}
@@ -919,7 +979,7 @@ function NodeLevel({ node, institutionId, childrenCache, loading, renaming, rena
                                             onOpen={() => onOpen(group.childType, child)}
                                             onDelete={() => onDelete(group.childType, child)}
                                         />
-                                    </motion.div>
+                                    </div>
                                 ))}
                             </div>
                         )}
@@ -942,8 +1002,8 @@ function EntityCard({ type, data, detail, renaming, renameValue, onRenameValue, 
     return (
         <div
             data-testid={`node-${type}-${data.id}`}
-            className={`flex h-full flex-col border border-border bg-card p-4 transition-colors ${
-                canDrill ? "cursor-pointer hover:border-primary/50" : ""
+            className={`flex h-full flex-col rounded-[var(--radius)] border border-border bg-card p-4 transition-colors ${
+                canDrill ? "cursor-pointer hover:border-input" : ""
             }`}
             onClick={canDrill && !isRenaming ? onOpen : undefined}
             onKeyDown={canDrill && !isRenaming ? (e) => { if (e.key === "Enter") onOpen(); } : undefined}
@@ -952,8 +1012,8 @@ function EntityCard({ type, data, detail, renaming, renameValue, onRenameValue, 
             aria-label={canDrill ? `Open ${displayName(type, data)}` : undefined}
         >
             <div className="flex items-start gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center bg-primary text-primary-foreground">
-                    <Icon size={20} weight="duotone" />
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--r)] bg-muted text-primary">
+                    <Icon size={20} weight="regular" />
                 </div>
                 <div className="min-w-0 flex-1">
                     {isRenaming ? (
@@ -967,11 +1027,11 @@ function EntityCard({ type, data, detail, renaming, renameValue, onRenameValue, 
                         />
                     ) : (
                         <>
-                            <div className="font-display truncate font-bold leading-tight">
+                            <div className="font-display truncate text-lg leading-tight">
                                 {displayName(type, data)}
                             </div>
                             {displayMeta(type, data) && (
-                                <div className="truncate text-xs text-muted-foreground">{displayMeta(type, data)}</div>
+                                <div className="truncate text-sm text-muted-foreground">{displayMeta(type, data)}</div>
                             )}
                         </>
                     )}
@@ -998,7 +1058,7 @@ function EntityCard({ type, data, detail, renaming, renameValue, onRenameValue, 
                         data-testid={`edit-${type}-${data.id}`}
                         aria-label={`Rename ${displayName(type, data)}`}
                     >
-                        <PencilSimple size={14} weight="duotone" />
+                        <PencilSimple size={14} weight="regular" />
                     </Button>
                 )}
                 <Button
@@ -1009,11 +1069,11 @@ function EntityCard({ type, data, detail, renaming, renameValue, onRenameValue, 
                     aria-label={`Delete ${displayName(type, data)}`}
                     className="text-destructive hover:text-destructive"
                 >
-                    <Trash size={14} weight="duotone" />
+                    <Trash size={14} weight="regular" />
                 </Button>
             </div>
             {detail && (
-                <div className="mt-2 text-xs text-muted-foreground">
+                <div className="mt-2 text-sm text-muted-foreground">
                     {type === "branch" && "Leaf level — nothing else to configure."}
                     {type === "subject" && "Lectures uploaded to this subject's classes generate study material."}
                 </div>
@@ -1084,7 +1144,7 @@ function BatchProgression({ batchId }) {
     const now = new Date().toISOString().slice(0, 10);
 
     return (
-        <section aria-label="Cohort progression" className="rounded-lg border border-border bg-card p-4">
+        <section aria-label="Cohort progression" className="rounded-[var(--radius)] border border-border bg-card p-4">
             <div className="text-overline mb-3 text-muted-foreground">Cohort progression — derived from term dates</div>
             <ol className="flex flex-wrap items-stretch gap-2">
                 {ordered.map((r) => {
@@ -1096,7 +1156,7 @@ function BatchProgression({ batchId }) {
                             key={r.id}
                             data-testid={`progression-chip-${sem?.number ?? r.id.slice(0, 8)}`}
                             title={`${sem?.label || "Semester"} · ${r.academic_year} (${r.starts_on} to ${r.ends_on})`}
-                            className={`min-w-20 flex-1 border px-3 py-2 text-center transition-colors ${
+                            className={`min-w-20 flex-1 rounded-[var(--r)] border px-3 py-2 text-center transition-colors ${
                                 isCurrent
                                     ? "border-primary bg-primary text-primary-foreground"
                                     : isPast
@@ -1104,10 +1164,10 @@ function BatchProgression({ batchId }) {
                                         : "border-border bg-card text-foreground"
                             }`}
                         >
-                            <div className="font-display text-sm font-bold">
+                            <div className="text-sm font-medium">
                                 {isCurrent ? "Now · " : ""}Sem {sem?.number ?? "?"}
                             </div>
-                            <div className={`text-xs tabular-nums ${isCurrent ? "text-primary-foreground/80" : "text-muted-foreground"}`}>
+                            <div className={`text-sm tabular-nums ${isCurrent ? "text-primary-foreground/80" : "text-muted-foreground"}`}>
                                 {r.academic_year}
                             </div>
                         </li>
@@ -1156,7 +1216,7 @@ function BranchDetail({ data, institutionId, renaming, renameValue, onRenameValu
 
     return (
         <div className="space-y-6">
-            <div className="rounded-lg border border-border bg-card p-6">
+            <div className="rounded-[var(--radius)] border border-border bg-card p-6">
                 <EntityCard
                     type="branch"
                     data={data}
@@ -1182,7 +1242,7 @@ function BranchDetail({ data, institutionId, renaming, renameValue, onRenameValu
                     ))}
                 </div>
             ) : batches.length === 0 ? (
-                <div className="rounded-lg border border-dashed border-border bg-card p-8 text-center">
+                <div className="rounded-[var(--radius)] border border-dashed border-input/60 bg-muted/50 p-8 text-center">
                     <p className="text-sm text-muted-foreground">
                         No batches yet. Create a batch first, then add this department's divisions to it.
                     </p>
@@ -1196,8 +1256,8 @@ function BranchDetail({ data, institutionId, renaming, renameValue, onRenameValu
                         <section key={batch.id} aria-label={`${displayName("batch", batch)} divisions`}>
                             <div className="mb-1 flex flex-wrap items-center justify-between gap-2 border-b border-border pb-2">
                                 <div className="flex items-center gap-2">
-                                    <GraduationCap size={18} weight="duotone" className="text-primary" />
-                                    <h2 className="font-display text-xl font-bold tracking-tight">
+                                    <GraduationCap size={18} weight="regular" className="text-primary" />
+                                    <h2 className="font-display text-2xl">
                                         {displayName("batch", batch)}
                                     </h2>
                                     <Badge variant="secondary" className="tabular-nums">{items.length}</Badge>
@@ -1215,12 +1275,12 @@ function BranchDetail({ data, institutionId, renaming, renameValue, onRenameValu
                                     })}
                                     data-testid={`add-division-${batch.id}-btn`}
                                 >
-                                    <Plus size={14} weight="duotone" className="mr-1" />
+                                    <Plus size={14} weight="regular" className="mr-1" />
                                     New Division
                                 </Button>
                             </div>
                             {items.length === 0 ? (
-                                <div className="rounded-lg border border-dashed border-border bg-card p-6 text-center">
+                                <div className="rounded-[var(--radius)] border border-dashed border-input/60 bg-muted/50 p-6 text-center">
                                     <p className="text-sm text-muted-foreground">
                                         No {displayName("branch", data)} divisions for {displayName("batch", batch)} yet.
                                     </p>
@@ -1228,12 +1288,7 @@ function BranchDetail({ data, institutionId, renaming, renameValue, onRenameValu
                             ) : (
                                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                                     {items.map((div, i) => (
-                                        <motion.div
-                                            key={div.id}
-                                            initial={{ opacity: 0, y: 8 }}
-                                            animate={{ opacity: 1, y: 0 }}
-                                            transition={{ delay: Math.min(i * 0.04, 0.3) }}
-                                        >
+                                        <div key={div.id}>
                                             <EntityCard
                                                 type="division"
                                                 data={div}
@@ -1246,7 +1301,7 @@ function BranchDetail({ data, institutionId, renaming, renameValue, onRenameValu
                                                 onOpen={() => onOpen("division", div)}
                                                 onDelete={() => Promise.resolve(onDelete("division", div)).then(load)}
                                             />
-                                        </motion.div>
+                                        </div>
                                     ))}
                                 </div>
                             )}
@@ -1261,14 +1316,14 @@ function BranchDetail({ data, institutionId, renaming, renameValue, onRenameValu
 function ClassDetail({ data, showTeachers, setShowTeachers }) {
     return (
         <div className="space-y-6">
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius)] border border-border bg-card p-5">
                 <div className="flex items-center gap-3">
-                    <div className="flex h-12 w-12 items-center justify-center bg-accent text-accent-foreground">
-                        <ChalkboardTeacher size={24} weight="duotone" />
+                    <div className="flex h-12 w-12 items-center justify-center rounded-[var(--r)] bg-muted text-primary">
+                        <ChalkboardTeacher size={24} weight="regular" />
                     </div>
                     <div>
                         <div className="text-overline text-muted-foreground">Class</div>
-                        <div className="font-display text-2xl font-bold tracking-tight">
+                        <div className="font-display text-2xl">
                             {displayName("class", data)}
                         </div>
                     </div>
@@ -1277,12 +1332,12 @@ function ClassDetail({ data, showTeachers, setShowTeachers }) {
                     onClick={() => setShowTeachers(true)}
                     data-testid={`manage-teachers-${data.id}`}
                 >
-                    <UsersThree size={16} weight="duotone" className="mr-2" />
+                    <UsersThree size={16} weight="regular" className="mr-2" />
                     Manage teachers
                 </Button>
             </div>
 
-            <div className="rounded-lg border border-border bg-card p-5">
+            <div className="rounded-[var(--radius)] border border-border bg-card p-5">
                 <div className="text-overline mb-1 text-muted-foreground">Step 1 — Staff the class</div>
                 <p className="text-sm text-muted-foreground">
                     Assign teachers so they can upload lectures here. Students join in step 2.
@@ -1294,7 +1349,7 @@ function ClassDetail({ data, showTeachers, setShowTeachers }) {
                     className="mt-3"
                     data-testid={`manage-teachers-cta-${data.id}`}
                 >
-                    <UsersThree size={14} weight="duotone" className="mr-1" />
+                    <UsersThree size={14} weight="regular" className="mr-1" />
                     Assign teachers
                 </Button>
             </div>
@@ -1303,7 +1358,7 @@ function ClassDetail({ data, showTeachers, setShowTeachers }) {
                 <div>
                     <div className="text-overline mb-2 text-muted-foreground">Step 2 — Enroll students</div>
                     <QRCodeCard classId={data.id} className={data.name || "Class"} />
-                    <p className="mt-2 flex items-start gap-2 text-xs text-muted-foreground">
+                    <p className="mt-2 flex items-start gap-2 text-sm text-muted-foreground">
                         <QrCode size={14} className="mt-0.5 shrink-0" />
                         Students scan this QR to enroll themselves. Regenerating invalidates the old code.
                     </p>

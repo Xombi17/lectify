@@ -243,6 +243,18 @@ async def can_access_lecture(
     return await verify_lecture_access(lecture_id, user)
 
 
+async def student_class_scope(user: UserPublic) -> Optional[set]:
+    """Enrolled class IDs for students; None (unscoped) for other roles."""
+    if user.role != "student":
+        return None
+    return set(await get_user_accessible_class_ids(user) or [])
+
+
+def lecture_in_scope(lecture, scope: Optional[set]) -> bool:
+    """True if scope is None, the lecture is unclassed (legacy), or its class is in scope."""
+    return scope is None or not lecture.class_id or lecture.class_id in scope
+
+
 async def get_user_accessible_class_ids(user: UserPublic) -> Optional[List[str]]:
     """Resolve accessible class IDs for user.
 

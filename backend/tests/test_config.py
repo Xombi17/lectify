@@ -32,7 +32,7 @@ def test_phase19_defaults(monkeypatch):
     _clean(monkeypatch)
     s = Settings()
     assert s.TRANSCRIPTION_PROVIDERS == ["deepgram", "naga", "gemini"]
-    assert s.LLM_PROVIDERS == ["naga", "nim", "gemini"]
+    assert s.LLM_PROVIDERS == ["groq", "cloudflare", "cloudflare2", "cloudflare3", "openrouter", "naga", "radox", "gemini", "nim"]
     assert (s.DEEPGRAM_MODEL, s.DEEPGRAM_LANGUAGE, s.DEEPGRAM_KEYTERMS) == ("nova-3", "multi", [])
     assert s.NAGA_CHAT_MODEL == "nemotron-3-super-120b-a12b:free"
     assert s.NAGA_WHISPER_MODEL == "whisper-large-v3:free"

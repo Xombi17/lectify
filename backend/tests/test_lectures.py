@@ -94,9 +94,10 @@ def test_upload_lecture_missing_class_id_returns_422(client):
 @patch("routes.lectures.enqueue_job", new_callable=AsyncMock)
 @patch("routes.lectures.get_storage")
 @patch("routes.lectures.LectureRepository")
+@patch("routes.lectures.TimetableRepository")
 @patch("routes.lectures.TeacherAssignmentRepository")
 def test_upload_lecture_requires_assigned_class(
-    mock_ta_repo, mock_lec_repo, mock_get_storage, mock_enqueue, client
+    mock_ta_repo, mock_tt_repo, mock_lec_repo, mock_get_storage, mock_enqueue, client
 ):
     """Teacher cannot upload lecture for an unassigned class (403), succeeds for assigned (202)."""
     teacher = UserPublic(
@@ -146,6 +147,31 @@ def test_upload_lecture_requires_assigned_class(
         )
         mock_ta_inst.find_existing = AsyncMock(return_value=active_assignment)
 
+        # Case 2a: slot belongs to a different class (or is missing) -> HTTP 400
+        from models.timetable import TimetableSlotDB
+        slot = TimetableSlotDB(
+            id="slot_1", class_id="cls_other", teacher_id="usr_t1", day_of_week=0,
+            start_time="09:00", end_time="10:00", room="R1", created_at=datetime.now(timezone.utc),
+        )
+        mock_tt_repo.return_value.get_by_id = AsyncMock(return_value=slot)
+        res_wrong_slot = client.post(
+            "/api/lectures",
+            data={"title": "Wrong Slot", "class_id": "cls_assigned", "timetable_slot_id": "slot_1"},
+            files={"file": ("w.mp3", io.BytesIO(b"x"), "audio/mpeg")},
+        )
+        assert res_wrong_slot.status_code == 400
+        mock_tt_repo.return_value.get_by_id = AsyncMock(return_value=None)
+        res_missing_slot = client.post(
+            "/api/lectures",
+            data={"title": "Missing Slot", "class_id": "cls_assigned", "timetable_slot_id": "slot_1"},
+            files={"file": ("m.mp3", io.BytesIO(b"x"), "audio/mpeg")},
+        )
+        assert res_missing_slot.status_code == 400
+
+        # Case 2b: slot belongs to the class -> HTTP 202
+        mock_tt_repo.return_value.get_by_id = AsyncMock(
+            return_value=slot.model_copy(update={"class_id": "cls_assigned"})
+        )
         audio_file2 = io.BytesIO(b"fake audio data 2")
         res_assigned = client.post(
             "/api/lectures",

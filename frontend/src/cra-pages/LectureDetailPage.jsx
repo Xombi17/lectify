@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { lectureApi, API, bookmarkApi } from "@/lib/api";
-import { STATUS_LABEL, statusPillKind } from "@/lib/lectureStatus";
+import { statusPillKind, FAILED_MESSAGE } from "@/lib/lectureStatus";
 import { formatProcessing } from "@/lib/formatDuration";
 import { useAuth } from "@/lib/auth";
 import FlashcardDeck from "@/components/FlashcardDeck";
@@ -11,6 +12,11 @@ import QuizRunner from "@/components/QuizRunner";
 import DoubtChat from "@/components/DoubtChat";
 import EditableNotes from "@/components/EditableNotes";
 import BookmarkButton from "@/components/BookmarkButton";
+import StatusStamp from "@/components/StatusStamp";
+import PenPlayer from "@/components/PenPlayer";
+import { usePageTitle } from "@/lib/usePageTitle";
+import { getPosition, rememberLecture, savePosition } from "@/lib/recentLectures";
+import ConfirmDialog from "@/components/ConfirmDialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -22,23 +28,16 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import {
+    ArrowLeft,
     Lightning,
-    CheckCircle,
     WarningCircle,
     PaperPlaneTilt,
     Trash,
     EyeSlash,
     Translate,
     DownloadSimple,
-} from "@phosphor-icons/react";
+} from "@/components/icons";
 import { toast } from "sonner";
-
-const STATUS_LABEL_FALLBACK = {
-    uploaded: "Queued",
-    processing: "AI is processing",
-    ready: "Ready",
-    error: "Error",
-};
 
 export default function LectureDetailPage() {
     const { id } = useParams();
@@ -47,6 +46,18 @@ export default function LectureDetailPage() {
     const [lecture, setLecture] = useState(null);
     const [audioToken, setAudioToken] = useState(null);
     const [downloadingPdf, setDownloadingPdf] = useState(false);
+    const [confirmDelete, setConfirmDelete] = useState(false);
+    const [retrying, setRetrying] = useState(false);
+    usePageTitle(lecture?.title || "Lecture");
+
+    // Students resume playback where they stopped, and the library's "pick up where you left off" uses this too
+    const isStudent = user?.role === "student";
+    const startAt = useMemo(() => (isStudent && id ? getPosition(user.id, id) : 0), [isStudent, user?.id, id]);
+    useEffect(() => {
+        if (isStudent && lecture?.id) {
+            rememberLecture(user.id, { id: lecture.id, title: lecture.title, subject: lecture.subject });
+        }
+    }, [isStudent, user?.id, lecture?.id, lecture?.title, lecture?.subject]);
 
     const downloadPdf = async () => {
         if (!lecture?.id || downloadingPdf) return;
@@ -133,14 +144,26 @@ export default function LectureDetailPage() {
 
     if (!lecture) {
         return (
-            <div className="h-40 animate-pulse border border-border bg-muted/40" />
+            <div className="sk h-40" aria-busy="true" />
         );
     }
 
     const isOwner = user?.role === "teacher" && user.id === lecture.teacher_id;
     const ready = lecture.status === "ready";
     const pillKind = statusPillKind(lecture.status);
-    const pillLabel = STATUS_LABEL[lecture.status] ?? STATUS_LABEL_FALLBACK[lecture.status] ?? lecture.status;
+    const home = user?.role === "student" ? "/student/dashboard" : user?.role === "admin" ? "/admin" : "/teacher/dashboard";
+
+    const retry = async () => {
+        if (retrying) return;
+        setRetrying(true);
+        try {
+            setLecture(await lectureApi.retry(lecture.id));
+        } catch (err) {
+            toast.error(err?.response?.data?.detail || "Retry failed");
+        } finally {
+            setRetrying(false);
+        }
+    };
 
     const togglePublish = async () => {
         try {
@@ -155,7 +178,6 @@ export default function LectureDetailPage() {
     };
 
     const remove = async () => {
-        if (!confirm("Delete this lecture? This cannot be undone.")) return;
         try {
             await lectureApi.remove(lecture.id);
             toast.success("Lecture deleted");
@@ -168,99 +190,97 @@ export default function LectureDetailPage() {
     return (
     <>
             <div className="mb-8">
-                <div className="text-overline mb-2 text-primary">Lecture</div>
+                <Link href={home} className="crumb">
+                    <ArrowLeft size={16} weight="bold" aria-hidden="true" />
+                    All lectures
+                </Link>
                 <div className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-end">
-                    <div>
-                        <h1 className="font-display text-3xl font-black tracking-tighter sm:text-4xl">
-                            {lecture.title}
-                        </h1>
-                        <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                            {lecture.subject && <Badge variant="outline">{lecture.subject}</Badge>}
-                            {lecture.semester && <Badge variant="outline">{lecture.semester}</Badge>}
-                            <Badge
-                                data-testid="status-badge"
-                                data-kind={pillKind}
-                                className={
-                                    pillKind === "ready"
-                                        ? "bg-primary text-primary-foreground"
-                                        : pillKind === "failed"
-                                            ? "bg-destructive text-destructive-foreground"
-                                            : "bg-accent/30 text-accent-foreground"
-                                }
-                            >
-                                {pillKind === "ready" ? (
-                                    <CheckCircle size={14} weight="duotone" className="mr-1" />
-                                ) : pillKind === "failed" ? (
-                                    <WarningCircle size={14} weight="duotone" className="mr-1" />
-                                ) : (
-                                    <Lightning size={14} weight="duotone" className="mr-1" />
-                                )}
-                                {pillLabel}
-                            </Badge>
+                    <div className="min-w-0 max-w-4xl">
+                        <h1 className="text-display">{lecture.title}</h1>
+                        <div className="meta mt-2">
+                            {lecture.subject && <span>{lecture.subject}</span>}
+                            {lecture.semester && <span>{lecture.semester}</span>}
+                            {lecture.created_at && (
+                                <time className="date" dateTime={lecture.created_at}>
+                                    {new Date(lecture.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
+                                </time>
+                            )}
+                            <StatusStamp status={lecture.status} />
                             {ready && formatProcessing(lecture.processing_seconds) && (
-                                <span data-testid="processing-time" className="text-xs">
+                                <span data-testid="processing-time" className="date">
                                     Processed in {formatProcessing(lecture.processing_seconds)}
                                 </span>
                             )}
-                            {lecture.published && (
-                                <Badge className="bg-accent text-accent-foreground">Published</Badge>
-                            )}
+                            {lecture.published && <span className="tag">Published</span>}
                         </div>
                     </div>
 
                     {isOwner && (
-                        <div className="flex gap-2">
+                        <div className="flex shrink-0 flex-wrap gap-2">
                             {ready && (
                                 <Button
-                                    variant="outline"
+                                    variant="default"
                                     onClick={downloadPdf}
                                     disabled={downloadingPdf}
                                     data-testid="download-pdf-btn"
                                 >
-                                    <DownloadSimple size={16} weight="duotone" className="mr-2" />
+                                    <DownloadSimple size={16} weight="regular" className="mr-2" />
                                     {downloadingPdf ? "Preparing…" : "PDF"}
                                 </Button>
                             )}
                             <Button
+                                variant={lecture.published ? "default" : "pen"}
                                 onClick={togglePublish}
                                 disabled={!ready}
                                 data-testid="publish-toggle-btn"
                             >
                                 {lecture.published ? (
                                     <>
-                                        <EyeSlash size={16} weight="duotone" className="mr-2" />
+                                        <EyeSlash size={16} weight="regular" className="mr-2" />
                                         Unpublish
                                     </>
                                 ) : (
                                     <>
-                                        <PaperPlaneTilt size={16} weight="duotone" className="mr-2" />
+                                        <PaperPlaneTilt size={16} weight="regular" className="mr-2" />
                                         Publish to students
                                     </>
                                 )}
                             </Button>
                             <Button
-                                variant="ghost"
-                                onClick={remove}
+                                variant="default"
+                                className="text-destructive hover:text-destructive"
+                                onClick={() => setConfirmDelete(true)}
                                 data-testid="delete-lecture-btn"
+                                aria-label="Delete lecture"
                             >
-                                <Trash size={16} weight="duotone" />
+                                <Trash size={16} />
                             </Button>
                         </div>
                     )}
                 </div>
             </div>
 
-            {audioToken && (
-                <div className="mb-8 border border-border bg-card p-4">
-                    <div className="text-overline mb-2 text-muted-foreground">Original recording</div>
-                    <audio controls src={audioToken} className="w-full" data-testid="lecture-audio" />
-                </div>
+            {audioToken && pillKind !== "failed" && (
+                <PenPlayer
+                    src={audioToken}
+                    startAt={startAt}
+                    onProgress={isStudent ? (s) => savePosition(user.id, lecture.id, s) : undefined}
+                />
             )}
+
+            <ConfirmDialog
+                open={confirmDelete}
+                onOpenChange={setConfirmDelete}
+                title={`Delete ${lecture.title}? This removes it and cannot be undone.`}
+                confirmLabel="Delete lecture"
+                cancelLabel="Keep it"
+                onConfirm={remove}
+            />
 
             {pillKind === "processing" ? (
                 <ProcessingState lecture={lecture} />
             ) : pillKind === "failed" ? (
-                <ErrorState message={lecture.error_message} deadLetter={lecture.status === "dead_letter"} />
+                <ErrorState canRetry={user?.role === "admin" || isOwner} onRetry={retry} retrying={retrying} />
             ) : (
                 <ContentTabs lecture={lecture} isOwner={isOwner} onLectureUpdate={setLecture} />
             )}
@@ -276,12 +296,12 @@ function ProcessingState({ lecture }) {
     const isLong = (lecture.duration_seconds || 0) > 30 * 60;
 
     return (
-        <div className="border-2 border-dashed border-border bg-card p-12 text-center">
-            <div className="mx-auto mb-5 flex h-16 w-16 animate-pulse items-center justify-center bg-accent">
-                <Lightning size={32} weight="duotone" className="text-accent-foreground" />
+        <div className="rounded-[var(--radius)] border border-border bg-card px-6 py-12 text-center sm:px-12">
+            <div className="mx-auto mb-5 flex h-14 w-14 motion-safe:animate-pulse items-center justify-center rounded-full bg-accent">
+                <Lightning size={28} weight="regular" className="text-primary" />
             </div>
-            <h3 className="font-display text-2xl font-black tracking-tighter">
-                AI is digesting your lecture
+            <h3 className="text-2xl font-bold">
+                Writing up your lecture
             </h3>
             <p
                 className="mt-2 text-sm text-muted-foreground"
@@ -292,28 +312,31 @@ function ProcessingState({ lecture }) {
 
             {pct !== null && (
                 <div className="mx-auto mt-6 max-w-md">
-                    <div className="mb-2 flex items-center justify-between text-xs">
+                    <div className="mb-2 flex items-center justify-between text-sm">
                         <span className="text-overline text-muted-foreground">Progress</span>
                         <span className="font-mono text-primary" data-testid="processing-percent">
                             {pct}%
                         </span>
                     </div>
-                    <div className="h-2 w-full bg-muted">
-                        <div
-                            className="h-full bg-primary transition-all duration-500"
-                            style={{ width: `${pct}%` }}
-                            data-testid="processing-bar"
-                        />
+                    <div
+                        className="ink-line"
+                        role="progressbar"
+                        aria-label="Writing up"
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                        aria-valuenow={pct}
+                    >
+                        <span style={{ width: `${pct}%` }} data-testid="processing-bar" />
                     </div>
-                    <div className="mt-1 text-xs text-muted-foreground">
+                    <div className="mt-1 text-sm text-muted-foreground">
                         Step {step} of {total}
                     </div>
                 </div>
             )}
 
             {isLong && lecture.chunk_count > 0 && (
-                <p className="mt-6 inline-flex items-center gap-2 border border-border bg-background px-3 py-1 text-xs text-muted-foreground">
-                    <Lightning size={12} weight="duotone" />
+                <p className="mt-6 inline-flex items-center gap-2 rounded-full border border-border bg-background px-3 py-1 text-sm text-muted-foreground">
+                    <Lightning size={12} weight="regular" />
                     Long lecture detected · split into{" "}
                     <span className="font-mono text-primary">{lecture.chunk_count}</span>{" "}
                     chunks for hierarchical processing
@@ -323,27 +346,19 @@ function ProcessingState({ lecture }) {
     );
 }
 
-function ErrorState({ message, deadLetter }) {
+function ErrorState({ canRetry, onRetry, retrying }) {
     return (
-        <div className="border-2 border-destructive bg-destructive/10 p-8">
+        <div role="alert" className="rounded-[var(--radius)] border border-destructive/50 bg-destructive/10 p-6 sm:p-8">
             <div className="flex items-center gap-3">
-                <WarningCircle size={24} weight="duotone" className="text-destructive" />
-                <h3 className="font-display text-2xl font-black tracking-tighter">
-                    Processing failed
-                </h3>
+                <WarningCircle size={24} className="text-destructive" aria-hidden="true" />
+                <h3 className="text-2xl font-bold">Processing failed</h3>
             </div>
-            <p className="mt-3 text-sm text-muted-foreground">
-                {message || "Processing failed — contact your teacher."}
-            </p>
-            {deadLetter && (
-                <p className="mt-2 text-xs text-muted-foreground">
-                    This lecture exhausted all retries. Contact your teacher to re-queue it.
-                </p>
+            <p className="mt-3 text-base">{FAILED_MESSAGE}</p>
+            {canRetry && (
+                <Button variant="pen" className="mt-4" onClick={onRetry} disabled={retrying}>
+                    Retry processing
+                </Button>
             )}
-            <p className="mt-2 text-xs text-muted-foreground">
-                Verify that <code className="font-mono">GEMINI_API_KEY</code> is set in
-                <code className="font-mono"> backend/.env</code> and try uploading again.
-            </p>
         </div>
     );
 }
@@ -405,7 +420,7 @@ function ContentTabs({ lecture, isOwner, onLectureUpdate }) {
 
     return (
         <Tabs defaultValue="notes" className="w-full" data-testid="lecture-tabs">
-            <TabsList className="h-auto w-full justify-start gap-6 rounded-none border-b border-border bg-transparent p-0">
+            <TabsList className="read-tabs">
                 {[
                     ["notes", "Smart Notes"],
                     ["quiz", "Quiz"],
@@ -417,7 +432,6 @@ function ContentTabs({ lecture, isOwner, onLectureUpdate }) {
                         key={v}
                         value={v}
                         data-testid={`tab-${v}`}
-                        className="rounded-none border-b-2 border-transparent bg-transparent px-1 pb-3 pt-0 font-display text-base font-bold tracking-tight text-muted-foreground shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none"
                     >
                         {label}
                     </TabsTrigger>
@@ -426,10 +440,10 @@ function ContentTabs({ lecture, isOwner, onLectureUpdate }) {
 
             <TabsContent value="notes" className="mt-8" data-testid="notes-tab-content">
                 <div className="mb-6 flex flex-wrap items-center gap-3 border-b border-border pb-3">
-                    <Translate size={16} weight="duotone" className="text-primary" />
+                    <Translate size={16} weight="regular" className="text-primary" />
                     <span className="text-overline text-muted-foreground">View in</span>
                     <Select value={language} onValueChange={onLanguage} disabled={translating}>
-                        <SelectTrigger data-testid="translate-language-select" className="h-9 w-48">
+                        <SelectTrigger data-testid="translate-language-select" className="w-48">
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -444,7 +458,7 @@ function ContentTabs({ lecture, isOwner, onLectureUpdate }) {
                             <SelectItem value="Chinese">Chinese (简体)</SelectItem>
                         </SelectContent>
                     </Select>
-                    {translating && <span className="text-xs text-muted-foreground">Translating…</span>}
+                    {translating && <span className="text-sm text-muted-foreground">Translating…</span>}
                 </div>
 
                 {showOriginal ? (
@@ -477,19 +491,19 @@ function ContentTabs({ lecture, isOwner, onLectureUpdate }) {
                 ) : (
                     <>
                         {m.summary && (
-                            <div className="mb-6 border-l-2 border-accent bg-card p-5">
+                            <div className="notes mb-8 rounded-[var(--radius)] border border-border bg-card p-5 sm:p-6">
                                 <div className="text-overline mb-2 text-primary">TL;DR</div>
-                                <p className="text-base leading-relaxed">{m.summary}</p>
+                                <p className="text-base">{m.summary}</p>
                             </div>
                         )}
                         <h3 className="text-overline mb-4 text-muted-foreground">Smart notes</h3>
-                        <ul className="space-y-3">
+                        <ul className="notes !pl-0 space-y-3">
                             {(m.smart_notes || []).map((n, i) => (
                                 <li
                                     key={i}
-                                    className="flex gap-3 border-b border-border pb-3 text-base leading-relaxed"
+                                    className="flex gap-3 border-b border-border pb-3 text-base"
                                 >
-                                    <span className="font-mono mt-1 text-xs text-primary">
+                                    <span className="font-mono mt-1 text-sm text-primary">
                                         {String(i + 1).padStart(2, "0")}
                                     </span>
                                     <span>{n}</span>
@@ -503,7 +517,7 @@ function ContentTabs({ lecture, isOwner, onLectureUpdate }) {
                                     {m.key_concepts.map((c, i) => (
                                         <span
                                             key={i}
-                                            className="border border-primary/20 bg-accent/20 px-3 py-1 text-sm font-medium"
+                                            className="rounded-full border border-border bg-card px-3 py-1 text-sm"
                                         >
                                             {c}
                                         </span>
@@ -528,7 +542,7 @@ function ContentTabs({ lecture, isOwner, onLectureUpdate }) {
             </TabsContent>
 
             <TabsContent value="transcript" className="mt-8" data-testid="transcript-tab-content">
-                <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-foreground/85">
+                <pre className="notes whitespace-pre-wrap text-base">
                     {lecture.transcript || "No transcript available."}
                 </pre>
             </TabsContent>

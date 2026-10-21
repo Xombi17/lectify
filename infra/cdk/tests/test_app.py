@@ -1,6 +1,5 @@
 import json
 import os
-import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -107,56 +106,42 @@ def test_observability_stack_wired(tmp_path):
     assert "ComputeStack" in deps and "BudgetStack" in deps
 
 
+def _strict(tmp_path, root):
+    """Run app.py in strict fail-fast mode against an isolated artifact root."""
+    return _run(
+        tmp_path,
+        {"budget_email": EMAIL},
+        extra_env={"LECTIFY_SKIP_COMPUTE_ARTIFACT_CHECK": "0", "LECTIFY_ARTIFACT_ROOT": str(root)},
+    )
+
+
+def _artifact_root(tmp_path, web=True, ffmpeg=True, sha=None):
+    root = tmp_path / "artifacts"
+    if web:
+        (root / "build" / "web").mkdir(parents=True)
+        (root / "build" / "web" / "server.js").write_text("// test dummy\n")
+    (root / "bootstrap" / "vendor").mkdir(parents=True, exist_ok=True)
+    if ffmpeg:
+        (root / "bootstrap" / "vendor" / "ffmpeg-release-amd64-static.tar.xz").write_bytes(b"dummy tar")
+    if sha is not None:
+        (root / "bootstrap" / "ffmpeg.sha256").write_text(sha)
+    return root
+
+
 def test_failfast_missing_web(tmp_path):
-    # Ensure web/server.js does not exist
-    web_dir = CDK_DIR / "build" / "web"
-    server_js = web_dir / "server.js"
-    if server_js.exists():
-        server_js.unlink()
-    r = _run(tmp_path, {"budget_email": EMAIL}, extra_env={"LECTIFY_SKIP_COMPUTE_ARTIFACT_CHECK": "0"})
+    r = _strict(tmp_path / "out", _artifact_root(tmp_path, web=False))
     assert r.returncode != 0
     assert "make build-web" in r.stderr
 
 
 def test_failfast_missing_ffmpeg(tmp_path):
-    web_dir = CDK_DIR / "build" / "web"
-    web_dir.mkdir(parents=True, exist_ok=True)
-    server_js = web_dir / "server.js"
-    server_js.write_text("// test dummy\n")
-    vendor_tar = CDK_DIR / "bootstrap" / "vendor" / "ffmpeg-release-amd64-static.tar.xz"
-    if vendor_tar.exists():
-        vendor_tar.unlink()
-    try:
-        r = _run(tmp_path, {"budget_email": EMAIL}, extra_env={"LECTIFY_SKIP_COMPUTE_ARTIFACT_CHECK": "0"})
-        assert r.returncode != 0
-        assert "make vendor-ffmpeg" in r.stderr
-    finally:
-        if server_js.exists():
-            server_js.unlink()
-        if web_dir.exists() and not any(web_dir.iterdir()):
-            shutil.rmtree(web_dir)
+    r = _strict(tmp_path / "out", _artifact_root(tmp_path, ffmpeg=False))
+    assert r.returncode != 0
+    assert "make vendor-ffmpeg" in r.stderr
 
 
 def test_failfast_ffmpeg_sha256_placeholder(tmp_path):
-    web_dir = CDK_DIR / "build" / "web"
-    web_dir.mkdir(parents=True, exist_ok=True)
-    server_js = web_dir / "server.js"
-    server_js.write_text("// test dummy\n")
-    vendor_dir = CDK_DIR / "bootstrap" / "vendor"
-    vendor_dir.mkdir(parents=True, exist_ok=True)
-    vendor_tar = vendor_dir / "ffmpeg-release-amd64-static.tar.xz"
-    vendor_tar.write_bytes(b"dummy tar")
-    try:
-        r = _run(tmp_path, {"budget_email": EMAIL}, extra_env={"LECTIFY_SKIP_COMPUTE_ARTIFACT_CHECK": "0"})
-        assert r.returncode != 0
-        assert "make vendor-ffmpeg" in r.stderr
-        assert "placeholder comments" in r.stderr
-    finally:
-        if server_js.exists():
-            server_js.unlink()
-        if web_dir.exists() and not any(web_dir.iterdir()):
-            shutil.rmtree(web_dir)
-        if vendor_tar.exists():
-            vendor_tar.unlink()
-        if vendor_dir.exists() and not any(vendor_dir.iterdir()):
-            shutil.rmtree(vendor_dir)
+    r = _strict(tmp_path / "out", _artifact_root(tmp_path, sha="# placeholder\n"))
+    assert r.returncode != 0
+    assert "make vendor-ffmpeg" in r.stderr
+    assert "placeholder comments" in r.stderr

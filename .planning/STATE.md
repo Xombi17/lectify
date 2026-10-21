@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 17 complete, ready to plan Phase 16
-last_updated: "2026-10-12T15:19:49.248Z"
-last_activity: 2026-10-12 -- Phase 19 execution started
+stopped_at: Phase 20 UI-SPEC approved
+last_updated: "2026-10-21T17:50:10.440Z"
+last_activity: 2026-10-21
 progress:
-  total_phases: 9
-  completed_phases: 8
-  total_plans: 53
-  completed_plans: 47
-  percent: 89
+  total_phases: 10
+  completed_phases: 9
+  total_plans: 63
+  completed_plans: 62
+  percent: 90
 ---
 
 # Project State
@@ -21,23 +21,22 @@ progress:
 See: .planning/PROJECT.md (updated 2026-10-04)
 
 **Core value:** A student who records or uploads a lecture reliably gets transcript, notes, quiz and flashcards back asynchronously, and the platform stays up through exam-season spikes without blocking the user's browser session.
-**Current focus:** Phase 19 — fast-transcription-providers
+**Current focus:** Phase 20 — frontend-redesign-new-design-system-and-full-ui-refresh-repl
 
 ## Current Position
 
-Phase: 19 (fast-transcription-providers) — EXECUTING
-Plan: 1 of 6
-Status: Executing Phase 19
-Last activity: 2026-10-12 -- Phase 19 execution started
+Phase: 20 (frontend-redesign-new-design-system-and-full-ui-refresh-repl) — EXECUTING
+Plan: 6 of 10
+Status: Ready to execute
+Last activity: 2026-10-21
 
-Progress: [██████░░░░] 63%
-Progress: [██████████] 100% (Phase 15)
+Progress: [█████████░] 90%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 42
+- Total plans completed: 48
 - Average duration: -
 - Total execution time: -
 
@@ -52,6 +51,7 @@ Progress: [██████████] 100% (Phase 15)
 | 15 | 6 | - | - |
 | 18 | 5 | - | - |
 | 17 | 4 | - | - |
+| 19 | 6 | - | - |
 
 ## Accumulated Context
 
@@ -67,6 +67,7 @@ Progress: [██████████] 100% (Phase 15)
 ### Roadmap Evolution
 
 - Phase 19 added: Fast transcription providers (Deepgram Nova-3 STT + NagaAI LLM) to replace slow Groq Whisper / Gemini
+- Phase 20 added: Frontend redesign: new design system and full UI refresh (replace neon scheme; power-design + taste + impeccable)
 - ALB routes /api/* to FastAPI on port 8000; defaults all other traffic to Next.js on port 3000
 - IMDSv2 required with hop limit 1 on all compute instances
 - Workers capped at WORKER_MAX=3 to safeguard AWS spending limits
@@ -83,6 +84,6 @@ None for Phase 15. Ready for Phase 16.
 
 ## Session Continuity
 
-Last session: 2026-10-06T11:29:30.463Z
-Stopped at: Phase 17 complete, ready to plan Phase 16
-Resume file: .planning/phases/17-observability-scaling/17-CONTEXT.md
+Last session: 2026-10-21T17:47:07.503Z
+Stopped at: Phase 20 UI-SPEC approved
+Resume file: None

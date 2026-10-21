@@ -5,8 +5,8 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     globals: true,
-    setupFiles: [],
-    include: ["src/lib/__tests__/**/*.{test,spec}.{js,jsx,ts,tsx}"],
+    setupFiles: ["@testing-library/jest-dom/vitest"],
+    include: ["src/**/__tests__/**/*.{test,spec}.{js,jsx,ts,tsx}"],
   },
   resolve: {
     alias: {

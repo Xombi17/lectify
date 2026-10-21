@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
-import { Microphone, UploadSimple, FileAudio, WarningCircle } from "@phosphor-icons/react";
+import { Microphone, UploadSimple, FileAudio, WarningCircle } from "@/components/icons";
 import { toast } from "sonner";
 
 const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
@@ -22,6 +22,7 @@ export default function UploadLecturePage() {
     const [verifying, setVerifying] = useState(false);
     const [fallbackNotice, setFallbackNotice] = useState("");
     const [uploadError, setUploadError] = useState("");
+    const [fieldErrors, setFieldErrors] = useState({});
 
     // Class scoping & timetable slot state
     const [assignedClasses, setAssignedClasses] = useState([]);
@@ -45,6 +46,7 @@ export default function UploadLecturePage() {
 
     const handleClassChange = (classId) => {
         setSelectedClassId(classId);
+        setFieldErrors((fe) => ({ ...fe, classId: undefined }));
         setSelectedSlotId("");
         const found = assignedClasses.find((c) => c.class_id === classId);
         if (found) {
@@ -95,13 +97,17 @@ export default function UploadLecturePage() {
         const f = e.target.files?.[0];
         if (!f) return;
         setFile(f);
+        setFieldErrors((fe) => ({ ...fe, file: undefined }));
         if (!title) setTitle(f.name.replace(/\.[^.]+$/, ""));
     };
 
     const submit = async (e) => {
         e.preventDefault();
-        if (!selectedClassId) return toast.error("Please select an assigned class first");
-        if (!file) return toast.error("Pick an audio file first");
+        const errs = {};
+        if (!selectedClassId) errs.classId = "Pick the class this lecture belongs to.";
+        if (!file) errs.file = "Pick an audio file to upload.";
+        setFieldErrors(errs);
+        if (errs.classId || errs.file) return;
 
         setSubmitting(true);
         setProgress(0);
@@ -173,44 +179,40 @@ export default function UploadLecturePage() {
     };
 
     return (
-        <div className="mx-auto max-w-3xl">
-            <div className="text-overline mb-3 text-primary">New lecture</div>
-            <h1 className="font-display text-4xl font-black tracking-tighter sm:text-5xl">
-                Drop your recording.
-            </h1>
-            <p className="mt-3 text-muted-foreground">
-                MP3, WAV, M4A or any common audio format. Up to 200 MB.
-            </p>
+        <div className="mx-auto max-w-2xl">
+            <header className="mb-8">
+                <div className="hand text-primary">New lecture</div>
+                <h1 className="text-display">Upload lecture</h1>
+                <p className="lede mt-3">
+                    Add the recording and pick the class. Notes, a quiz and flashcards are ready once processing finishes.
+                </p>
+            </header>
 
             {!loadingClasses && assignedClasses.length === 0 && (
-                <div
-                    data-testid="no-classes-warning"
-                    className="mt-6 flex items-start gap-3 border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-700 dark:text-amber-300"
-                >
-                    <WarningCircle size={20} weight="fill" className="shrink-0 mt-0.5 text-amber-600" />
-                    <div>
-                        <div className="font-bold">No assigned classes found.</div>
-                        <div>
-                            You have not been assigned to any classes yet. Contact an administrator to assign classes before uploading lectures.
-                        </div>
-                    </div>
+                <div data-testid="no-classes-warning" className="empty mt-6">
+                    <WarningCircle aria-hidden="true" size={20} weight="bold" className="text-amber" />
+                    <h2 className="text-2xl font-bold">No assigned classes found.</h2>
+                    <p className="text-sm text-muted-foreground">
+                        You have not been assigned to any classes yet. Contact an administrator to assign classes before uploading lectures.
+                    </p>
                 </div>
             )}
 
-            <form onSubmit={submit} className="mt-8 space-y-6" data-testid="upload-form">
-                <FileDrop file={file} onFile={onFile} disabled={submitting || (!loadingClasses && assignedClasses.length === 0)} />
+            <form onSubmit={submit} className="grid gap-6" data-testid="upload-form">
+                <FileDrop file={file} onFile={onFile} error={fieldErrors.file} disabled={submitting || (!loadingClasses && assignedClasses.length === 0)} />
 
-                <div className="grid gap-5 md:grid-cols-2">
+                <div className="grid gap-6 md:grid-cols-2">
                     {/* Class Selector Dropdown */}
-                    <div className="space-y-2 md:col-span-2">
-                        <Label htmlFor="classId">Assigned Class *</Label>
+                    <div className="grid gap-2 md:col-span-2">
+                        <Label htmlFor="classId">Assigned class</Label>
                         <select
                             id="classId"
                             data-testid="class-select"
-                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                            className="field"
                             value={selectedClassId}
                             onChange={(e) => handleClassChange(e.target.value)}
-                            required
+                            aria-invalid={fieldErrors.classId ? "true" : undefined}
+                            aria-describedby={fieldErrors.classId ? "class-error" : undefined}
                             disabled={submitting || loadingClasses || assignedClasses.length === 0}
                         >
                             <option value="">
@@ -226,16 +228,22 @@ export default function UploadLecturePage() {
                                 </option>
                             ))}
                         </select>
+                        {fieldErrors.classId && (
+                            <p id="class-error" className="errm" role="alert">
+                                <WarningCircle aria-hidden="true" size={16} weight="bold" />
+                                {fieldErrors.classId}
+                            </p>
+                        )}
                     </div>
 
                     {/* Optional Timetable Slot Dropdown */}
                     {timetableSlots.length > 0 && (
-                        <div className="space-y-2 md:col-span-2">
+                        <div className="grid gap-2 md:col-span-2">
                             <Label htmlFor="slotId">Weekly Timetable Slot (optional)</Label>
                             <select
                                 id="slotId"
                                 data-testid="timetable-slot-select"
-                                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                className="field"
                                 value={selectedSlotId}
                                 onChange={(e) => setSelectedSlotId(e.target.value)}
                                 disabled={submitting}
@@ -250,7 +258,7 @@ export default function UploadLecturePage() {
                         </div>
                     )}
 
-                    <div className="space-y-2 md:col-span-2">
+                    <div className="grid gap-2 md:col-span-2">
                         <Label htmlFor="title">Lecture title</Label>
                         <Input
                             id="title"
@@ -261,7 +269,7 @@ export default function UploadLecturePage() {
                             required
                         />
                     </div>
-                    <div className="space-y-2">
+                    <div className="grid gap-2">
                         <Label htmlFor="subject">Subject (optional)</Label>
                         <Input
                             id="subject"
@@ -271,7 +279,7 @@ export default function UploadLecturePage() {
                             onChange={(e) => setSubject(e.target.value)}
                         />
                     </div>
-                    <div className="space-y-2">
+                    <div className="grid gap-2">
                         <Label htmlFor="semester">Semester (optional)</Label>
                         <Input
                             id="semester"
@@ -284,12 +292,12 @@ export default function UploadLecturePage() {
                 </div>
 
                 {submitting && (
-                    <div className="border border-border bg-card p-4">
+                    <div className="slip">
                         <div className="text-overline mb-2 text-muted-foreground">
                             {verifying ? "Verifying upload…" : "Uploading to storage…"}
                         </div>
-                        <Progress value={progress} className="h-2" />
-                        <div className="mt-2 text-xs text-muted-foreground">
+                        <Progress value={progress} />
+                        <div className="mt-2 font-mono text-sm text-muted-foreground">
                             {verifying
                                 ? "Verifying upload…"
                                 : `${progress}% — once upload finishes, processing begins automatically.`}
@@ -298,31 +306,32 @@ export default function UploadLecturePage() {
                 )}
 
                 {fallbackNotice && (
-                    <div data-testid="fallback-notice" className="border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
+                    <div data-testid="fallback-notice" className="rounded-[var(--r)] border border-border bg-muted p-3 text-sm text-muted-foreground">
                         {fallbackNotice}
                     </div>
                 )}
 
                 {uploadError && (
-                    <div data-testid="upload-error" role="alert" className="border border-destructive bg-destructive/10 p-3 text-sm text-destructive">
+                    <div data-testid="upload-error" role="alert" className="flex items-start gap-2 rounded-[var(--r)] border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+                        <WarningCircle aria-hidden="true" size={16} weight="bold" className="mt-0.5 shrink-0" />
                         {uploadError}
                     </div>
                 )}
 
-                <div className="flex gap-3">
+                <div className="flex flex-wrap gap-3 border-t border-border pt-6">
                     <Button
                         type="submit"
+                        variant="pen"
                         size="lg"
-                        disabled={submitting || !file || !selectedClassId || assignedClasses.length === 0}
+                        disabled={submitting || assignedClasses.length === 0}
                         data-testid="submit-upload-btn"
-                        className="transition-transform hover:scale-[1.02] active:scale-[0.98]"
                     >
-                        <UploadSimple size={18} weight="duotone" className="mr-2" />
-                        {submitting ? "Uploading…" : "Upload and process"}
+                        <UploadSimple size="1em" aria-hidden="true" weight="bold" />
+                        {submitting ? "Uploading…" : "Upload lecture"}
                     </Button>
                     <Button
                         type="button"
-                        variant="ghost"
+                        variant="quiet"
                         onClick={() => router.push("/teacher/dashboard")}
                         data-testid="cancel-upload-btn"
                     >
@@ -334,65 +343,60 @@ export default function UploadLecturePage() {
     );
 }
 
-function FileDrop({ file, onFile, disabled }) {
+function FileDrop({ file, onFile, disabled, error }) {
     const [drag, setDrag] = useState(false);
     return (
-        <label
-            data-testid="audio-dropzone"
-            onDragOver={(e) => {
-                e.preventDefault();
-                setDrag(true);
-            }}
-            onDragLeave={() => setDrag(false)}
-            onDrop={(e) => {
-                e.preventDefault();
-                setDrag(false);
-                onFile({ target: { files: e.dataTransfer.files } });
-            }}
-            className={`block cursor-pointer border-2 border-dashed p-10 text-center transition-all ${
-                drag
-                    ? "border-primary bg-accent/20"
-                    : file
-                        ? "border-primary/50 bg-card"
-                        : "border-border bg-card hover:border-primary/40"
-            } ${disabled ? "pointer-events-none opacity-60" : ""}`}
-        >
-            <input
-                type="file"
-                accept="audio/*"
-                className="hidden"
-                onChange={onFile}
-                data-testid="audio-file-input"
-            />
-            {file ? (
-                <div className="flex flex-col items-center gap-3">
-                    <div className="flex h-14 w-14 items-center justify-center bg-primary text-primary-foreground">
-                        <FileAudio size={28} weight="duotone" />
+        <div>
+            <label
+                data-testid="audio-dropzone"
+                onDragOver={(e) => {
+                    e.preventDefault();
+                    setDrag(true);
+                }}
+                onDragLeave={() => setDrag(false)}
+                onDrop={(e) => {
+                    e.preventDefault();
+                    setDrag(false);
+                    onFile({ target: { files: e.dataTransfer.files } });
+                }}
+                className={`empty block cursor-pointer focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-ink ${
+                    drag ? "bg-accent/20" : ""
+                } ${error ? "border-destructive" : ""} ${disabled ? "pointer-events-none opacity-60" : ""}`}
+            >
+                <input
+                    type="file"
+                    accept="audio/*"
+                    className="sr-only"
+                    onChange={onFile}
+                    aria-invalid={error ? "true" : undefined}
+                    aria-describedby={error ? "file-error" : undefined}
+                    data-testid="audio-file-input"
+                />
+                {file ? (
+                    <div className="flex flex-col items-center gap-2">
+                        <FileAudio aria-hidden="true" size={28} weight="bold" />
+                        <div className="font-display max-w-full break-all text-xl">{file.name}</div>
+                        <div className="font-mono text-sm text-muted-foreground">
+                            {(file.size / 1024 / 1024).toFixed(2)} MB · {file.type || "audio file"}
+                        </div>
+                        <div className="text-sm text-muted-foreground">Click to swap file</div>
                     </div>
-                    <div>
-                        <div className="font-display text-lg font-bold">{file.name}</div>
-                        <div className="text-xs text-muted-foreground">
-                            {(file.size / 1024 / 1024).toFixed(2)} MB ·{" "}
-                            {file.type || "audio file"}
+                ) : (
+                    <div className="flex flex-col items-center gap-2">
+                        <Microphone aria-hidden="true" size={28} weight="bold" />
+                        <div className="font-display text-xl">Drop lecture audio here</div>
+                        <div className="text-sm text-muted-foreground">
+                            or click to browse · mp3 · wav · m4a · up to 200 MB
                         </div>
                     </div>
-                    <div className="text-overline text-muted-foreground">
-                        Click to swap file
-                    </div>
-                </div>
-            ) : (
-                <div className="flex flex-col items-center gap-3">
-                    <div className="flex h-14 w-14 items-center justify-center bg-accent">
-                        <Microphone size={28} weight="duotone" />
-                    </div>
-                    <div className="font-display text-xl font-bold">
-                        Drop lecture audio here
-                    </div>
-                    <div className="text-sm text-muted-foreground">
-                        or click to browse · mp3 · wav · m4a · up to 200 MB
-                    </div>
-                </div>
+                )}
+            </label>
+            {error && (
+                <p id="file-error" className="errm mt-2" role="alert">
+                    <WarningCircle aria-hidden="true" size={16} weight="bold" />
+                    {error}
+                </p>
             )}
-        </label>
+        </div>
     );
 }

@@ -90,6 +90,7 @@ Because the public ALB DNS name is assigned dynamically during the initial Cloud
    make deploy BUDGET_EMAIL=you@example.com READY_EMAILS=you@example.com APP_ORIGIN=http://<AlbDnsName>
    ```
    This updates the S3 bucket's CORS configuration to allow direct browser uploads from the ALB domain.
+   **Use the ALB DNS name in lowercase.** Browsers lowercase the host in the `Origin` header and S3 matches CORS origins case-sensitively; the DNS name printed by `AlbDnsName` can be mixed case, which makes every browser upload fail with a CORS 403.
 
 ### Bootstrap DB & Seed Demo via Session Manager
 The RDS PostgreSQL instance is deployed in isolated private subnets with no public access. To bootstrap tables or seed demo records, use AWS Systems Manager (SSM) Session Manager to execute the helper scripts from an EC2 instance:

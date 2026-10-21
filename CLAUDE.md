@@ -33,7 +33,53 @@ Rules:
 ## Status
 
 Living project status, updated after every feature lands.
-**Last updated:** 2026-10-12 (Phase 19 UAT gap fixes; pending verify-work)
+**Last updated:** 2026-10-21 (Phase 20 Field Notebook redesign; human UAT pending; VER-01 live run still open)
+
+### SESSION HANDOFF 2026-10-22 (read this first in a new session)
+
+**Live stack (ap-southeast-2, profile `lectify`, URL `http://comput-alb16-wndvevxfg69z-1334501939.ap-southeast-2.elb.amazonaws.com`):** all stacks deployed; web+worker ASGs running; RDS up. CLI default region is us-east-1 (SCP-denied): always `export AWS_PROFILE=lectify AWS_REGION=ap-southeast-2 AWS_DEFAULT_REGION=ap-southeast-2`. Deploy needs `-c budget_email=varadaj47@gmail.com -c ready_emails=varadaj47@gmail.com -c app_origin=<ALB URL in LOWERCASE>` (S3 CORS matches case-sensitively; mixed-case broke uploads once). Pause/resume: `make aws-pause|aws-resume|aws-status` in infra/cdk. Ship = `make build-web` + `npx --no-install cdk deploy --all ...` + `aws autoscaling start-instance-refresh` on both ASGs (`ComputeStack-WebAsgASGEE4061A2-2CcStOQTw3tx`, `ComputeStack-WorkerAsgASGC59A845D-QR910JqZwEER`, MinHealthy 100 / MaxHealthy 200, warmup 300). Instances only pick up new code/SSM keys after a refresh. RDS is private: run scripts via `aws ssm send-command` (AWS-RunShellScript) on an instance as user `lectify` with `source /etc/lectify/app.env`, `PYTHONPATH=/opt/lectify/backend`, `/opt/lectify/venv/bin/python`. Never print secrets; read keys from `backend/.env`.
+
+**In flight when this session ended:** a backend-only deploy that DID complete its CDK step (ComputeStack updated 18:46 UTC, OpenRouter key in SSM); the instance refresh on both ASGs had just started (0%) and needs about 10-15 min. VERIFY it finished: `aws autoscaling describe-instance-refreshes`, then worker log (`aws logs filter-log-events --log-group-name /lectify/worker`) should show `AI provider chain: ['groq','openrouter','naga','gemini','nim']`. The lecture `crypto_intro_short` (id starts `e774d7ae`) was stuck at "Generating study materials" because Naga 503 / NIM 404 / Gemini 503; after the refresh press Retry processing (owner teacher or admin) and confirm it reaches Ready.
+
+**AI providers (backend/services/ai_service.py, core/config.py):** STT chain deepgram -> naga -> gemini (Deepgram verified live: 2-7 s). LLM chain `LLM_PROVIDERS` default `groq,openrouter,naga,radox,gemini,nim` with **round robin** (`LLM_ROUND_ROBIN=1`, `FailoverAIProvider(rotate=True)`): each call starts at the next provider then fails over. Providers without keys are skipped. Verified live with the real `generate_study_materials`: Groq `openai/gpt-oss-120b` (5.8 s; the old llama-3.3 id no longer exists), OpenRouter `minimax/minimax-m3.1-flash:free` (19 s). **NIM is broken** (NVIDIA function id 404; also hits `nvidia/nemotron-3-super-120b-a12b:free` on OpenRouter): kept last. **Radox** (`https://radoxai.com/v1`, only `/v1` works) accepts the key but every model returns 402 insufficient_quota: needs credit, then set `RADOX_CHAT_MODEL` (ids from `GET /v1/models`). Naga free tier is flaky (503s). SSM now holds JWT_SECRET, GROQ, GEMINI, DEEPGRAM, NAGA_AI, NIM, OPENROUTER keys (RADOX key is only in local .env).
+
+**Uncommitted work in the tree (nothing committed; user commits):** (1) my UX-audit fixes, see the "UX audit fixes" section below (backend 338 tests, plus frontend tests); (2) a second Claude session `cdk-7a` is doing the Phase 20 frontend redesign in the same tree (custom icon set `src/components/icons.jsx`, editorial warm palette, full page audit). Coordinate through ListAgents/SendMessage; do not edit `frontend/` or redeploy while it is working unless the user says so. The deployed web bundle is from the 18:00 UTC build (pre-icons), not the latest redesign; shipping the redesign needs `make build-web` after cdk-7a finishes and the user has looked at it in a browser (nobody has yet).
+
+**Open items:** Phase 20 visual UAT; VER-01 live run with SNS email (subscription is confirmed); NIM model fix or removal; Radox credit; legacy lectures with `class_id IS NULL` visible to all students; capacity (DB pool, login storm); no emailed password reset (admin reset links instead); react-query not adopted. Gotchas: frontend vitest needs `--pool=threads` on Node 24; a GateGuard hook demands "importers / affected API / data / user instruction" facts before the first edit of each file (state them, then retry the edit).
+
+### What was added (Phase 20 - Field Notebook frontend redesign)
+
+- **Tokens and themes** (`frontend/src/index.css`, `tailwind.config.js`, `app/providers.tsx`, `ThemeToggle.jsx`): Day desk / Night desk via `data-theme`, next-themes with a pre-paint script (`lectify-theme`, `suppressHydrationWarning` in `app/layout.tsx`); lime removed; tokens and AA contrast checked in `tokens.test.js`.
+- **Fonts** (`app/layout.tsx`): `next/font/google` Bricolage Grotesque, Newsreader, Caveat (400/700) and Geist Mono, self-hosted at build; no third-party CDN references.
+- **Primitives**: Button variants paper/pen/quiet with legacy aliases, restyled ui fields and read-tabs, `StatusStamp` ("Ready / Writing up / Retry processing"), `ConfirmDialog`, `PenPlayer`.
+- **Surfaces restyled**: landing, auth, student dashboard/review/bookmarks, lecture detail, teacher dashboard/upload, admin on a plain page (no holes or tape). `lectureApi.retry` client added for the admin retry action.
+- **Guards**: `tokens`, `designGuards` (banned fonts/CDNs plus a surface-wide gate: weights 400/700 only, 4 sizes, no palette classes, no duotone, no standalone `text-accent`, no `dark:`, framer-motion requires `useReducedMotion`), `testids` baseline, `modules`.
+- **Concurrent UX-audit changes** (separate session, noted as facts): new ForgotPassword, ResetPassword, Enroll, Account, AdminUsers pages, `AuthCard`, `PasswordInput`, `not-found`/`error`/`global-error`, Account link and Users nav in `AppShell`, filters and load-more in `StudentDashboard`. Their old Tailwind sizes and weights were swept into the Field Notebook tokens (logic and testids unchanged).
+- **Test counts:** frontend vitest 18 files, 283 passed; `next build` passes. Backend untouched.
+- **Still open:** human visual UAT (375px and 1280px, day and night, reduced motion, admin without holes or tape); VER-01 live run.
+- **Next card in queue:** Phase 20 UAT sign-off, then redeploy ComputeStack and run VER-01.
+
+### What was added (UX audit fixes: accounts, enrollment, QR, paging)
+
+- **Accounts** (`routes/auth.py`, `routes/admin.py`, `core/security.py`): public signup creates **students only** (teacher/admin accounts come from `POST /admin/users`); `PATCH /auth/me`, `POST /auth/change-password` (revokes the old token, returns a new one), `POST /auth/reset-password`; admin-issued one-time reset link `POST /admin/users/{id}/reset-link` (30 min, dies when the password changes, no storage). Reset/enrollment tokens carry a `type` claim and `decode_access_token` rejects any typed token, so they can never authenticate a session. Password minimum is 8. No email service exists for end users, so there is no emailed forgot-password and no email verification.
+- **QR + enrollment** (`routes/qr.py`): the QR SVG key moved to `classes/{class_id}/qr/{id}.svg` (the old `qr-codes/` prefix was outside the API role's `classes/*` write scope, so generation failed on AWS); the enrollment URL uses `APP_URL` if set, else the browser's `Origin` (default is now empty, never localhost); only students can enroll; the preview call returns the class name; regenerate now checks the class exists and the teacher is assigned. Frontend `/enroll?token=` page handles signed-out, wrong role, already enrolled and expired QR.
+- **Retry:** `POST /lectures/{id}/retry` allows the owning teacher or an admin (UI shows the button to both).
+- **Paging:** `/lectures/published` and `/lectures/mine` accept `limit` (default 100, max 200) and `offset`; repositories default to unbounded so existing callers are unchanged.
+- **Frontend:** `/forgot-password`, `/reset-password`, `/account`, `/admin/users`, 404 + error boundaries, session-expired banner with return-to path, show/hide password, student filters/sort/New marker/resume/Load more, teacher search/Load more, audio resume position (`src/lib/recentLectures.js`, per-user localStorage), hierarchy list search (>8 items) and a root Classes list, per-page tab titles.
+- **Test counts:** backend 332 passed, 3 skipped; frontend 283 passed.
+- **Not deployed yet:** visual UAT pending. To ship: `make build-web`, `cdk deploy --all` with the **lowercase** ALB origin, instance refresh on both ASGs, then `make put-secrets` (Deepgram/Naga/NIM keys are missing from SSM).
+- **Not done:** react-query adoption, email verification / emailed password reset, DB-pool and login-throughput tuning (Phase 18 capacity gap).
+
+### What was added (v1.0 milestone closure)
+
+- **Verification:** `13.1`, `15`, `19` now have `*-VERIFICATION.md` (all `passed`); Phase 19 `19-SECURITY.md` has `threats_open: 0` (24/24). `v1.0-MILESTONE-AUDIT.md` records the audit; `REQUIREMENTS.md` ticked except **VER-01** (live real-provider upload-to-ready + SNS email on the deployed stack).
+- **IAM fix** (`infra/cdk/lectify_cdk/compute_iam.py`): API role gains `s3:DeleteObject` (classes/*) and `s3:ListBucket` (classes/* prefix) so missing-object `upload-complete` returns 409 (not 500) and failed/deleted uploads stop orphaning S3 objects. **Takes effect only after a ComputeStack redeploy.**
+- **Class scoping:** `/flashcards/due`, `/bookmarks/me`, `/analytics/me` filter by the student's enrolled classes (`core/deps.py` `student_class_scope`/`lecture_in_scope`); both upload paths reject a `timetable_slot_id` that is missing or belongs to another class (400).
+- **Re-embed:** `python -m scripts.reembed_lectures [--dry-run] [--limit N]` re-embeds existing lectures after the `gemini-embedding-001` switch.
+- **Test hygiene:** CDK fail-fast tests use `LECTIFY_ARTIFACT_ROOT` + temp dirs (they used to mutate real build/vendor dirs); `test_queue` priority test no longer depends on time of day. Frontend vitest needs `--pool=threads` on Node 24.
+- **Test counts:** backend 309 passed, 3 skipped; CDK 65 passed; frontend 16 passed.
+- **Still open:** VER-01 + Phase 16 human checks; capacity goal (20 vs ~2,000 users, DB pool first); published lectures with `class_id IS NULL` are visible to all students (backfill/unpublish before prod); per-process provider cooldowns.
+- **Next card in queue:** redeploy ComputeStack, run one live lecture (VER-01), then `/gsd-complete-milestone 1.0`.
 
 ### What was added (Phase 19 UAT gap fixes)
 
@@ -326,7 +372,7 @@ See [.planning/PROJECT.md](.planning/PROJECT.md) for full project context — re
 ## Technology Stack
 
 - **Backend:** Python 3.11 on AWS instances (3.14 local dev), FastAPI, SQLAlchemy (async), Pydantic
-- **Frontend:** React 19 + TypeScript
+- **Frontend:** Next 16 app router + React 19 (JS pages), Tailwind 3.4 + shadcn tokens (Field Notebook design system)
 - **Database:** PostgreSQL (Neon), SQLite for tests
 - **Storage:** S3 (AWS) / local filesystem or MinIO (local dev)
 - **Queue:** SQS (AWS) / SQL-table backend (local), Postgres jobs-table idempotency (Phase 13/14)

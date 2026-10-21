@@ -8,7 +8,13 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from io import BytesIO
 
-from core.deps import get_current_user, require_teacher, verify_lecture_access
+from core.deps import (
+    get_current_user,
+    lecture_in_scope,
+    require_teacher,
+    student_class_scope,
+    verify_lecture_access,
+)
 from models.bookmark import (
     BookmarkCreate,
     BookmarkDB,
@@ -118,15 +124,21 @@ async def list_my_bookmarks(user: UserPublic = Depends(get_current_user)):
     bm_repo = BookmarkRepository()
     lec_repo = LectureRepository()
     bookmarks = await bm_repo.list_for_user(user.id)
+    scope = await student_class_scope(user)
     out: list[BookmarkWithLecture] = []
-    cache: dict[str, tuple[str, str | None]] = {}
+    cache: dict[str, tuple[str, str | None] | None] = {}
     for bm in bookmarks:
         if bm.lecture_id not in cache:
             lec = await lec_repo.get_by_id(bm.lecture_id)
-            cache[bm.lecture_id] = (
-                (lec.title if lec else "(deleted lecture)"),
-                (lec.subject if lec else None),
-            )
+            if lec and not lecture_in_scope(lec, scope):
+                cache[bm.lecture_id] = None
+            else:
+                cache[bm.lecture_id] = (
+                    (lec.title if lec else "(deleted lecture)"),
+                    (lec.subject if lec else None),
+                )
+        if cache[bm.lecture_id] is None:
+            continue
         title, subject = cache[bm.lecture_id]
         out.append(BookmarkWithLecture(**bm.model_dump(), lecture_title=title, lecture_subject=subject))
     return out
@@ -180,6 +192,7 @@ async def list_due_flashcards(
     rev_repo = FlashcardReviewRepository()
     lec_repo = LectureRepository()
     due = await rev_repo.list_due_for_user(user.id, limit=limit)
+    scope = await student_class_scope(user)
     out: list[DueCard] = []
     lec_cache: dict[str, "LectureDB | None"] = {}
     for r in due:
@@ -189,6 +202,8 @@ async def list_due_flashcards(
         if not lecture or r.card_index >= len(lecture.materials.flashcards):
             continue
         if user.role == "student" and not lecture.published:
+            continue
+        if not lecture_in_scope(lecture, scope):
             continue
         card = lecture.materials.flashcards[r.card_index]
         out.append(DueCard(

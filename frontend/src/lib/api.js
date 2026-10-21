@@ -66,10 +66,12 @@ api.interceptors.response.use(
                 return api(originalRequest);
             } catch (refreshError) {
                 processQueue(refreshError, null);
-                // Refresh failed — force logout
+                // Refresh failed — force logout, but tell the user why and bring them back after login
                 localStorage.removeItem("lm_token");
                 localStorage.removeItem("lm_user");
-                window.location.href = "/login";
+                document.cookie = "lm_token=; path=/; max-age=0; SameSite=Lax";
+                const here = window.location.pathname + window.location.search;
+                window.location.href = `/login?expired=1&redirect=${encodeURIComponent(here)}`;
                 return Promise.reject(refreshError);
             } finally {
                 isRefreshing = false;
@@ -84,6 +86,17 @@ export const authApi = {
     signup: (data) => api.post("/auth/signup", data).then((r) => r.data),
     login: (data) => api.post("/auth/login", data).then((r) => r.data),
     me: () => api.get("/auth/me").then((r) => r.data),
+    updateProfile: (name) => api.patch("/auth/me", { name }).then((r) => r.data),
+    changePassword: (current_password, new_password) =>
+        api.post("/auth/change-password", { current_password, new_password }).then((r) => r.data),
+    resetPassword: (token, new_password) =>
+        api.post("/auth/reset-password", { token, new_password }).then((r) => r.data),
+};
+
+// Student self-enrollment via a class QR code (/enroll?token=...)
+export const enrollApi = {
+    preview: (token) => api.get(`/qr/enroll/${encodeURIComponent(token)}`).then((r) => r.data),
+    join: (token) => api.post(`/qr/enroll/${encodeURIComponent(token)}`).then((r) => r.data),
 };
 
 export const lectureApi = {
@@ -97,8 +110,9 @@ export const lectureApi = {
     uploadUrl: (payload) => api.post("/lectures/upload-url", payload).then((r) => r.data),
     uploadComplete: (id) => api.post(`/lectures/${id}/upload-complete`).then((r) => r.data),
     audioPresignedUrl: (id) => api.get(`/lectures/${id}/audio-url`).then((r) => r.data),
-    mine: () => api.get("/lectures/mine").then((r) => r.data),
-    published: () => api.get("/lectures/published").then((r) => r.data),
+    mine: (params) => api.get("/lectures/mine", { params }).then((r) => r.data),
+    published: (params) => api.get("/lectures/published", { params }).then((r) => r.data),
+    retry: (id) => api.post(`/lectures/${id}/retry`).then((r) => r.data),
     get: (id) => api.get(`/lectures/${id}`).then((r) => r.data),
     publish: (id) => api.post(`/lectures/${id}/publish`).then((r) => r.data),
     unpublish: (id) => api.post(`/lectures/${id}/unpublish`).then((r) => r.data),
@@ -239,6 +253,9 @@ export const adminApi = {
 
     // Classes
     listClasses: () => api.get("/admin/classes").then((r) => r.data),
+    listUsers: (params) => api.get("/admin/users", { params }).then((r) => r.data),
+    createUser: (data) => api.post("/admin/users", data).then((r) => r.data),
+    userResetLink: (id) => api.post(`/admin/users/${id}/reset-link`).then((r) => r.data),
     createClass: (data) => api.post("/admin/classes", data).then((r) => r.data),
     getClass: (id) => api.get(`/admin/classes/${id}`).then((r) => r.data),
     updateClass: (id, data) => api.put(`/admin/classes/${id}`, data).then((r) => r.data),
@@ -252,6 +269,7 @@ export const adminApi = {
 // Teacher Assignment API (for admin dashboard)
 // ============================================================================
 export const assignmentApi = {
+    listTeachers: () => api.get("/enrollment/teachers").then((r) => r.data),
     assign: (data) => api.post("/enrollment/assignments", data).then((r) => r.data),
     listForClass: (classId) => api.get(`/enrollment/assignments/class/${classId}`).then((r) => r.data),
     listForTeacher: (teacherId) => api.get(`/enrollment/assignments/teacher/${teacherId}`).then((r) => r.data),

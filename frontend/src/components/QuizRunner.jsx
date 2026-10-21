@@ -1,14 +1,15 @@
 import { useState } from "react";
 import { lectureApi } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { CheckCircle, XCircle, ArrowClockwise } from "@phosphor-icons/react";
-import { motion } from "framer-motion";
+import { Check, X, ArrowClockwise } from "@/components/icons";
+import { motion, useReducedMotion } from "framer-motion";
 import { toast } from "sonner";
 
 export default function QuizRunner({ lectureId, quiz = [] }) {
     const [answers, setAnswers] = useState(Array(quiz.length).fill(-1));
     const [result, setResult] = useState(null);
     const [submitting, setSubmitting] = useState(false);
+    const reduce = useReducedMotion();
 
     if (!quiz.length) {
         return <div className="text-sm text-muted-foreground">No quiz generated yet.</div>;
@@ -45,20 +46,20 @@ export default function QuizRunner({ lectureId, quiz = [] }) {
         <div className="space-y-8">
             {result && (
                 <motion.div
-                    initial={{ opacity: 0, y: -8 }}
+                    initial={{ opacity: 0, y: reduce ? 0 : -8 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="border-2 border-primary bg-primary p-6 text-primary-foreground"
+                    className="rounded-[var(--radius)] border border-border bg-card p-6"
                     data-testid="quiz-result"
                 >
-                    <div className="text-overline text-accent">Result</div>
-                    <div className="font-display text-5xl font-black tracking-tighter">
+                    <div className="text-overline text-primary">Result</div>
+                    <div className="font-mono text-2xl font-bold" data-testid="quiz-score">
                         {result.score}/{result.total}
                     </div>
                     <div className="mt-1 text-base">
                         {result.percentage}% — {result.percentage >= 80 ? "Excellent" : result.percentage >= 60 ? "Solid pass" : "Time for revision"}
                     </div>
                     <Button
-                        variant="secondary"
+                        variant="default"
                         onClick={reset}
                         className="mt-4"
                         data-testid="quiz-retry-btn"
@@ -71,10 +72,10 @@ export default function QuizRunner({ lectureId, quiz = [] }) {
 
             {quiz.map((q, qi) => (
                 <div key={qi} data-testid={`quiz-question-${qi}`}>
-                    <div className="text-overline mb-2 text-primary">
+                    <div className="mb-2 font-mono text-sm text-primary">
                         Question {qi + 1}
                     </div>
-                    <div className="font-display mb-4 text-xl font-bold tracking-tight">
+                    <div className="mb-4 text-2xl font-bold">
                         {q.question}
                     </div>
                     <div className="grid gap-2">
@@ -87,30 +88,41 @@ export default function QuizRunner({ lectureId, quiz = [] }) {
                                 <button
                                     key={oi}
                                     type="button"
+                                    aria-pressed={selected}
                                     data-testid={`quiz-${qi}-option-${oi}`}
                                     onClick={() => pick(qi, oi)}
-                                    className={`flex items-center gap-3 border px-4 py-3 text-left text-sm transition-all ${
+                                    className={`flex min-h-11 w-full items-center gap-3 border px-4 py-3 text-left text-base ${
                                         showCorrect
-                                            ? "border-primary bg-primary text-primary-foreground"
+                                            ? "border-primary bg-card text-primary"
                                             : wrongPick
-                                                ? "border-destructive bg-destructive/10 text-foreground"
+                                                ? "border-destructive bg-card text-destructive"
                                                 : selected
-                                                    ? "border-primary bg-accent/30"
+                                                    ? "border-primary bg-accent text-accent-foreground"
                                                     : "border-border bg-card hover:border-primary/40"
                                     }`}
                                 >
-                                    <span className="flex h-6 w-6 shrink-0 items-center justify-center border border-current text-xs font-bold">
+                                    <span className="flex h-6 w-6 shrink-0 items-center justify-center border border-current font-mono text-sm font-bold">
                                         {String.fromCharCode(65 + oi)}
                                     </span>
                                     <span className="flex-1">{opt}</span>
-                                    {showCorrect && <CheckCircle size={18} weight="fill" />}
-                                    {wrongPick && <XCircle size={18} weight="fill" />}
+                                    {showCorrect && (
+                                        <span className="inline-flex items-center gap-1 text-sm font-bold">
+                                            <Check size={18} weight="bold" aria-hidden="true" />
+                                            Correct
+                                        </span>
+                                    )}
+                                    {wrongPick && (
+                                        <span className="inline-flex items-center gap-1 text-sm font-bold">
+                                            <X size={18} weight="bold" aria-hidden="true" />
+                                            Wrong
+                                        </span>
+                                    )}
                                 </button>
                             );
                         })}
                     </div>
                     {result && q.explanation && (
-                        <div className="mt-3 border-l-2 border-accent bg-muted px-4 py-2 text-sm">
+                        <div className="mt-3 border-l-2 border-primary bg-muted px-4 py-2 text-sm">
                             <span className="text-overline mr-2 text-primary">Why</span>
                             {q.explanation}
                         </div>
@@ -121,10 +133,11 @@ export default function QuizRunner({ lectureId, quiz = [] }) {
             {!result && (
                 <Button
                     size="lg"
+                    variant="pen"
                     onClick={submit}
                     disabled={submitting}
                     data-testid="quiz-submit-btn"
-                    className="transition-transform hover:scale-[1.02] active:scale-[0.98]"
+                    className="motion-safe:transition-transform motion-safe:hover:scale-[1.02]"
                 >
                     {submitting ? "Grading…" : "Submit answers"}
                 </Button>

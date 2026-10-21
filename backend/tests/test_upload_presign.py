@@ -534,11 +534,50 @@ class TestRetry:
             _clear()
 
     @patch("routes.lectures.LectureRepository")
-    def test_non_admin_forbidden(self, mock_lec, client):
-        _override(_teacher())
+    def test_student_forbidden(self, mock_lec, client):
+        from models.user import UserPublic
+
+        _override(UserPublic(id="usr_s1", email="s@example.com", name="Stu", role="student",
+                             created_at=datetime.now(timezone.utc)))
         try:
-            r = client.post("/api/lectures/lec_dl/retry")
-            assert r.status_code == 403
+            assert client.post("/api/lectures/lec_dl/retry").status_code == 403
+        finally:
+            _clear()
+
+    @patch("routes.lectures.LectureRepository")
+    def test_teacher_cannot_retry_someone_elses_lecture(self, mock_lec, client):
+        from unittest.mock import AsyncMock
+
+        _override(_teacher("usr_other"))
+        try:
+            mock_lec.return_value.get_by_id = AsyncMock(
+                return_value=_lecture(lecture_id="lec_dl", teacher_id="usr_t1", status="dead_letter")
+            )
+            assert client.post("/api/lectures/lec_dl/retry").status_code == 404
+        finally:
+            _clear()
+
+    @patch("routes.lectures.enqueue_job", new_callable=AsyncMock)
+    @patch("routes.lectures.LectureRepository")
+    def test_owner_teacher_can_retry(self, mock_lec, mock_enq, client):
+        from unittest.mock import AsyncMock
+
+        _override(_teacher("usr_t1"))
+        try:
+            dead = _lecture(lecture_id="lec_dl", teacher_id="usr_t1", status="dead_letter")
+            queued = _lecture(lecture_id="lec_dl", teacher_id="usr_t1", status="queued")
+            inst = mock_lec.return_value
+            inst.get_by_id = AsyncMock(side_effect=[dead, queued])
+            inst.update_fields = AsyncMock()
+            import core.sql_db
+            orig = core.sql_db.session_maker
+            core.sql_db.session_maker = lambda: self._fake_session(max_version=1)
+            try:
+                r = client.post("/api/lectures/lec_dl/retry")
+            finally:
+                core.sql_db.session_maker = orig
+            assert r.status_code == 200, r.text
+            assert mock_enq.call_count == 1
         finally:
             _clear()
 

@@ -1,27 +1,25 @@
 import HierarchyTree from "@/components/HierarchyTree";
-import { Buildings } from "@phosphor-icons/react";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 
 export default function AdminDashboard() {
+    const reduce = useReducedMotion();
     return (
-            <div data-testid="admin-dashboard">
-                <section className="mb-10">
-                    <div className="text-overline mb-3 text-primary">Admin dashboard</div>
-                    <h1 className="font-display text-4xl font-black tracking-tighter sm:text-5xl">
-                        Academic hierarchy.
-                    </h1>
-                    <p className="mt-3 max-w-xl text-base text-muted-foreground">
-                        Manage years, branches, semesters, subjects, divisions, and classes for your institution.
-                    </p>
-                </section>
+        <div data-testid="admin-dashboard">
+            <section className="mb-10">
+                <div className="text-overline mb-3 text-primary">Admin</div>
+                <h1 className="text-display font-display">Academic hierarchy</h1>
+                <p className="mt-3 max-w-prose text-base text-muted-foreground">
+                    Manage years, branches, semesters, subjects, divisions, and classes for your institution.
+                </p>
+            </section>
 
-                <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.3 }}
-                >
-                    <HierarchyTree />
-                </motion.div>
-            </div>
+            <motion.div
+                initial={reduce ? false : { opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3 }}
+            >
+                <HierarchyTree />
+            </motion.div>
+        </div>
     );
 }

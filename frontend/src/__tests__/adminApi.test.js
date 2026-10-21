@@ -1,15 +1,18 @@
+import { vi } from 'vitest';
 import { adminApi, assignmentApi, qrApi, enrollmentApi } from '../lib/api';
 import api from '../lib/api';
 
 // Mock axios
-jest.mock('axios');
+vi.mock('axios', () => {
+    const inst = {
+        get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn(),
+        interceptors: { request: { use: vi.fn() }, response: { use: vi.fn() } },
+    };
+    return { default: { ...inst, create: () => inst } };
+});
 import axios from 'axios';
 
 describe('adminApi', () => {
-    beforeEach(() => {
-        axios.create.mockReturnThis();
-    });
-
     test('listInstitutions calls GET /admin/institutions', async () => {
         axios.get.mockResolvedValue({ data: [] });
         await adminApi.listInstitutions();
@@ -63,10 +66,6 @@ describe('adminApi', () => {
 });
 
 describe('assignmentApi', () => {
-    beforeEach(() => {
-        axios.create.mockReturnThis();
-    });
-
     test('assign calls POST /enrollment/assignments', async () => {
         const data = { class_id: 'c1', teacher_id: 't1' };
         axios.post.mockResolvedValue({ data });
@@ -88,10 +87,6 @@ describe('assignmentApi', () => {
 });
 
 describe('qrApi', () => {
-    beforeEach(() => {
-        axios.create.mockReturnThis();
-    });
-
     test('generate calls POST /qr/classes/{id}/generate', async () => {
         axios.post.mockResolvedValue({ data: {} });
         await qrApi.generate('class-1');
@@ -123,10 +118,6 @@ describe('qrApi', () => {
 });
 
 describe('enrollmentApi', () => {
-    beforeEach(() => {
-        axios.create.mockReturnThis();
-    });
-
     test('listForClass calls GET /enrollment/classes/{id}/students', async () => {
         axios.get.mockResolvedValue({ data: [] });
         await enrollmentApi.listForClass('class-1');

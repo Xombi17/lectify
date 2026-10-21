@@ -178,6 +178,66 @@ def test_factory_chain(monkeypatch):
     assert p._embedder is p._members[1][1]
 
 
+def test_factory_radox_and_groq_join_chain_in_order(monkeypatch):
+    _cfg(monkeypatch, NAGA_AI_API_KEY="k1", NIM_API_KEY="k2", RADOX_API_KEY="r",
+         RADOX_CHAT_MODEL="radox-model", RADOX_BASE_URL="https://radoxai.com/v1",
+         GROQ_API_KEY="g", GROQ_BASE_URL="https://groq/v1", GROQ_LLM_MODEL="groq-model",
+         LLM_PROVIDERS=["naga", "radox", "groq", "nim"])
+    p = m.get_ai_service()
+    assert [n for n, _ in p._members] == ["naga", "radox", "groq", "nim"]
+    models = {n: pr._chat_model for n, pr in p._members}
+    assert models["radox"] == "radox-model" and models["groq"] == "groq-model"
+
+
+def test_round_robin_spreads_calls_across_members():
+    a, b, c = _Fake(tag="a"), _Fake(tag="b"), _Fake(tag="c")
+    ch = m.FailoverAIProvider([("naga", a), ("nim", b), ("gemini", c)], embedder=c, rotate=True)
+    assert [run(ch.chat("t", [], "q")) for _ in range(6)] == ["a", "b", "c", "a", "b", "c"]
+
+
+def test_round_robin_still_fails_over(monkeypatch):
+    a, c = _Fake(exc=RuntimeError("down"), tag="a"), _Fake(tag="c")
+    ch = m.FailoverAIProvider([("naga", a), ("gemini", c)], embedder=c, rotate=True)
+    assert [run(ch.chat("t", [], "q")) for _ in range(3)] == ["c", "c", "c"]
+
+
+def test_priority_order_when_not_rotating():
+    a, b = _Fake(tag="a"), _Fake(tag="b")
+    ch = m.FailoverAIProvider([("naga", a), ("nim", b)], embedder=b)
+    assert [run(ch.chat("t", [], "q")) for _ in range(3)] == ["a", "a", "a"]
+
+
+def test_factory_openrouter_joins_chain(monkeypatch):
+    _cfg(monkeypatch, NAGA_AI_API_KEY="k1", NIM_API_KEY="k2", OPENROUTER_API_KEY="o",
+         OPENROUTER_BASE_URL="https://or/v1", OPENROUTER_CHAT_MODEL="or-model", GROQ_API_KEY="",
+         LLM_PROVIDERS=["openrouter", "naga"])
+    p = m.get_ai_service()
+    assert [n for n, _ in p._members] == ["openrouter", "naga"]
+    assert p._members[0][1]._chat_model == "or-model"
+
+
+def test_factory_cloudflare_needs_token_and_account(monkeypatch):
+    _cfg(monkeypatch, NAGA_AI_API_KEY="k1", NIM_API_KEY="k2", GROQ_API_KEY="", CLOUDFLARE_API_TOKEN="t",
+         CLOUDFLARE_ACCOUNT_ID="", LLM_PROVIDERS=["cloudflare", "naga"])
+    assert [n for n, _ in m.get_ai_service()._members] == ["naga"]
+    m.reset_ai_service()
+    _cfg(monkeypatch, NAGA_AI_API_KEY="k1", NIM_API_KEY="k2", GROQ_API_KEY="", CLOUDFLARE_API_TOKEN="t",
+         CLOUDFLARE_ACCOUNT_ID="a", CLOUDFLARE_BASE_URL="https://cf/v1", CLOUDFLARE_CHAT_MODEL="@cf/x",
+         CLOUDFLARE_CHAT_MODEL_2="@cf/y", LLM_PROVIDERS=["cloudflare", "cloudflare2", "naga"])
+    p = m.get_ai_service()
+    assert [n for n, _ in p._members] == ["cloudflare", "cloudflare2", "naga"]
+    assert p._members[1][1]._chat_model == "@cf/y"
+    assert p._members[0][1]._chat_model == "@cf/x"
+
+
+def test_factory_radox_skipped_until_key_and_model_set(monkeypatch):
+    # key without a model id must not build a provider that would fail on every call
+    _cfg(monkeypatch, NAGA_AI_API_KEY="k1", NIM_API_KEY="k2", RADOX_API_KEY="r",
+         RADOX_CHAT_MODEL="", GROQ_API_KEY="", LLM_PROVIDERS=["naga", "radox", "groq"])
+    p = m.get_ai_service()
+    assert [n for n, _ in p._members] == ["naga"]
+
+
 def test_factory_single_unwrapped(monkeypatch):
     _cfg(monkeypatch, NIM_API_KEY="k2", LLM_PROVIDERS=["nim"])
     assert isinstance(m.get_ai_service(), m.NIMProvider)

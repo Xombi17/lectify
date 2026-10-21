@@ -1,28 +1,21 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { motion } from "framer-motion";
-import {
-    BookmarkSimple,
-    Sparkle,
-    Note,
-    Cards,
-    Tag,
-    Trash,
-} from "@phosphor-icons/react";
-import { Badge } from "@/components/ui/badge";
+import { motion, useReducedMotion } from "framer-motion";
+import { Trash } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { bookmarkApi } from "@/lib/api";
 import { toast } from "sonner";
 
 const KIND_META = {
-    concept: { icon: Tag, label: "Concept" },
-    note: { icon: Note, label: "Note" },
-    flashcard: { icon: Cards, label: "Flashcard" },
+    concept: { label: "Concept" },
+    note: { label: "Note" },
+    flashcard: { label: "Flashcard" },
 };
 
 export default function BookmarksPage() {
     const [items, setItems] = useState([]);
     const [loading, setLoading] = useState(true);
+    const reduce = useReducedMotion();
 
     const load = () => {
         setLoading(true);
@@ -53,93 +46,78 @@ export default function BookmarksPage() {
     }, {});
 
     return (
-    <>
-            <div className="text-overline mb-3 text-primary">Saved for later</div>
-            <h1 className="font-display text-4xl font-black tracking-tighter sm:text-5xl">
-                Your bookmarks.
-            </h1>
-            <p className="mt-3 max-w-xl text-base text-muted-foreground">
-                Concepts, notes, and flashcards you starred across all lectures.
-            </p>
+        <>
+            <header className="head">
+                <div>
+                    <h1 className="text-display">Bookmarks</h1>
+                    <p className="lede mt-3">Notes, concepts and flashcards you saved, grouped by lecture.</p>
+                </div>
+            </header>
 
-            <div className="mt-10" data-testid="bookmarks-list">
+            <div data-testid="bookmarks-list">
                 {loading ? (
-                    <div className="grid gap-3">
-                        {[1, 2, 3].map((n) => (
-                            <div key={n} className="h-24 animate-pulse border border-border bg-muted/40" />
-                        ))}
+                    <div aria-busy="true" aria-label="Loading" className="grid gap-4">
+                        <span className="sk" />
+                        <span className="sk" />
+                        <span className="sk" />
                     </div>
                 ) : items.length === 0 ? (
-                    <div className="border-2 border-dashed border-border bg-card p-10 text-center">
-                        <BookmarkSimple
-                            size={32}
-                            weight="duotone"
-                            className="mx-auto text-muted-foreground"
-                        />
-                        <h3 className="font-display mt-3 text-2xl font-bold tracking-tight">
-                            No bookmarks yet
-                        </h3>
+                    <div className="empty">
+                        <h2 className="text-2xl font-bold">A blank page</h2>
                         <p className="mt-1 text-sm text-muted-foreground">
-                            Open a lecture and tap the bookmark icon next to any concept, note, or
-                            flashcard.
+                            Tap the ribbon on a lecture to keep it here.
                         </p>
+                        <span className="hand">nothing marked yet</span>
                     </div>
                 ) : (
-                    <div className="space-y-8">
+                    <div className="grid items-start gap-6 lg:grid-cols-2">
                         {Object.values(grouped).map(({ meta, items: lectureItems }) => (
                             <motion.section
                                 key={meta.lecture_id}
-                                initial={{ opacity: 0, y: 6 }}
+                                className="slip slip--plain"
+                                initial={reduce ? false : { opacity: 0, y: 6 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 data-testid={`bookmark-group-${meta.lecture_id}`}
                             >
-                                <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2 border-b border-border pb-2">
-                                    <Link
-                                        href={`/student/lectures/${meta.lecture_id}`}
-                                        className="font-display text-lg font-bold tracking-tight text-primary underline-offset-4 hover:underline"
-                                    >
-                                        {meta.lecture_title}
-                                    </Link>
-                                    <div className="flex items-center gap-2">
-                                        {meta.lecture_subject && (
-                                            <Badge variant="outline">{meta.lecture_subject}</Badge>
-                                        )}
-                                        <span className="text-overline text-muted-foreground">
-                                            {lectureItems.length} saved
-                                        </span>
-                                    </div>
+                                <div className="mb-3 grid gap-1">
+                                    <h2 className="min-w-0 text-xl">
+                                        <Link
+                                            href={`/student/lectures/${meta.lecture_id}`}
+                                            className="hover:underline"
+                                        >
+                                            {meta.lecture_title}
+                                        </Link>
+                                    </h2>
+                                    <span className="text-sm text-muted-foreground">
+                                        {meta.lecture_subject ? `${meta.lecture_subject} · ` : ""}
+                                        {lectureItems.length} saved
+                                    </span>
                                 </div>
                                 <div className="grid gap-2">
                                     {lectureItems.map((bm) => {
                                         const M = KIND_META[bm.kind] || KIND_META.note;
-                                        const Icon = M.icon;
                                         return (
                                             <div
                                                 key={bm.id}
-                                                className="group flex items-start gap-3 border border-border bg-card px-4 py-3 transition-all hover:border-primary/40"
+                                                className="flex items-start gap-3 border-t border-border py-3"
                                             >
-                                                <Icon
-                                                    size={18}
-                                                    weight="duotone"
-                                                    className="mt-1 shrink-0 text-primary"
-                                                />
                                                 <div className="min-w-0 flex-1">
                                                     <div className="text-overline text-muted-foreground">
                                                         {M.label}
                                                     </div>
-                                                    <div className="mt-0.5 text-sm leading-relaxed">
-                                                        {bm.text}
-                                                    </div>
+                                                    <div className="mt-0.5 text-base">{bm.text}</div>
                                                 </div>
-                                                <button
+                                                <Button
                                                     type="button"
+                                                    variant="quiet"
+                                                    size="icon"
                                                     onClick={() => remove(bm.id)}
-                                                    className="opacity-0 transition-opacity group-hover:opacity-100"
-                                                    title="Remove"
+                                                    aria-label="Remove bookmark"
+                                                    className="shrink-0 hover:text-destructive"
                                                     data-testid={`remove-bookmark-${bm.id}`}
                                                 >
-                                                    <Trash size={16} weight="duotone" className="text-destructive" />
-                                                </button>
+                                                    <Trash size={16} weight="bold" />
+                                                </Button>
                                             </div>
                                         );
                                     })}
@@ -149,6 +127,6 @@ export default function BookmarksPage() {
                     </div>
                 )}
             </div>
-    </>
+        </>
     );
 }

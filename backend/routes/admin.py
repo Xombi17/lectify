@@ -36,8 +36,10 @@ from models.academic import (
     YearCreate,
     YearPublic,
 )
-from models.user import UserPublic
+from core.security import create_reset_token, hash_password
+from models.user import AdminUserCreate, ResetLink, UserDB, UserPublic
 from repositories.audit_log_repository import AuditLogRepository
+from repositories.user_repository import UserRepository
 from repositories.batch_repository import BatchRepository
 from repositories.batch_semester_repository import BatchSemesterRepository
 from repositories.branch_repository import BranchRepository
@@ -915,6 +917,67 @@ async def delete_class(class_id: str, admin: UserPublic = Depends(get_admin_user
 async def list_division_classes(division_id: str):
     repo = ClassRepository()
     return await repo.list_by_division(division_id)
+
+
+# ============================================================================
+# User management (admin-only: teacher/admin accounts are never self-service)
+# ============================================================================
+
+
+def _public_user(u) -> UserPublic:
+    return UserPublic(**u.model_dump(exclude={"password_hash"}))
+
+
+@router.get("/users", response_model=List[UserPublic])
+async def list_users(
+    role: Optional[str] = None,
+    q: Optional[str] = None,
+    limit: int = 50,
+    offset: int = 0,
+    admin: UserPublic = Depends(get_admin_user),
+):
+    users = await UserRepository().search(role, q, max(1, min(limit, 200)), max(offset, 0))
+    return [_public_user(u) for u in users]
+
+
+@router.post("/users", response_model=UserPublic, status_code=status.HTTP_201_CREATED)
+async def create_user(payload: AdminUserCreate, admin: UserPublic = Depends(get_admin_user)):
+    repo = UserRepository()
+    if await repo.get_by_email(payload.email.lower()):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")
+    user = UserDB(
+        id=repo.new_id(),
+        name=payload.name.strip(),
+        email=payload.email.lower(),
+        role=payload.role,
+        password_hash=hash_password(payload.password),
+    )
+    await repo.create(user)
+    await log_audit(
+        action=AUDIT_CREATE,
+        entity_type="user",
+        entity_id=user.id,
+        details=f"Admin created {user.role} account {user.email}",
+        admin_id=admin.id,
+    )
+    return _public_user(user)
+
+
+@router.post("/users/{user_id}/reset-link", response_model=ResetLink)
+async def create_reset_link(user_id: str, admin: UserPublic = Depends(get_admin_user)):
+    """One-time password reset link (30 min). Admin hands it to the user; it dies once the password changes."""
+    user = await UserRepository().get_by_id(user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    token = create_reset_token(user.id, user.password_hash)
+    await log_audit(
+        action=AUDIT_UPDATE,
+        entity_type="user",
+        entity_id=user.id,
+        details=f"Admin issued password reset link for {user.email}",
+        admin_id=admin.id,
+    )
+    return ResetLink(reset_path=f"/reset-password?token={token}", expires_in_minutes=30)
 
 
 # ============================================================================

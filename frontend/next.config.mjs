@@ -3,14 +3,28 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: "standalone",
-  // Pin the workspace root to frontend/ so the standalone bundle is flat (server.js at the top).
+
+  // Pin the workspace root to frontend/ so the standalone bundle is flat.
+  // This keeps server.js at the top of the standalone bundle.
   outputFileTracingRoot: import.meta.dirname,
-  turbopack: { root: import.meta.dirname },
+
+  turbopack: {
+    root: import.meta.dirname,
+  },
+
+  // Allow the ngrok domain to access Next.js development resources.
+  allowedDevOrigins: [
+    "catchier-reynaldo-noneuphoniously.ngrok-free.dev",
+  ],
+
   async rewrites() {
     if (process.env.NODE_ENV === "production") {
       return [];
     }
-    const backendUrl = process.env.DEV_BACKEND_URL || "http://localhost:8001";
+
+    const backendUrl =
+      process.env.DEV_BACKEND_URL || "http://localhost:8001";
+
     return [
       {
         source: "/api/:path*",
@@ -18,6 +32,7 @@ const nextConfig = {
       },
     ];
   },
+
   images: {
     unoptimized: false,
     remotePatterns: [

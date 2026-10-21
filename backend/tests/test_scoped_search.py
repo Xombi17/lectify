@@ -149,7 +149,7 @@ def test_get_published_lectures_role_scoping(
         published=True,
     )
 
-    async def mock_list_published(class_ids=None):
+    async def mock_list_published(class_ids=None, limit=None, offset=0):
         if class_ids is None:
             return [lec_summary_a, lec_summary_b]
         res = []

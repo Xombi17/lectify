@@ -102,17 +102,23 @@ class LectureRepository:
             row = await s.get(LectureORM, lecture_id)
             return _to_lecture(row) if row else None
 
-    async def list_by_teacher(self, teacher_id: str) -> List[LectureSummary]:
+    async def list_by_teacher(
+        self, teacher_id: str, limit: Optional[int] = None, offset: int = 0
+    ) -> List[LectureSummary]:
         async with session_maker()() as s:
             stmt = (
                 select(LectureORM)
                 .where(LectureORM.teacher_id == teacher_id)
                 .order_by(LectureORM.created_at.desc())
             )
+            if limit is not None:
+                stmt = stmt.limit(limit).offset(offset)
             rows = (await s.execute(stmt)).scalars().all()
             return [_to_summary(r) for r in rows]
 
-    async def list_published(self, class_ids: Optional[List[str]] = None) -> List[LectureSummary]:
+    async def list_published(
+        self, class_ids: Optional[List[str]] = None, limit: Optional[int] = None, offset: int = 0
+    ) -> List[LectureSummary]:
         if class_ids is not None and len(class_ids) == 0:
             return []
         async with session_maker()() as s:
@@ -123,6 +129,8 @@ class LectureRepository:
             if class_ids is not None:
                 stmt = stmt.where(LectureORM.class_id.in_(class_ids))
             stmt = stmt.order_by(LectureORM.created_at.desc())
+            if limit is not None:
+                stmt = stmt.limit(limit).offset(offset)
             rows = (await s.execute(stmt)).scalars().all()
             return [_to_summary(r) for r in rows]
 

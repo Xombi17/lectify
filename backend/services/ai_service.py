@@ -858,16 +858,31 @@ class StubProvider(AIProvider):
 
 
 class FailoverAIProvider(AIProvider):
-    """Tries LLM members in order; embed/transcribe stay on the embedder (no re-embed)."""
+    """Tries LLM members with failover; embed/transcribe stay on the embedder (no re-embed).
 
-    def __init__(self, members: list[tuple[str, AIProvider]], embedder: AIProvider):
+    rotate=True (round robin): each call starts at the next member, then falls through the rest, so load
+    (and each free tier's rate limit) is spread across every configured provider instead of draining the first.
+    """
+
+    def __init__(
+        self, members: list[tuple[str, AIProvider]], embedder: AIProvider, rotate: bool = False
+    ):
         self._members = members
         self._embedder = embedder
+        self._rotate = rotate and len(members) > 1
+        self._next = 0
+
+    def _ordered(self) -> list[tuple[str, AIProvider]]:
+        if not self._rotate:
+            return self._members
+        start = self._next % len(self._members)
+        self._next += 1
+        return self._members[start:] + self._members[:start]
 
     async def _call(self, method: str, *args):
         rate_limited = False
         last: Exception | None = None
-        for name, p in self._members:
+        for name, p in self._ordered():
             if cooldown_remaining(name) > 0:
                 rate_limited = True
                 continue
@@ -964,6 +979,22 @@ def get_ai_service() -> AIProvider:
                 settings.NAGA_AI_API_KEY, settings.NAGA_BASE_URL,
                 settings.NAGA_CHAT_MODEL, "", label="naga",
             ),
+            "openrouter": lambda: settings.OPENROUTER_API_KEY
+            and NIMProvider(
+                settings.OPENROUTER_API_KEY, settings.OPENROUTER_BASE_URL,
+                settings.OPENROUTER_CHAT_MODEL, "", label="openrouter",
+            ),
+            "radox": lambda: settings.RADOX_API_KEY
+            and settings.RADOX_CHAT_MODEL
+            and NIMProvider(
+                settings.RADOX_API_KEY, settings.RADOX_BASE_URL,
+                settings.RADOX_CHAT_MODEL, "", label="radox",
+            ),
+            "groq": lambda: settings.GROQ_API_KEY
+            and NIMProvider(
+                settings.GROQ_API_KEY, settings.GROQ_BASE_URL,
+                settings.GROQ_LLM_MODEL, "", label="groq",
+            ),
             "nim": lambda: settings.NIM_API_KEY
             and NIMProvider(
                 settings.NIM_API_KEY, settings.NIM_BASE_URL,
@@ -975,6 +1006,18 @@ def get_ai_service() -> AIProvider:
                 fallback_models=settings.GEMINI_FALLBACK_MODELS,
             ),
         }
+        for cf_name, cf_model in (
+            ("cloudflare", settings.CLOUDFLARE_CHAT_MODEL),
+            ("cloudflare2", settings.CLOUDFLARE_CHAT_MODEL_2),
+            ("cloudflare3", settings.CLOUDFLARE_CHAT_MODEL_3),
+        ):
+            builders[cf_name] = lambda n=cf_name, m=cf_model: (
+                settings.CLOUDFLARE_API_TOKEN
+                and settings.CLOUDFLARE_ACCOUNT_ID
+                and NIMProvider(
+                    settings.CLOUDFLARE_API_TOKEN, settings.CLOUDFLARE_BASE_URL, m, "", label=n,
+                )
+            )
         built: dict[str, AIProvider] = {}
 
         def get(name: str):
@@ -993,7 +1036,7 @@ def get_ai_service() -> AIProvider:
         if len(members) == 1 and members[0][1] is embedder:
             _provider = embedder
         else:
-            _provider = FailoverAIProvider(members, embedder)
+            _provider = FailoverAIProvider(members, embedder, rotate=settings.LLM_ROUND_ROBIN)
         logger.info(
             "AI provider chain: %s (embed=%s)", [n for n, _ in members], embed_name
         )

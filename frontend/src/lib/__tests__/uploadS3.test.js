@@ -125,15 +125,16 @@ describe("lectureApi presigned endpoints", () => {
 
 describe("status pills + audio preference", () => {
     it("maps ready/uploading/dead_letter per UI-SPEC", async () => {
-        const { STATUS_LABEL, statusPillKind } = await import("../lectureStatus");
+        const { STATUS_LABEL, statusPillKind, FAILED_MESSAGE } = await import("../lectureStatus");
         expect(STATUS_LABEL.ready).toBe("Ready");
         expect(statusPillKind("ready")).toBe("ready");
         for (const s of ["uploading", "queued", "processing", "retrying", "uploaded"]) {
             expect(statusPillKind(s)).toBe("processing");
-            expect(STATUS_LABEL[s]).toBe("Processing");
+            expect(STATUS_LABEL[s]).toBe("Writing up");
         }
         expect(statusPillKind("dead_letter")).toBe("failed");
-        expect(STATUS_LABEL.dead_letter).toMatch(/contact your teacher/);
+        expect(STATUS_LABEL.dead_letter).toBe("Retry processing");
+        expect(FAILED_MESSAGE).toMatch(/ask an admin/);
     });
 
     it("audio prefers presigned src with no auth header; 501 falls back to blob", async () => {

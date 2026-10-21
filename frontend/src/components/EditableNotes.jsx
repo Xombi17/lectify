@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Pencil, Check, X, Plus, TrashSimple } from "@phosphor-icons/react";
+import { Pencil, Check, X, Plus, TrashSimple } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -64,7 +64,7 @@ export default function EditableNotes({ lecture, isOwner, onSaved, renderNoteExt
                     <Button variant="ghost" size="sm" onClick={cancel} disabled={saving}>
                         <X size={14} className="mr-1" /> Cancel
                     </Button>
-                    <Button size="sm" onClick={save} disabled={saving} data-testid="save-notes-btn">
+                    <Button size="sm" variant="pen" onClick={save} disabled={saving} data-testid="save-notes-btn">
                         <Check size={14} className="mr-1" />
                         {saving ? "Saving…" : "Save changes"}
                     </Button>
@@ -84,7 +84,7 @@ export default function EditableNotes({ lecture, isOwner, onSaved, renderNoteExt
                 <div className="mb-2 space-y-2">
                     {notes.map((n, i) => (
                         <div key={i} className="flex gap-2">
-                            <span className="font-mono mt-2 w-6 shrink-0 text-xs text-primary">
+                            <span className="font-mono mt-2 w-6 shrink-0 text-sm text-primary">
                                 {String(i + 1).padStart(2, "0")}
                             </span>
                             <Textarea
@@ -100,16 +100,16 @@ export default function EditableNotes({ lecture, isOwner, onSaved, renderNoteExt
                             <button
                                 type="button"
                                 onClick={() => setNotes(notes.filter((_, x) => x !== i))}
-                                className="mt-1 h-9 w-9 text-muted-foreground hover:text-destructive"
+                                className="mt-1 h-11 w-11 text-muted-foreground hover:text-destructive"
                                 title="Remove"
                             >
-                                <TrashSimple size={14} weight="duotone" />
+                                <TrashSimple size={14} weight="regular" />
                             </button>
                         </div>
                     ))}
                 </div>
                 <Button
-                    variant="outline"
+                    variant="default"
                     size="sm"
                     onClick={() => setNotes([...notes, ""])}
                     className="mb-6"
@@ -122,7 +122,7 @@ export default function EditableNotes({ lecture, isOwner, onSaved, renderNoteExt
                 <div className="text-overline mb-3 text-muted-foreground">Key concepts</div>
                 <div className="mb-2 flex flex-wrap gap-2">
                     {concepts.map((c, i) => (
-                        <div key={i} className="flex items-center gap-1 border border-border bg-card">
+                        <div key={i} className="flex items-center gap-1 rounded-[var(--r)] border border-border bg-card">
                             <Input
                                 value={c}
                                 onChange={(e) => {
@@ -130,7 +130,7 @@ export default function EditableNotes({ lecture, isOwner, onSaved, renderNoteExt
                                     next[i] = e.target.value;
                                     setConcepts(next);
                                 }}
-                                className="h-8 w-44 border-0"
+                                className="w-44 border-0"
                                 data-testid={`edit-concept-${i}`}
                             />
                             <button
@@ -138,7 +138,7 @@ export default function EditableNotes({ lecture, isOwner, onSaved, renderNoteExt
                                 onClick={() =>
                                     setConcepts(concepts.filter((_, x) => x !== i))
                                 }
-                                className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                                className="h-11 w-11 text-muted-foreground hover:text-destructive"
                                 title="Remove"
                             >
                                 <X size={12} />
@@ -147,7 +147,7 @@ export default function EditableNotes({ lecture, isOwner, onSaved, renderNoteExt
                     ))}
                 </div>
                 <Button
-                    variant="outline"
+                    variant="default"
                     size="sm"
                     onClick={() => setConcepts([...concepts, ""])}
                     data-testid="add-concept-btn"
@@ -161,10 +161,10 @@ export default function EditableNotes({ lecture, isOwner, onSaved, renderNoteExt
 
     // Read mode
     return (
-        <div data-testid="editable-notes-read">
+        <div data-testid="editable-notes-read" className="notes">
             {isOwner && (
                 <div className="mb-4 flex justify-end">
-                    <Button variant="outline" size="sm" onClick={startEdit} data-testid="edit-notes-btn">
+                    <Button variant="default" size="sm" onClick={startEdit} data-testid="edit-notes-btn">
                         <Pencil size={14} className="mr-1" />
                         Edit notes
                     </Button>
@@ -172,20 +172,20 @@ export default function EditableNotes({ lecture, isOwner, onSaved, renderNoteExt
             )}
 
             {m.summary && (
-                <div className="mb-6 border-l-2 border-accent bg-card p-5">
+                <div className="mb-8 rounded-[var(--radius)] border border-border bg-card p-5 sm:p-6">
                     <div className="text-overline mb-2 text-primary">TL;DR</div>
-                    <p className="text-base leading-relaxed">{m.summary}</p>
+                    <p className="text-base">{m.summary}</p>
                 </div>
             )}
 
             <h3 className="text-overline mb-4 text-muted-foreground">Smart notes</h3>
-            <ul className="space-y-3">
+            <ul className="!pl-0 space-y-3">
                 {(m.smart_notes || []).map((n, i) => (
                     <li
                         key={i}
-                        className="flex gap-3 border-b border-border pb-3 text-base leading-relaxed"
+                        className="flex gap-3 border-b border-border pb-3 text-base"
                     >
-                        <span className="font-mono mt-1 text-xs text-primary">
+                        <span className="font-mono mt-1 text-sm text-primary">
                             {String(i + 1).padStart(2, "0")}
                         </span>
                         <span className="flex-1">{n}</span>
@@ -201,7 +201,7 @@ export default function EditableNotes({ lecture, isOwner, onSaved, renderNoteExt
                         {m.key_concepts.map((c, i) => (
                             <span
                                 key={i}
-                                className="inline-flex items-center gap-1 border border-primary/20 bg-accent/20 px-3 py-1 text-sm font-medium"
+                                className="inline-flex items-center gap-1 rounded-full border border-border bg-card py-0 pl-4 pr-1 font-sans text-sm"
                             >
                                 {c}
                                 {renderConceptExtras?.(i, c)}

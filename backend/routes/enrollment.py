@@ -51,6 +51,19 @@ class AssignmentUpdate(BaseModel):
     active: bool
 
 
+class TeacherOption(BaseModel):
+    id: str
+    name: str
+    email: str
+
+
+@router.get("/teachers", response_model=List[TeacherOption])
+async def list_teachers(_: str = Depends(require_admin)):
+    """Teachers an admin can assign to a class (id, name, email only)."""
+    teachers = await UserRepository().list_by_role("teacher")
+    return [TeacherOption(id=t.id, name=t.name, email=t.email) for t in teachers]
+
+
 @router.post(
     "/assignments",
     response_model=TeacherAssignmentPublic,
@@ -62,6 +75,10 @@ async def assign_teacher(
 ):
     """Assign a teacher to a class. Returns 409 if active assignment already exists."""
     repo = TeacherAssignmentRepository()
+
+    teacher = await UserRepository().get_by_id(payload.teacher_id)
+    if not teacher or teacher.role != "teacher":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Not a valid teacher")
 
     # Check for existing assignment
     existing = await repo.find_existing(payload.class_id, payload.teacher_id, active_only=True)

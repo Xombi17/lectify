@@ -178,7 +178,7 @@ ok "Workers running."
 # dual lockfile layout ("inferred workspace root" crash loop).
 info "[3/3] Starting frontend on port ${FRONTEND_PORT} (first compile is slow)..."
 cd frontend
-PORT="$FRONTEND_PORT" DEV_BACKEND_URL="$DEV_BACKEND_URL" npx next dev --webpack \
+PORT="$FRONTEND_PORT" DEV_BACKEND_URL="$DEV_BACKEND_URL" npx next dev --hostname 0.0.0.0 --webpack \
     > "${FRONTEND_LOG}" 2>&1 &
 FRONTEND_PID=$!
 cd "$SCRIPT_DIR"

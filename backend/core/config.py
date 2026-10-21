@@ -123,6 +123,42 @@ class Settings:
         self.NAGA_WHISPER_MODEL: str = os.environ.get(
             "NAGA_WHISPER_MODEL", "whisper-large-v3:free"
         )
+        # Radox AI: OpenAI-compatible gateway (https://radoxai.com/docs). The model id is not guessed:
+        # list ids with `curl -H "Authorization: Bearer $RADOX_API_KEY" https://radoxai.com/v1/models`
+        # and set RADOX_CHAT_MODEL. The provider is skipped until both key and model are set.
+        self.RADOX_API_KEY: str = os.environ.get("RADOX_API_KEY", "")
+        self.RADOX_BASE_URL: str = os.environ.get("RADOX_BASE_URL", "https://radoxai.com/v1")
+        self.RADOX_CHAT_MODEL: str = os.environ.get("RADOX_CHAT_MODEL", "")
+        # Groq's free OpenAI-compatible LLM endpoint; reuses GROQ_API_KEY (already used for Whisper)
+        self.GROQ_BASE_URL: str = os.environ.get("GROQ_BASE_URL", "https://api.groq.com/openai/v1")
+        # Checked live against this key's GET /models (llama-3.3-70b-versatile no longer exists there)
+        self.GROQ_LLM_MODEL: str = os.environ.get("GROQ_LLM_MODEL", "openai/gpt-oss-120b")
+        # OpenRouter: OpenAI-compatible, many free ":free" models. Default checked live with this key
+        # (JSON mode, ~1 s); `openrouter/free` auto-routes across free models if you prefer that.
+        self.OPENROUTER_API_KEY: str = os.environ.get("OPENROUTER_API_KEY", "")
+        self.OPENROUTER_BASE_URL: str = os.environ.get("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
+        self.OPENROUTER_CHAT_MODEL: str = os.environ.get(
+            "OPENROUTER_CHAT_MODEL", "minimax/minimax-m3.1-flash:free"
+        )
+        # Cloudflare Workers AI via its OpenAI-compatible endpoint. Needs an account id and an API token
+        # with the "Workers AI" permission; skipped until both are set. Free tier is 10k neurons/day.
+        self.CLOUDFLARE_ACCOUNT_ID: str = os.environ.get("CLOUDFLARE_ACCOUNT_ID", "")
+        self.CLOUDFLARE_API_TOKEN: str = os.environ.get("CLOUDFLARE_API_TOKEN", "")
+        self.CLOUDFLARE_CHAT_MODEL: str = os.environ.get(
+            "CLOUDFLARE_CHAT_MODEL", "@cf/meta/llama-3.3-70b-instruct-fp8-fast"
+        )
+        # Extra Cloudflare models, each a separate chain member (cloudflare2, cloudflare3) so the round robin
+        # spreads load across them and each gets its own cooldown. All checked live on the free plan.
+        self.CLOUDFLARE_CHAT_MODEL_2: str = os.environ.get("CLOUDFLARE_CHAT_MODEL_2", "@cf/google/gemma-4-26b-a4b-it")
+        self.CLOUDFLARE_CHAT_MODEL_3: str = os.environ.get(
+            "CLOUDFLARE_CHAT_MODEL_3", "@cf/meta/llama-4-scout-17b-16e-instruct"
+        )
+        self.CLOUDFLARE_BASE_URL: str = os.environ.get(
+            "CLOUDFLARE_BASE_URL",
+            f"https://api.cloudflare.com/client/v4/accounts/{self.CLOUDFLARE_ACCOUNT_ID}/ai/v1",
+        )
+        # Round robin across every configured LLM provider (set LLM_ROUND_ROBIN=0 for strict priority order)
+        self.LLM_ROUND_ROBIN: bool = os.environ.get("LLM_ROUND_ROBIN", "1").strip().lower() not in ("0", "false", "no")
         self.TRANSCRIPTION_PROVIDERS: list = [
             p.strip().lower()
             for p in os.environ.get("TRANSCRIPTION_PROVIDERS", "deepgram,naga,gemini").split(",")
@@ -130,7 +166,9 @@ class Settings:
         ]
         self.LLM_PROVIDERS: list = [
             p.strip().lower()
-            for p in os.environ.get("LLM_PROVIDERS", "naga,nim,gemini").split(",")
+            # Providers without a key are skipped. Verified-working free ones first (groq, openrouter), then
+            # naga (small daily budget), radox (needs credit), gemini, and nim last (its function 404s today)
+            for p in os.environ.get("LLM_PROVIDERS", "groq,cloudflare,cloudflare2,cloudflare3,openrouter,naga,radox,gemini,nim").split(",")
             if p.strip()
         ]
         self.PROVIDER_COOLDOWN_SECONDS: float = float(
@@ -169,7 +207,8 @@ class Settings:
         )
 
         # App
-        self.APP_URL: str = os.environ.get("APP_URL", "http://localhost:5173")
+        # Empty = derive from the requesting browser's origin (see routes/qr.py _app_base_url)
+        self.APP_URL: str = os.environ.get("APP_URL", "")
 
         # Prometheus / Monitoring
         self.PROMETHEUS_ENABLED: bool = (

@@ -2,8 +2,9 @@ import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import ConfirmDialog from "@/components/ConfirmDialog";
 import { API, qrApi } from "@/lib/api";
-import { QrCode, ArrowClockwise, Download } from "@phosphor-icons/react";
+import { QrCode, ArrowClockwise, Download } from "@/components/icons";
 import { toast } from "sonner";
 
 function authHeaders() {
@@ -18,6 +19,7 @@ export default function QRCodeCard({ classId, className }) {
     const [regenerating, setRegenerating] = useState(false);
     const [imgUrl, setImgUrl] = useState(null);
     const [downloading, setDownloading] = useState(false);
+    const [confirmOpen, setConfirmOpen] = useState(false);
 
     const load = useCallback(async () => {
         if (!classId) return;
@@ -112,15 +114,15 @@ export default function QRCodeCard({ classId, className }) {
     };
 
     if (loading) {
-        return <div className="h-40 animate-pulse border border-border bg-muted/40 rounded-lg" />;
+        return <div className="h-40 animate-pulse rounded-[var(--radius)] border border-border bg-muted/40" />;
     }
 
     return (
-        <Card className="border border-border" data-testid={`qr-card-${classId}`}>
+        <Card className="p-6" data-testid={`qr-card-${classId}`}>
             <CardHeader className="pb-2">
                 <CardTitle className="flex items-center justify-between text-base">
                     <span className="flex items-center gap-2">
-                        <QrCode size={16} weight="duotone" className="text-primary" />
+                        <QrCode size={16} weight="regular" className="text-primary" />
                         QR Code
                     </span>
                     {qr?.is_active && (
@@ -134,14 +136,14 @@ export default function QRCodeCard({ classId, className }) {
                 {!qr ? (
                     <div className="py-4 text-center">
                         <p className="mb-3 text-sm text-muted-foreground">No QR code generated</p>
-                        <Button onClick={handleGenerate} size="sm" data-testid="generate-qr-btn">
+                        <Button variant="pen" onClick={handleGenerate} size="sm" data-testid="generate-qr-btn">
                             Generate QR Code
                         </Button>
                     </div>
                 ) : (
                     <div className="flex flex-col items-center gap-4">
                         {/* QR Image */}
-                        <div className="border border-border bg-white p-3 rounded">
+                        <div className="rounded-[var(--r)] border border-border bg-white p-3">
                             {imgUrl ? (
                                 <img
                                     src={imgUrl}
@@ -150,7 +152,7 @@ export default function QRCodeCard({ classId, className }) {
                                     data-testid="qr-image"
                                 />
                             ) : (
-                                <div className="flex h-40 w-40 items-center justify-center text-xs text-muted-foreground">
+                                <div className="flex h-40 w-40 items-center justify-center text-sm text-muted-foreground">
                                     Couldn't load QR image
                                 </div>
                             )}
@@ -160,19 +162,19 @@ export default function QRCodeCard({ classId, className }) {
                         {analytics && (
                             <div className="flex gap-6 text-center">
                                 <div>
-                                    <div className="font-display text-xl font-bold">
+                                    <div className="font-mono text-2xl font-bold">
                                         {analytics.scan_count}
                                     </div>
                                     <div className="text-overline text-muted-foreground">Scans</div>
                                 </div>
                                 <div>
-                                    <div className="font-display text-xl font-bold">
+                                    <div className="font-mono text-2xl font-bold">
                                         {analytics.enrollment_count}
                                     </div>
                                     <div className="text-overline text-muted-foreground">Enrolled</div>
                                 </div>
                                 <div>
-                                    <div className="font-display text-xl font-bold">
+                                    <div className="font-mono text-2xl font-bold">
                                         {analytics.scan_count > 0
                                             ? `${Math.round((analytics.enrollment_count / analytics.scan_count) * 100)}%`
                                             : "—"}
@@ -185,28 +187,38 @@ export default function QRCodeCard({ classId, className }) {
                         {/* Actions */}
                         <div className="flex gap-2">
                             <Button
-                                variant="outline"
+                                variant="default"
                                 size="sm"
                                 onClick={handleDownload}
                                 disabled={downloading || !imgUrl}
                                 data-testid="download-qr-btn"
                             >
-                                <Download size={14} weight="duotone" className="mr-1" />
+                                <Download size={14} weight="regular" className="mr-1" />
                                 {downloading ? "Preparing…" : "Download"}
                             </Button>
                             <Button
-                                variant="outline"
+                                variant="quiet"
                                 size="sm"
-                                onClick={handleRegenerate}
+                                onClick={() => setConfirmOpen(true)}
                                 disabled={regenerating}
                                 data-testid="regenerate-qr-btn"
                             >
-                                <ArrowClockwise size={14} weight="duotone" className="mr-1" />
-                                {regenerating ? "Regenerating..." : "Regenerate"}
+                                <ArrowClockwise size={14} weight="regular" className="mr-1" />
+                                {regenerating ? "Regenerating..." : "Regenerate QR"}
                             </Button>
                         </div>
                     </div>
                 )}
+                <ConfirmDialog
+                    open={confirmOpen}
+                    onOpenChange={setConfirmOpen}
+                    testId="confirm-regenerate-qr"
+                    title="Regenerate the QR code?"
+                    description="The old code stops working."
+                    confirmLabel="Regenerate QR"
+                    cancelLabel="Keep current code"
+                    onConfirm={handleRegenerate}
+                />
             </CardContent>
         </Card>
     );

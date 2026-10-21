@@ -25,8 +25,10 @@ class TestPriorityScoring:
 
     def test_older_gets_higher_score_within_same_day(self):
         """Older uploads within the same day get a higher score (age component)."""
-        older = datetime.now(timezone.utc) - timedelta(hours=10)
-        newer = datetime.now(timezone.utc) - timedelta(hours=1)
+        # Anchor to today's UTC midnight so both timestamps stay on the same day at any run time
+        now = datetime.now(timezone.utc)
+        older = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        newer = now
         assert compute_priority_score(older) > compute_priority_score(newer)
 
     def test_score_is_float(self):

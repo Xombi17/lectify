@@ -1,9 +1,9 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
-    darkMode: ["class"],
+    darkMode: ["selector", '[data-theme="dark"]'],
     content: [
     "./src/**/*.{js,jsx,ts,tsx}",
-    "./public/index.html"
+    "./app/**/*.{ts,tsx}"
   ],
   theme: {
   	extend: {
@@ -43,6 +43,21 @@ module.exports = {
   				DEFAULT: 'hsl(var(--destructive))',
   				foreground: 'hsl(var(--destructive-foreground))'
   			},
+  			desk: 'hsl(var(--desk) / <alpha-value>)',
+  			paper: 'hsl(var(--paper) / <alpha-value>)',
+  			'paper-2': 'hsl(var(--paper-2) / <alpha-value>)',
+  			line: 'hsl(var(--line) / <alpha-value>)',
+  			'line-strong': 'hsl(var(--line-strong) / <alpha-value>)',
+  			margin: 'hsl(var(--margin) / <alpha-value>)',
+  			ink: 'hsl(var(--ink) / <alpha-value>)',
+  			'ink-soft': 'hsl(var(--ink-soft) / <alpha-value>)',
+  			pen: 'hsl(var(--pen) / <alpha-value>)',
+  			'pen-fg': 'hsl(var(--pen-fg) / <alpha-value>)',
+  			hl: 'hsl(var(--hl) / <alpha-value>)',
+  			'hl-fg': 'hsl(var(--hl-fg) / <alpha-value>)',
+  			amber: 'hsl(var(--amber) / <alpha-value>)',
+  			red: 'hsl(var(--red) / <alpha-value>)',
+  			tape: 'var(--tape)',
   			border: 'hsl(var(--border))',
   			input: 'hsl(var(--input))',
   			ring: 'hsl(var(--ring))',
@@ -53,6 +68,21 @@ module.exports = {
   				'4': 'hsl(var(--chart-4))',
   				'5': 'hsl(var(--chart-5))'
   			}
+  		},
+  		fontFamily: {
+  			display: ['var(--font-serif)', 'Georgia', 'serif'],
+  			sans: ['var(--font-sans)', 'system-ui', 'sans-serif'],
+  			serif: ['var(--font-serif)', 'Georgia', 'serif'],
+  			hand: ['var(--font-serif)', 'Georgia', 'serif'],
+  			mono: ['var(--font-mono)', 'ui-monospace', 'monospace']
+  		},
+  		// Editorial contract: two weights only. `font-bold` across older pages renders at 500.
+  		fontWeight: {
+  			bold: '500'
+  		},
+  		boxShadow: {
+  			paper: 'var(--shadow)',
+  			float: 'var(--shadow-float)'
   		},
   		keyframes: {
   			'accordion-down': {

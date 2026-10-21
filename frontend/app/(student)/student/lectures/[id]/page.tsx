@@ -10,7 +10,7 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { id } = await params;
   return {
-    title: `Lecture ${id} | LectureMind AI`,
+    title: `Lecture ${id} | Lectify`,
     description: "View lecture transcript, AI notes, quiz, and flashcards",
     openGraph: {
       type: "article",
@@ -20,7 +20,11 @@ export async function generateMetadata({
 
 export default function StudentLectureDetailPage() {
   return (
-    <Suspense fallback={<div className="h-48 animate-pulse bg-muted/40" />}>
+    <Suspense fallback={<div role="status" aria-busy="true" aria-label="Loading" className="grid gap-4 p-4">
+          <span className="sk w-2/3" />
+          <span className="sk w-full" />
+          <span className="sk w-1/2" />
+        </div>}>
       <LectureDetailPage />
     </Suspense>
   );

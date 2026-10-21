@@ -1,44 +1,68 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { academicApi, lectureApi, timetableApi } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import {
-    Microphone,
-    BookOpen,
-    Lightning,
-    CheckCircle,
-    WarningCircle,
-    Clock,
-    Calendar,
-} from "@phosphor-icons/react";
-import { motion } from "framer-motion";
+import { Input } from "@/components/ui/input";
+import { usePageTitle } from "@/lib/usePageTitle";
+import StatusStamp from "@/components/StatusStamp";
+import { UploadSimple } from "@/components/icons";
+import { motion, useReducedMotion } from "framer-motion";
 
-const EMPTY_IMG =
-    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='300' viewBox='0 0 400 300'%3E%3Crect fill='%23f8f9fa' width='400' height='300'/%3E%3Cpath d='M120 100h160v100H120z' fill='%23ddd'/%3E%3Cpath d='M140 130h120v4H140zM140 145h100v3H140zM140 160h80v3H140z' fill='%23bbb'/%3E%3C/svg%3E";
-
-const STATUS = {
-    uploaded: { label: "Queued", icon: Clock, cls: "bg-muted text-muted-foreground" },
-    processing: { label: "Processing", icon: Lightning, cls: "bg-accent/30 text-accent-foreground" },
-    ready: { label: "Ready", icon: CheckCircle, cls: "bg-primary text-primary-foreground" },
-    error: { label: "Error", icon: WarningCircle, cls: "bg-destructive text-destructive-foreground" },
-};
+const PAGE_SIZE = 20;
 
 const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
+const fmtDate = (d) =>
+    new Date(d).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+
+function Loading({ rows = 3 }) {
+    return (
+        <div aria-busy="true" aria-label="Loading" className="grid gap-4">
+            {Array.from({ length: rows }, (_, i) => (
+                <span key={i} className="sk" />
+            ))}
+        </div>
+    );
+}
+
 export default function TeacherDashboard() {
+    const { user } = useAuth();
+    const reduce = useReducedMotion();
     const [lectures, setLectures] = useState([]);
     const [loading, setLoading] = useState(true);
     const [schedule, setSchedule] = useState([]);
     const [assignedClasses, setAssignedClasses] = useState([]);
+    usePageTitle("Dashboard");
+    const [q, setQ] = useState("");
+    const [hasMore, setHasMore] = useState(false);
+    const [loadingMore, setLoadingMore] = useState(false);
+    // The 8 s status poll re-fetches everything loaded so far, so "Load more" is never wiped by a refresh
+    const pagesRef = useRef(1);
 
     const load = async () => {
         try {
-            setLectures(await lectureApi.mine());
+            const size = pagesRef.current * PAGE_SIZE;
+            const rows = await lectureApi.mine({ limit: size, offset: 0 });
+            setLectures(rows);
+            setHasMore(rows.length === size);
         } finally {
             setLoading(false);
         }
     };
+
+    const loadMore = () => {
+        pagesRef.current += 1;
+        setLoadingMore(true);
+        load().finally(() => setLoadingMore(false));
+    };
+
+    const needle = q.trim().toLowerCase();
+    const visible = needle
+        ? lectures.filter((l) =>
+              [l.title, l.subject, l.semester].filter(Boolean).some((v) => v.toLowerCase().includes(needle))
+          )
+        : lectures;
 
     useEffect(() => {
         load();
@@ -55,266 +79,218 @@ export default function TeacherDashboard() {
         published: lectures.filter((l) => l.published).length,
     };
 
+    const now = new Date();
+    const hour = now.getHours();
+    const part = hour < 12 ? "morning" : hour < 17 ? "afternoon" : "evening";
+    const weekday = DAY_NAMES[(now.getDay() + 6) % 7];
+    const firstName = (user?.name || "").trim().split(/\s+/)[0];
+    const nowHM = `${String(hour).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+    const nowDay = (now.getDay() + 6) % 7;
+
     return (
-    <>
-        <section className="mb-10 flex flex-col items-start justify-between gap-6 md:flex-row md:items-end">
+        <>
+            <header className="head">
                 <div>
-                    <div className="text-overline mb-3 text-primary">Teacher dashboard</div>
-                    <h1 className="font-display text-4xl font-black tracking-tighter sm:text-5xl">
-                        Your lecture library.
+                    <div className="hand text-primary" suppressHydrationWarning>
+                        {weekday} {part}
+                    </div>
+                    <h1 className="text-display" suppressHydrationWarning>
+                        Good {part}
+                        {firstName ? `, ${firstName}` : ""}
                     </h1>
-                    <p className="mt-3 max-w-xl text-base text-muted-foreground">
-                        Drop a recording. We&apos;ll transcribe it, build clean notes, write a
-                        quiz, and cut flashcards — automatically.
-                    </p>
                 </div>
                 <Link href="/teacher/upload">
-                    <Button
-                        size="lg"
-                        data-testid="upload-lecture-btn"
-                        className="transition-transform hover:scale-[1.02] active:scale-[0.98]"
-                    >
-                        <Microphone size={18} weight="duotone" className="mr-2" />
+                    <Button variant="pen" size="lg" data-testid="upload-lecture-btn">
+                        <UploadSimple size="1em" aria-hidden="true" weight="bold" />
                         Upload lecture
                     </Button>
                 </Link>
+            </header>
+
+            <section className="mb-10" aria-label="Lecture counts">
+                <div className="week">
+                    {[
+                        { label: "Total lectures", value: stats.total },
+                        { label: "Ready to publish", value: stats.ready },
+                        { label: "In processing", value: stats.processing },
+                        { label: "Published", value: stats.published },
+                    ].map((s) => (
+                        <div key={s.label} data-testid={`stat-${s.label.toLowerCase().replace(/\s/g, "-")}`}>
+                            <b className="font-mono">{s.value}</b>
+                            <span className="text-sm">{s.label}</span>
+                        </div>
+                    ))}
+                </div>
             </section>
 
-            {/* Assigned classes */}
-            <section className="mb-10" data-testid="teacher-classes">
-                <div className="mb-4 flex items-center justify-between border-b border-border pb-2">
-                    <h2 className="font-display text-xl font-bold tracking-tight">
-                        My classes
-                    </h2>
-                    <span className="text-overline text-muted-foreground">
-                        {assignedClasses.length} assigned
-                    </span>
-                </div>
+            <div className="layout">
+                <div className="col">
+                    <section data-testid="teacher-classes" aria-labelledby="classes-h">
+                        <div className="mb-4 flex items-baseline justify-between border-b border-border pb-2">
+                            <h2 id="classes-h" className="text-2xl font-bold">My classes</h2>
+                            <span className="text-sm text-muted-foreground">{assignedClasses.length} assigned</span>
+                        </div>
 
-                {assignedClasses.length === 0 ? (
-                    <div className="border border-dashed border-border bg-card p-6 text-center text-sm text-muted-foreground" data-testid="empty-assigned-classes">
-                        No assigned classes found. Contact an administrator to assign classes before uploading lectures.
-                    </div>
-                ) : (
-                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                        {assignedClasses.map((c, idx) => (
-                            <motion.div
-                                key={c.class_id}
-                                initial={{ opacity: 0, y: 8 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ delay: idx * 0.04 }}
-                                data-testid={`teacher-class-card-${c.class_id}`}
-                                className="flex flex-col border border-border bg-card p-5 transition-all hover:border-primary/40"
-                            >
-                                <div className="flex items-center gap-3">
-                                    <div className="flex h-10 w-10 shrink-0 items-center justify-center bg-primary text-primary-foreground">
-                                        <BookOpen size={20} weight="duotone" />
-                                    </div>
-                                    <div className="min-w-0">
-                                        <div className="truncate font-display text-base font-bold">
-                                            {c.subject_name || "Untitled subject"}
-                                        </div>
-                                        <div className="truncate text-xs text-muted-foreground">
-                                            {[c.division_name, c.semester_label].filter(Boolean).join(" · ")}
-                                        </div>
-                                    </div>
-                                </div>
-                                <Link
-                                    href={`/teacher/upload?class_id=${c.class_id}`}
-                                    className="mt-4"
-                                >
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="w-full"
-                                        data-testid={`upload-to-class-${c.class_id}`}
+                        {assignedClasses.length === 0 ? (
+                            <div className="empty" data-testid="empty-assigned-classes">
+                                <p className="text-sm text-muted-foreground">
+                                    No assigned classes found. Contact an administrator to assign classes before uploading lectures.
+                                </p>
+                            </div>
+                        ) : (
+                            <div className="grid gap-4 sm:grid-cols-2">
+                                {assignedClasses.map((c, idx) => (
+                                    <motion.div
+                                        key={c.class_id}
+                                        initial={reduce ? false : { opacity: 0, y: 8 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        transition={{ delay: idx * 0.04 }}
+                                        data-testid={`teacher-class-card-${c.class_id}`}
+                                        className="slip flex flex-col"
                                     >
-                                        <Microphone size={14} weight="duotone" className="mr-2" />
+                                        <h3 className="text-xl">{c.subject_name || "Untitled subject"}</h3>
+                                        <p className="mt-2 text-sm text-muted-foreground">
+                                            {[c.division_name, c.semester_label].filter(Boolean).join(" · ")}
+                                        </p>
+                                        <Link href={`/teacher/upload?class_id=${c.class_id}`} className="mt-auto pt-5">
+                                            <Button
+                                                className="w-full"
+                                                data-testid={`upload-to-class-${c.class_id}`}
+                                            >
+                                                <UploadSimple size="1em" aria-hidden="true" weight="bold" />
+                                                Upload lecture
+                                            </Button>
+                                        </Link>
+                                    </motion.div>
+                                ))}
+                            </div>
+                        )}
+                    </section>
+
+                    <section data-testid="lectures-list" aria-labelledby="recent-h">
+                        <div className="mb-4 flex items-baseline justify-between border-b border-border pb-2">
+                            <h2 id="recent-h" className="text-2xl font-bold">Recent lectures</h2>
+                            <span className="text-sm text-muted-foreground">Auto-refreshing</span>
+                        </div>
+
+                        {!loading && lectures.length > 0 && (
+                            <Input
+                                value={q}
+                                onChange={(e) => setQ(e.target.value)}
+                                placeholder="Search your lectures"
+                                aria-label="Search your lectures"
+                                className="mb-4 max-w-md"
+                                data-testid="teacher-search-input"
+                            />
+                        )}
+
+                        {loading ? (
+                            <Loading />
+                        ) : lectures.length === 0 ? (
+                            <div className="empty">
+                                <h3 className="text-2xl font-bold">A blank page</h3>
+                                <p className="text-sm text-muted-foreground">
+                                    Upload your first lecture and it shows up here once it is ready.
+                                </p>
+                                <span className="hand">nothing to study yet</span>
+                                <Link href="/teacher/upload" className="mt-2 inline-block">
+                                    <Button variant="pen" data-testid="empty-upload-btn">
+                                        <UploadSimple size="1em" aria-hidden="true" weight="bold" />
                                         Upload lecture
                                     </Button>
                                 </Link>
-                            </motion.div>
-                        ))}
-                    </div>
-                )}
-            </section>
-
-            {/* Stats bento */}
-            <section className="mb-10 grid grid-cols-2 gap-4 md:grid-cols-4">
-                {[
-                    { label: "Total lectures", value: stats.total, accent: false },
-                    { label: "Ready to publish", value: stats.ready, accent: false },
-                    { label: "In processing", value: stats.processing, accent: false },
-                    { label: "Published", value: stats.published, accent: true },
-                ].map((s) => (
-                    <div
-                        key={s.label}
-                        data-testid={`stat-${s.label.toLowerCase().replace(/\s/g, "-")}`}
-                        className={`border border-border p-6 transition-all hover:border-primary/30 ${
-                            s.accent ? "bg-primary text-primary-foreground" : "bg-card"
-                        }`}
-                    >
-                        <div
-                            className={`text-overline ${
-                                s.accent ? "text-accent" : "text-muted-foreground"
-                            }`}
-                        >
-                            {s.label}
-                        </div>
-                        <div className="mt-2 font-display text-4xl font-black tracking-tighter">
-                            {s.value}
-                        </div>
-                    </div>
-                ))}
-            </section>
-
-            {/* Teaching Schedule */}
-            {schedule.length > 0 && (
-                <section className="mb-10" data-testid="teacher-schedule">
-                    <div className="mb-4 flex items-center justify-between border-b border-border pb-2">
-                        <div className="flex items-center gap-2">
-                            <Calendar size={20} weight="duotone" className="text-primary" />
-                            <h2 className="font-display text-xl font-bold tracking-tight">
-                                Weekly teaching schedule
-                            </h2>
-                        </div>
-                        <span className="text-overline text-muted-foreground">
-                            {schedule.length} session{schedule.length === 1 ? "" : "s"}
-                        </span>
-                    </div>
-                    <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-                        {[...schedule]
-                            .sort((a, b) => a.day_of_week - b.day_of_week || a.start_time.localeCompare(b.start_time))
-                            .map((slot) => (
-                                <div
-                                    key={slot.id}
-                                    data-testid={`schedule-slot-${slot.id}`}
-                                    className="border border-border bg-card p-4 transition-all hover:border-primary/40"
-                                >
-                                    <div className="flex items-center justify-between">
-                                        <Badge variant="secondary" className="font-semibold">
-                                            {DAY_NAMES[slot.day_of_week] || `Day ${slot.day_of_week}`}
-                                        </Badge>
-                                        {slot.room && (
-                                            <span className="text-xs text-muted-foreground">
-                                                {slot.room}
+                            </div>
+                        ) : visible.length === 0 ? (
+                            <p className="py-6 text-sm text-muted-foreground" data-testid="teacher-no-match">
+                                No lectures match &ldquo;{q}&rdquo;.
+                            </p>
+                        ) : (
+                            <ol className="toc">
+                                {visible.map((l) => (
+                                    <li key={l.id}>
+                                        <Link
+                                            href={`/teacher/lectures/${l.id}`}
+                                            data-testid={`lecture-row-${l.id}`}
+                                            className="row"
+                                        >
+                                            <span className="min-w-0">
+                                                <span className="t">{l.title}</span>
+                                                <span className="s">
+                                                    {[l.subject, l.semester].filter(Boolean).join(" · ")}
+                                                    {l.published && <span className="tag">Published</span>}
+                                                </span>
                                             </span>
-                                        )}
-                                    </div>
-                                    <div className="mt-3 flex items-center gap-2 text-sm font-bold font-display">
-                                        <Clock size={16} weight="duotone" className="text-primary" />
-                                        <span>{slot.start_time} - {slot.end_time}</span>
-                                    </div>
-                                </div>
-                            ))}
-                    </div>
-                </section>
-            )}
-
-            {/* List */}
-            <section data-testid="lectures-list">
-                <div className="mb-4 flex items-center justify-between border-b border-border pb-2">
-                    <h2 className="font-display text-xl font-bold tracking-tight">
-                        Recent lectures
-                    </h2>
-                    <span className="text-overline text-muted-foreground">
-                        Auto-refreshing
-                    </span>
+                                            <span className="aside">
+                                                <StatusStamp status={l.status} />
+                                                {l.created_at && (
+                                                    <time className="date" dateTime={l.created_at}>
+                                                        {fmtDate(l.created_at)}
+                                                    </time>
+                                                )}
+                                            </span>
+                                        </Link>
+                                    </li>
+                                ))}
+                            </ol>
+                        )}
+                        {hasMore && !loading && (
+                            <div className="mt-4 text-center">
+                                <Button variant="quiet" onClick={loadMore} disabled={loadingMore} data-testid="teacher-load-more">
+                                    {loadingMore ? "Loading…" : "Load more lectures"}
+                                </Button>
+                            </div>
+                        )}
+                    </section>
                 </div>
 
-                {loading ? (
-                    <div className="grid gap-3">
-                        {[1, 2, 3].map((i) => (
-                            <div key={i} className="h-24 animate-pulse border border-border bg-muted/40" />
-                        ))}
-                    </div>
-                ) : lectures.length === 0 ? (
-                    <EmptyState />
-                ) : (
-                    <div className="grid gap-3">
-                        {lectures.map((l, idx) => {
-                            const s = STATUS[l.status] || STATUS.uploaded;
-                            const Icon = s.icon;
-                            return (
-                                <motion.div
-                                    key={l.id}
-                                    initial={{ opacity: 0, y: 8 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    transition={{ delay: idx * 0.04 }}
-                                >
-                                    <Link
-                                        href={`/teacher/lectures/${l.id}`}
-                                        data-testid={`lecture-row-${l.id}`}
-                                        className="group flex items-center justify-between gap-4 border border-border bg-card px-5 py-4 transition-all hover:border-primary/40 hover:shadow-sm"
-                                    >
-                                        <div className="flex min-w-0 flex-1 items-center gap-4">
-                                            <div className="flex h-12 w-12 shrink-0 items-center justify-center bg-muted">
-                                                <BookOpen
-                                                    size={20}
-                                                    weight="duotone"
-                                                    className="text-primary"
-                                                />
-                                            </div>
-                                            <div className="min-w-0 flex-1">
-                                                <div className="truncate font-display text-base font-bold">
-                                                    {l.title}
-                                                </div>
-                                                <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
-                                                    {l.subject && (
-                                                        <span>{l.subject}</span>
-                                                    )}
-                                                    {l.semester && (
-                                                        <span>· {l.semester}</span>
-                                                    )}
-                                                    <span>
-                                                        · {new Date(l.created_at).toLocaleDateString()}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center gap-3">
-                                            {l.published && (
-                                                <Badge variant="outline" className="border-primary text-primary">
-                                                    Published
-                                                </Badge>
-                                            )}
-                                            <span
-                                                className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold ${s.cls}`}
+                <div className="col">
+                    <section data-testid="teacher-schedule" aria-labelledby="planner-h">
+                        {schedule.length === 0 ? (
+                            <div className="empty text-left" data-testid="empty-teacher-schedule">
+                                <h2 id="planner-h" className="text-xl">Weekly teaching schedule</h2>
+                                <p className="mt-2 text-sm text-muted-foreground">
+                                    No timetable slots yet. Your administrator adds them per class; they show up here with
+                                    the session that is on now highlighted.
+                                </p>
+                            </div>
+                        ) : (
+                            <div className="planner">
+                                <header>
+                                    <h2 id="planner-h" className="text-base font-bold">Weekly teaching schedule</h2>
+                                    <span className="text-sm">
+                                        {schedule.length} session{schedule.length === 1 ? "" : "s"}
+                                    </span>
+                                </header>
+                                {[...schedule]
+                                    .sort((a, b) => a.day_of_week - b.day_of_week || a.start_time.localeCompare(b.start_time))
+                                    .map((slot) => {
+                                        const isNow =
+                                            slot.day_of_week === nowDay &&
+                                            slot.start_time <= nowHM &&
+                                            nowHM < slot.end_time;
+                                        return (
+                                            <div
+                                                key={slot.id}
+                                                data-testid={`schedule-slot-${slot.id}`}
+                                                className={`pl ${isNow ? "now bg-accent text-accent-foreground" : ""}`}
+                                                aria-current={isNow ? "time" : undefined}
                                             >
-                                                <Icon size={14} weight="duotone" />
-                                                {s.label}
-                                            </span>
-                                        </div>
-                                    </Link>
-                                </motion.div>
-                            );
-                        })}
-                    </div>
-                )}
-            </section>
-    </>
-    );
-}
-
-function EmptyState() {
-    return (
-        <div className="grid grid-cols-1 items-center gap-6 border border-border bg-card p-10 md:grid-cols-2">
-            <div>
-                <div className="text-overline mb-2 text-primary">No lectures yet</div>
-                <h3 className="font-display text-3xl font-black tracking-tighter">
-                    Press record on your first lecture.
-                </h3>
-                <p className="mt-3 text-muted-foreground">
-                    Upload any audio file (mp3, wav, m4a). LectureMind will do the rest.
-                </p>
-                <Link href="/teacher/upload" className="mt-6 inline-block">
-                    <Button data-testid="empty-upload-btn">
-                        <Microphone size={18} weight="duotone" className="mr-2" />
-                        Upload lecture
-                    </Button>
-                </Link>
+                                                <time>{slot.start_time}</time>
+                                                <span>
+                                                    <b>{DAY_NAMES[slot.day_of_week] || `Day ${slot.day_of_week}`}</b>
+                                                    <small className="font-mono">
+                                                        {slot.start_time} - {slot.end_time}
+                                                    </small>
+                                                </span>
+                                                {slot.room && <small>{slot.room}</small>}
+                                            </div>
+                                        );
+                                    })}
+                            </div>
+                        )}
+                    </section>
+                </div>
             </div>
-            <img src={EMPTY_IMG} alt="Empty state" className="mx-auto h-60 object-contain" />
-        </div>
+        </>
     );
 }

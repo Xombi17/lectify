@@ -674,3 +674,58 @@ def test_teacher_cannot_publish_lecture_for_unassigned_class(
         assert res.status_code in (403, 404)
     finally:
         app.dependency_overrides.clear()
+
+
+# ── 10. Stale-row Isolation (due flashcards, bookmarks, analytics) ────
+
+
+@patch("routes.analytics.LectureRepository")
+@patch("routes.analytics.AttemptRepository")
+@patch("routes.study.LectureRepository")
+@patch("routes.study.BookmarkRepository")
+@patch("routes.study.FlashcardReviewRepository")
+@patch("core.deps.StudentEnrollmentRepository")
+def test_student_stale_rows_from_unenrolled_class_are_hidden(
+    mock_se_repo, mock_fc_repo, mock_bm_repo, mock_study_lec, mock_attempt_repo, mock_an_lec, college, client
+):
+    """Review/bookmark/attempt rows for a class the student is NOT enrolled in leak nothing."""
+    from models.bookmark import BookmarkDB, FlashcardReviewDB
+    from models.lecture import Flashcard
+
+    card = [Flashcard(front="Q", back="A")]
+    own = college.lectures["comps_a_lec"]
+    other = college.lectures["comps_b_lec"]
+    own = own.model_copy(update={"materials": own.materials.model_copy(update={"flashcards": card})})
+    other = other.model_copy(update={"materials": other.materials.model_copy(update={"flashcards": card})})
+    by_id = {own.id: own, other.id: other}
+
+    mock_se_repo.return_value.list_for_student = AsyncMock(
+        return_value=[StudentEnrollmentDB(id="enr_1", class_id=own.class_id, student_id="usr_stu_comps_a")]
+    )
+    mock_study_lec.return_value.get_by_id = AsyncMock(side_effect=lambda lid: by_id.get(lid))
+    mock_an_lec.return_value.get_by_id = AsyncMock(side_effect=lambda lid: by_id.get(lid))
+    uid = "usr_stu_comps_a"
+    mock_fc_repo.return_value.list_due_for_user = AsyncMock(
+        return_value=[FlashcardReviewDB(id=f"r_{i}", user_id=uid, lecture_id=lid, card_index=0) for i, lid in enumerate(by_id)]
+    )
+    mock_bm_repo.return_value.list_for_user = AsyncMock(
+        return_value=[BookmarkDB(id=f"b_{i}", user_id=uid, lecture_id=lid, kind="concept", text="t") for i, lid in enumerate(by_id)]
+    )
+    now = datetime.now(timezone.utc)
+    mock_attempt_repo.return_value.list_for_user = AsyncMock(
+        return_value=[MagicMock(lecture_id=lid, percentage=50.0, created_at=now) for lid in by_id]
+    )
+
+    _set_user(college, "student_comps_a")
+    try:
+        due = client.get("/api/flashcards/due").json()
+        assert [d["lecture_id"] for d in due] == [own.id]
+
+        bms = client.get("/api/bookmarks/me").json()
+        assert [b["lecture_id"] for b in bms] == [own.id]
+
+        ana = client.get("/api/analytics/me").json()
+        listed = {w["lecture_id"] for w in ana["weak_lectures"] + ana["strong_lectures"]}
+        assert listed == {own.id}
+    finally:
+        app.dependency_overrides.clear()

@@ -31,6 +31,8 @@ Transcripts may be mixed Hindi+English; study output is English. `STUB_PROVIDERS
 
 **LLM chain** `LLM_PROVIDERS` (default `naga,nim,gemini`), free models only: `nemotron-3-super-120b-a12b:free` (Naga), `nvidia/nemotron-3-super-120b-a12b` (NIM). Embeddings stay on `AI_PROVIDER` (no re-embed).
 
+**Cloudflare Workers AI** (`cloudflare` in `LLM_PROVIDERS`, default chain `groq,cloudflare,cloudflare2,cloudflare3,openrouter,naga,radox,gemini,nim`): OpenAI-compatible endpoint `https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/ai/v1`, three members, each its own model and cooldown: `CLOUDFLARE_CHAT_MODEL` (`@cf/meta/llama-3.3-70b-instruct-fp8-fast`), `_2` (`@cf/google/gemma-4-26b-a4b-it`), `_3` (`@cf/meta/llama-4-scout-17b-16e-instruct`); JSON mode verified live on the free plan. `gpt-oss-120b`, `qwen3-30b-a3b` and `nemotron-3-120b` returned null content; DeepSeek v4.x/GLM 5.x/Kimi need Workers Paid. Needs `CLOUDFLARE_ACCOUNT_ID` + `CLOUDFLARE_API_TOKEN` (Workers AI permission); skipped until both are set. Free tier 10k neurons/day. Both go to SSM via `put-secrets.sh`.
+
 **Failover:** 429 puts the provider in cooldown (honours Retry-After, else `PROVIDER_COOLDOWN_SECONDS`); the `naga` budget is shared by STT and LLM. 5xx, timeout, empty/None content or invalid JSON falls to the next provider. All rate limited raises `ProviderRateLimited`.
 
 **Free limits:** Naga 10 rpm and 100 requests/day account-wide; Deepgram per account credit.

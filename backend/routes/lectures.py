@@ -11,6 +11,7 @@ from fastapi import (
     File,
     Form,
     HTTPException,
+    Query,
     UploadFile,
     status,
 )
@@ -44,6 +45,7 @@ from repositories.job_repository import JobRepository
 from repositories.attempt_repository import AttemptRepository
 from repositories.lecture_repository import LectureRepository
 from repositories.teacher_assignment_repository import TeacherAssignmentRepository
+from repositories.timetable_repository import TimetableRepository
 from services.ai_service import get_ai_service
 from services.lecture_service import (
     ALLOWED_AUDIO_MIME,
@@ -70,6 +72,15 @@ class UploadUrlRequest(BaseModel):
     size: int
 
 
+async def _validate_slot(class_id: str, slot_id: str | None) -> None:
+    """A linked timetable slot must exist and belong to the lecture's class."""
+    if not slot_id:
+        return
+    slot = await TimetableRepository().get_by_id(slot_id)
+    if not slot or slot.class_id != class_id:
+        raise HTTPException(status_code=400, detail="Timetable slot does not belong to this class")
+
+
 @router.post("", response_model=LectureDB, status_code=status.HTTP_202_ACCEPTED)
 async def upload_lecture(
     title: str = Form(...),
@@ -85,6 +96,7 @@ async def upload_lecture(
         assignment = await assignment_repo.find_existing(class_id=class_id, teacher_id=user.id, active_only=True)
         if not assignment:
             raise HTTPException(status_code=403, detail="Not assigned to teach this class")
+    await _validate_slot(class_id, timetable_slot_id)
 
     if file.size and file.size > 200 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="File too large (max 200 MB)")
@@ -139,14 +151,22 @@ async def upload_lecture(
 
 
 @router.get("/mine", response_model=list[LectureSummary])
-async def my_lectures(user: UserPublic = Depends(require_teacher)):
-    return await LectureRepository().list_by_teacher(user.id)
+async def my_lectures(
+    user: UserPublic = Depends(require_teacher),
+    limit: int = Query(100, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+):
+    return await LectureRepository().list_by_teacher(user.id, limit=limit, offset=offset)
 
 
 @router.get("/published", response_model=list[LectureSummary])
-async def published_lectures(user: UserPublic = Depends(get_current_user)):
+async def published_lectures(
+    user: UserPublic = Depends(get_current_user),
+    limit: int = Query(100, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+):
     class_ids = await get_user_accessible_class_ids(user)
-    return await LectureRepository().list_published(class_ids=class_ids)
+    return await LectureRepository().list_published(class_ids=class_ids, limit=limit, offset=offset)
 
 
 @router.get("/{lecture_id}/job-status", response_model=JobPublic)
@@ -195,6 +215,7 @@ async def create_upload_url(
         )
         if not assignment:
             raise HTTPException(status_code=403, detail="Not assigned to teach this class")
+    await _validate_slot(payload.class_id, payload.timetable_slot_id)
 
     if payload.size > MAX_UPLOAD_BYTES:
         raise HTTPException(status_code=413, detail="File too large (max 200 MB)")
@@ -313,9 +334,9 @@ async def complete_upload(
 @router.post("/{lecture_id}/retry", response_model=LectureDB)
 async def retry_lecture(
     lecture_id: str,
-    user: UserPublic = Depends(require_admin),
+    user: UserPublic = Depends(require_teacher_or_admin),
 ):
-    """Reset a dead_letter lecture to queued and enqueue a fresh transcribe job (admin-only)."""
+    """Reset a dead_letter lecture to queued and enqueue a fresh transcribe job (owner teacher or admin)."""
     from sqlalchemy import func, select
 
     from core.sql_db import session_maker
@@ -323,7 +344,7 @@ async def retry_lecture(
 
     repo = LectureRepository()
     lecture = await repo.get_by_id(lecture_id)
-    if not lecture:
+    if not lecture or (user.role != "admin" and lecture.teacher_id != user.id):
         raise HTTPException(status_code=404, detail="Lecture not found")
     if lecture.status != "dead_letter":
         raise HTTPException(status_code=409, detail="Lecture is not in dead_letter")

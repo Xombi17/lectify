@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { BookmarkSimple } from "@phosphor-icons/react";
+import { BookmarkSimple } from "@/components/icons";
 import { bookmarkApi } from "@/lib/api";
 import { toast } from "sonner";
 
@@ -57,17 +57,18 @@ export default function BookmarkButton({
             onClick={toggle}
             disabled={busy}
             aria-pressed={!!bookmark}
+            aria-label={bookmark ? "Remove bookmark" : "Bookmark"}
             data-testid={`bookmark-${kind}-${refIndex ?? "none"}`}
-            className={`inline-flex h-7 w-7 items-center justify-center transition-colors ${
+            className={`inline-flex h-11 w-11 items-center justify-center transition-colors ${
                 bookmark
-                    ? "text-primary"
-                    : "text-muted-foreground hover:text-primary"
+                    ? "text-destructive"
+                    : "text-muted-foreground hover:text-destructive"
             }`}
             title={bookmark ? "Remove bookmark" : "Bookmark"}
         >
             <BookmarkSimple
                 size={size}
-                weight={bookmark ? "fill" : "duotone"}
+                weight={bookmark ? "fill" : "regular"}
             />
         </button>
     );

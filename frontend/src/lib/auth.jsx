@@ -67,8 +67,15 @@ export function AuthProvider({ children }) {
         }
     };
 
+    // Used after change-password (new token) and profile edits (new name)
+    const applySession = (token, u) => persist(token, u);
+    const updateUser = (u) => {
+        localStorage.setItem("lm_user", JSON.stringify(u));
+        setUser(u);
+    };
+
     return (
-        <AuthCtx.Provider value={{ user, loading, login, signup, logout }}>
+        <AuthCtx.Provider value={{ user, loading, login, signup, logout, applySession, updateUser }}>
             {children}
         </AuthCtx.Provider>
     );

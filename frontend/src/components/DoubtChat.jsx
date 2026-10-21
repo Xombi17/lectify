@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import ReactMarkdown from "react-markdown";
-import { PaperPlaneTilt, ChatCircle, Robot, User } from "@phosphor-icons/react";
+import { PaperPlaneTilt, ChatCircle, Robot, User } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { chatApi } from "@/lib/api";
 import { toast } from "sonner";
 
@@ -57,9 +58,9 @@ export default function DoubtChat({ lectureId, canChat }) {
 
     if (!canChat) {
         return (
-            <div className="border-2 border-dashed border-border bg-card p-10 text-center">
-                <ChatCircle size={32} weight="duotone" className="mx-auto text-muted-foreground" />
-                <h3 className="font-display mt-3 text-2xl font-bold tracking-tight">
+            <div className="empty">
+                <ChatCircle size={32} weight="regular" className="mx-auto text-muted-foreground" />
+                <h3 className="mt-3 text-2xl font-bold">
                     Chat unlocks once processing is done
                 </h3>
                 <p className="text-sm text-muted-foreground">
@@ -78,9 +79,9 @@ export default function DoubtChat({ lectureId, canChat }) {
                 {messages.length === 0 ? (
                     <div className="flex h-full flex-col items-center justify-center text-center">
                         <div className="mb-3 flex h-12 w-12 items-center justify-center bg-accent">
-                            <Robot size={24} weight="duotone" />
+                            <Robot size={24} weight="regular" />
                         </div>
-                        <div className="font-display text-lg font-bold tracking-tight">
+                        <div className="text-base font-bold">
                             Ask me anything about this lecture
                         </div>
                         <p className="mt-1 max-w-sm text-sm text-muted-foreground">
@@ -92,7 +93,7 @@ export default function DoubtChat({ lectureId, canChat }) {
                                     key={s}
                                     onClick={() => send(s)}
                                     data-testid={`chat-suggestion-${s.slice(0, 12).replace(/\s/g, "-").toLowerCase()}`}
-                                    className="border border-border bg-background px-3 py-1.5 text-xs transition-all hover:border-primary/40"
+                                    className="border border-border bg-background min-h-11 px-3 py-1.5 text-sm hover:border-primary/40"
                                 >
                                     {s}
                                 </button>
@@ -116,18 +117,22 @@ export default function DoubtChat({ lectureId, canChat }) {
                 }}
                 className="flex gap-2"
             >
+                <Label htmlFor="chat-input" className="sr-only">
+                    Ask about this lecture
+                </Label>
                 <Input
+                    id="chat-input"
                     data-testid="chat-input"
                     placeholder="Ask a question about this lecture…"
                     value={q}
                     onChange={(e) => setQ(e.target.value)}
                     disabled={sending}
                 />
-                <Button type="submit" disabled={sending || !q.trim()} data-testid="chat-send-btn">
-                    <PaperPlaneTilt size={16} weight="duotone" />
+                <Button type="submit" variant="pen" aria-label="Send" disabled={sending || !q.trim()} data-testid="chat-send-btn">
+                    <PaperPlaneTilt size={16} weight="regular" />
                 </Button>
             </form>
-            <p className="mt-2 text-xs text-muted-foreground">
+            <p className="mt-2 text-sm text-muted-foreground">
                 Answers are grounded in the lecture transcript only. No web facts.
             </p>
         </div>
@@ -135,10 +140,11 @@ export default function DoubtChat({ lectureId, canChat }) {
 }
 
 function Bubble({ msg }) {
+    const reduce = useReducedMotion();
     const isUser = msg.role === "user";
     return (
         <motion.div
-            initial={{ opacity: 0, y: 4 }}
+            initial={{ opacity: 0, y: reduce ? 0 : 4 }}
             animate={{ opacity: 1, y: 0 }}
             className={`flex gap-3 ${isUser ? "flex-row-reverse" : ""}`}
             data-testid={`chat-msg-${msg.role}`}
@@ -148,13 +154,13 @@ function Bubble({ msg }) {
                     isUser ? "bg-primary text-primary-foreground" : "bg-accent text-accent-foreground"
                 }`}
             >
-                {isUser ? <User size={16} weight="duotone" /> : <Robot size={16} weight="duotone" />}
+                {isUser ? <User size={16} weight="regular" /> : <Robot size={16} weight="regular" />}
             </div>
             <div
-                className={`max-w-[80%] border px-4 py-2.5 text-sm leading-relaxed ${
+                className={`max-w-[80%] border px-4 py-2.5 font-serif text-base leading-[var(--lh)] ${
                     isUser
-                        ? "border-primary bg-primary text-primary-foreground"
-                        : "border-border bg-background"
+                        ? "border-border bg-paper-2"
+                        : "border-border bg-card"
                 }`}
             >
                 {isUser ? (
@@ -170,7 +176,7 @@ function Bubble({ msg }) {
                                 strong: ({ children }) => <strong className="font-bold text-foreground">{children}</strong>,
                                 em: ({ children }) => <em className="italic">{children}</em>,
                                 code: ({ children }) => (
-                                    <code className="rounded bg-muted px-1 py-0.5 font-mono text-[13px]">{children}</code>
+                                    <code className="rounded bg-muted px-1 py-0.5 font-mono text-sm">{children}</code>
                                 ),
                             }}
                         >
@@ -187,13 +193,13 @@ function TypingBubble() {
     return (
         <div className="flex gap-3">
             <div className="flex h-8 w-8 items-center justify-center bg-accent">
-                <Robot size={16} weight="duotone" />
+                <Robot size={16} weight="regular" />
             </div>
-            <div className="flex items-center gap-1 border border-border bg-background px-4 py-3">
+            <div className="flex items-center gap-1 border border-border bg-card px-4 py-3">
                 {[0, 1, 2].map((i) => (
                     <span
                         key={i}
-                        className="h-1.5 w-1.5 animate-pulse bg-primary"
+                        className="h-1.5 w-1.5 bg-primary motion-safe:animate-pulse"
                         style={{ animationDelay: `${i * 0.15}s` }}
                     />
                 ))}

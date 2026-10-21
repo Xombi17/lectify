@@ -1,9 +1,10 @@
 export default function TeacherDashboardLoading() {
   return (
-    <div className="p-8 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-      {[1, 2, 3].map((i) => (
-        <div key={i} className="h-48 animate-pulse border border-border bg-muted/40" />
-      ))}
+    <div role="status" aria-busy="true" aria-label="Loading" className="grid gap-4 p-8">
+      <span className="sk w-2/3" />
+      <span className="sk w-full" />
+      <span className="sk w-5/6" />
+      <span className="sk w-1/2" />
     </div>
   );
 }

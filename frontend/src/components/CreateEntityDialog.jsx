@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { adminApi } from "@/lib/api";
 import { toast } from "sonner";
 
@@ -134,15 +135,15 @@ export default function CreateEntityDialog({ open, onOpenChange, entityType, par
                 <DialogHeader>
                     <DialogTitle>Create {entityLabel}</DialogTitle>
                 </DialogHeader>
-                <form onSubmit={handleSubmit} className="space-y-4">
+                <form onSubmit={handleSubmit} className="grid gap-6">
                     {fields
                         .filter((f) => !f.hidden)
                         .map((field) => (
                             <div key={field.key}>
-                                <label className="text-overline text-muted-foreground block mb-1">
+                                <Label htmlFor={`create-${entityType}-${field.key}`} className="block mb-1">
                                     {field.label}
                                     {field.required && <span className="text-destructive ml-1">*</span>}
-                                </label>
+                                </Label>
                                 {field.type === "select" ? (
                                     <select
                                         value={values[field.key] || ""}
@@ -150,8 +151,9 @@ export default function CreateEntityDialog({ open, onOpenChange, entityType, par
                                             setValues((v) => ({ ...v, [field.key]: e.target.value }))
                                         }
                                         required={field.required}
+                                        id={`create-${entityType}-${field.key}`}
                                         data-testid={`create-${entityType}-${field.key}`}
-                                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                                        className="field w-full"
                                     >
                                         <option value="">Select {field.label.toLowerCase()}…</option>
                                         {(selectOptions[field.key] || field.options || []).map((o) => (
@@ -169,6 +171,7 @@ export default function CreateEntityDialog({ open, onOpenChange, entityType, par
                                     required={field.required}
                                     type={field.type || "text"}
                                     placeholder={field.placeholder || ""}
+                                    id={`create-${entityType}-${field.key}`}
                                     data-testid={`create-${entityType}-${field.key}`}
                                 />
                                 )}
@@ -177,7 +180,7 @@ export default function CreateEntityDialog({ open, onOpenChange, entityType, par
                     <DialogFooter>
                         <Button
                             type="button"
-                            variant="ghost"
+                            variant="quiet"
                             onClick={() => onOpenChange(false)}
                             data-testid={`create-${entityType}-cancel`}
                         >
@@ -185,6 +188,7 @@ export default function CreateEntityDialog({ open, onOpenChange, entityType, par
                         </Button>
                         <Button
                             type="submit"
+                            variant="pen"
                             disabled={loading}
                             data-testid={`create-${entityType}-submit`}
                         >
