@@ -165,7 +165,7 @@ export default function AdminUsersPage() {
                                                 aria-label={`Reset password for ${u.name}`}
                                                 data-testid={`reset-link-${u.id}`}
                                             >
-                                                Reset<span className="hidden sm:inline">&nbsp;password</span>
+                                                Reset<span className="-ml-1 hidden sm:inline">password</span>
                                             </Button>
                                         </TableCell>
                                     </TableRow>

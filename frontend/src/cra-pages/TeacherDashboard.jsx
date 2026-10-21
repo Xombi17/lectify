@@ -194,7 +194,7 @@ export default function TeacherDashboard() {
                                 </p>
                                 <span className="hand">nothing to study yet</span>
                                 <Link href="/teacher/upload" className="mt-2 inline-block">
-                                    <Button variant="pen" data-testid="empty-upload-btn">
+                                    <Button variant="default" data-testid="empty-upload-btn">
                                         <UploadSimple size="1em" aria-hidden="true" weight="bold" />
                                         Upload lecture
                                     </Button>

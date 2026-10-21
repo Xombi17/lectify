@@ -60,7 +60,7 @@ export default function DoubtChat({ lectureId, canChat }) {
         return (
             <div className="empty">
                 <ChatCircle size={32} weight="regular" className="mx-auto text-muted-foreground" />
-                <h3 className="mt-3 text-2xl font-bold">
+                <h3 className="mt-3 text-2xl">
                     Chat unlocks once processing is done
                 </h3>
                 <p className="text-sm text-muted-foreground">
@@ -74,14 +74,14 @@ export default function DoubtChat({ lectureId, canChat }) {
         <div className="flex flex-col" data-testid="doubt-chat">
             <div
                 ref={scrollRef}
-                className="mb-4 h-[420px] overflow-y-auto border border-border bg-card p-5"
+                className="mb-4 h-[420px] overflow-y-auto rounded-[var(--radius)] border border-border bg-card p-5"
             >
                 {messages.length === 0 ? (
                     <div className="flex h-full flex-col items-center justify-center text-center">
-                        <div className="mb-3 flex h-12 w-12 items-center justify-center bg-accent">
+                        <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-accent">
                             <Robot size={24} weight="regular" />
                         </div>
-                        <div className="text-base font-bold">
+                        <div className="font-display text-xl">
                             Ask me anything about this lecture
                         </div>
                         <p className="mt-1 max-w-sm text-sm text-muted-foreground">
@@ -93,7 +93,7 @@ export default function DoubtChat({ lectureId, canChat }) {
                                     key={s}
                                     onClick={() => send(s)}
                                     data-testid={`chat-suggestion-${s.slice(0, 12).replace(/\s/g, "-").toLowerCase()}`}
-                                    className="border border-border bg-background min-h-11 px-3 py-1.5 text-sm hover:border-primary/40"
+                                    className="min-h-11 rounded-full border border-border bg-background px-4 py-1.5 text-sm hover:border-input hover:bg-muted"
                                 >
                                     {s}
                                 </button>
@@ -150,14 +150,14 @@ function Bubble({ msg }) {
             data-testid={`chat-msg-${msg.role}`}
         >
             <div
-                className={`flex h-8 w-8 shrink-0 items-center justify-center ${
+                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
                     isUser ? "bg-primary text-primary-foreground" : "bg-accent text-accent-foreground"
                 }`}
             >
                 {isUser ? <User size={16} weight="regular" /> : <Robot size={16} weight="regular" />}
             </div>
             <div
-                className={`max-w-[80%] border px-4 py-2.5 font-serif text-base leading-[var(--lh)] ${
+                className={`max-w-[80%] rounded-[var(--radius)] border px-4 py-2.5 font-serif text-base leading-[var(--lh)] ${
                     isUser
                         ? "border-border bg-paper-2"
                         : "border-border bg-card"
@@ -192,14 +192,14 @@ function Bubble({ msg }) {
 function TypingBubble() {
     return (
         <div className="flex gap-3">
-            <div className="flex h-8 w-8 items-center justify-center bg-accent">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-accent">
                 <Robot size={16} weight="regular" />
             </div>
-            <div className="flex items-center gap-1 border border-border bg-card px-4 py-3">
+            <div className="flex items-center gap-1 rounded-[var(--radius)] border border-border bg-card px-4 py-3">
                 {[0, 1, 2].map((i) => (
                     <span
                         key={i}
-                        className="h-1.5 w-1.5 bg-primary motion-safe:animate-pulse"
+                        className="h-1.5 w-1.5 rounded-full bg-primary motion-safe:animate-pulse"
                         style={{ animationDelay: `${i * 0.15}s` }}
                     />
                 ))}

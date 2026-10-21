@@ -52,7 +52,7 @@ export default function QuizRunner({ lectureId, quiz = [] }) {
                     data-testid="quiz-result"
                 >
                     <div className="text-overline text-primary">Result</div>
-                    <div className="font-mono text-2xl font-bold" data-testid="quiz-score">
+                    <div className="text-section tabular-nums" data-testid="quiz-score">
                         {result.score}/{result.total}
                     </div>
                     <div className="mt-1 text-base">
@@ -75,7 +75,7 @@ export default function QuizRunner({ lectureId, quiz = [] }) {
                     <div className="mb-2 font-mono text-sm text-primary">
                         Question {qi + 1}
                     </div>
-                    <div className="mb-4 text-2xl font-bold">
+                    <div className="mb-4 font-display text-2xl">
                         {q.question}
                     </div>
                     <div className="grid gap-2">
@@ -91,7 +91,7 @@ export default function QuizRunner({ lectureId, quiz = [] }) {
                                     aria-pressed={selected}
                                     data-testid={`quiz-${qi}-option-${oi}`}
                                     onClick={() => pick(qi, oi)}
-                                    className={`flex min-h-11 w-full items-center gap-3 border px-4 py-3 text-left text-base ${
+                                    className={`flex min-h-11 w-full items-center gap-3 rounded-[var(--r)] border px-4 py-3 text-left text-base ${
                                         showCorrect
                                             ? "border-primary bg-card text-primary"
                                             : wrongPick
@@ -101,7 +101,7 @@ export default function QuizRunner({ lectureId, quiz = [] }) {
                                                     : "border-border bg-card hover:border-primary/40"
                                     }`}
                                 >
-                                    <span className="flex h-6 w-6 shrink-0 items-center justify-center border border-current font-mono text-sm font-bold">
+                                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-current font-mono text-sm">
                                         {String.fromCharCode(65 + oi)}
                                     </span>
                                     <span className="flex-1">{opt}</span>
@@ -122,7 +122,7 @@ export default function QuizRunner({ lectureId, quiz = [] }) {
                         })}
                     </div>
                     {result && q.explanation && (
-                        <div className="mt-3 border-l-2 border-primary bg-muted px-4 py-2 text-sm">
+                        <div className="mt-3 rounded-[var(--r)] bg-muted px-4 py-3 text-sm">
                             <span className="text-overline mr-2 text-primary">Why</span>
                             {q.explanation}
                         </div>

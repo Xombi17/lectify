@@ -71,20 +71,20 @@ export default function FlashcardDeck({ cards = [], lectureId = null }) {
                     animate={{ rotateY: flipped ? 180 : 0 }}
                     transition={{ duration: reduce ? 0 : 0.45, ease: "easeInOut" }}
                 >
-                    <div className="backface-hidden absolute inset-0 flex flex-col items-center justify-center border border-border border-t-[3px] border-t-destructive bg-card p-6 text-center"
+                    <div className="backface-hidden absolute inset-0 flex flex-col items-center justify-center rounded-[var(--radius)] border border-border bg-card p-6 text-center"
                         style={{ opacity: flipped ? 0 : 1, transition: reduce ? "none" : "opacity 0s linear 0.225s", pointerEvents: flipped ? "none" : "auto" }}>
                         <div className="text-overline mb-3 text-primary">Question</div>
-                        <div className="text-2xl font-bold leading-snug">
+                        <div className="font-display text-2xl leading-snug">
                             {card.front}
                         </div>
                         <div className="mt-6 flex items-center gap-1 text-sm text-muted-foreground">
                             <ArrowsClockwise size={14} weight="regular" /> Click to flip
                         </div>
                     </div>
-                    <div className="backface-hidden rotate-y-180 absolute inset-0 flex flex-col items-center justify-center border border-primary border-t-[3px] border-t-destructive bg-card p-6 text-center"
+                    <div className="backface-hidden rotate-y-180 absolute inset-0 flex flex-col items-center justify-center rounded-[var(--radius)] border border-primary/60 bg-card p-6 text-center"
                         style={{ opacity: flipped ? 1 : 0, transition: reduce ? "none" : "opacity 0s linear 0.225s", pointerEvents: flipped ? "auto" : "none" }}>
                         <div className="text-overline mb-3 text-primary">Answer</div>
-                        <div className="font-serif text-base leading-snug">
+                        <div className="font-serif text-lg leading-relaxed">
                             {card.back}
                         </div>
                     </div>
@@ -130,7 +130,7 @@ export default function FlashcardDeck({ cards = [], lectureId = null }) {
                                     onClick={() => rate(r.q)}
                                     disabled={submittingQ !== null}
                                     data-testid={`rate-${r.label.toLowerCase()}-btn`}
-                                    className={`flex min-h-11 flex-col items-center justify-center px-3 py-2 disabled:opacity-50 motion-safe:transition-transform motion-safe:hover:scale-[1.02] ${r.className}`}
+                                    className={`flex min-h-11 flex-col items-center justify-center rounded-[var(--r)] px-3 py-2 disabled:opacity-50 motion-safe:transition-transform motion-safe:hover:scale-[1.02] ${r.className}`}
                                 >
                                     <span className="text-base font-bold">{r.label}</span>
                                     <span className="text-overline opacity-80">{r.hint}</span>
