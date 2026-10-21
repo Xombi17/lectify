@@ -336,6 +336,7 @@
     .col {
         display: grid;
         gap: 32px;
+        min-width: 0;
     }
     .more {
         font-size: 15px;

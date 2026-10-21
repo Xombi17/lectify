@@ -15,7 +15,7 @@ const SORTS = {
     oldest: { label: "Oldest first", fn: (a, b) => new Date(a.created_at) - new Date(b.created_at) },
     title: { label: "Title A–Z", fn: (a, b) => (a.title || "").localeCompare(b.title || "") },
 };
-const FILTER_CLASS = "field w-auto pr-8";
+const FILTER_CLASS = "field w-auto min-w-0 max-w-full pr-8";
 
 const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
@@ -199,7 +199,7 @@ export default function StudentDashboard() {
                         </div>
                         {!searchResults && !loading && lectures.length > 1 && (
                             <div className="mb-4 flex flex-wrap items-center gap-3" data-testid="library-filters">
-                                <label className="flex items-center gap-2 text-sm">
+                                <label className="flex min-w-0 max-w-full items-center gap-2 text-sm">
                                     <span className="text-muted-foreground">Subject</span>
                                     <select
                                         value={subject}
@@ -215,7 +215,7 @@ export default function StudentDashboard() {
                                         ))}
                                     </select>
                                 </label>
-                                <label className="flex items-center gap-2 text-sm">
+                                <label className="flex min-w-0 max-w-full items-center gap-2 text-sm">
                                     <span className="text-muted-foreground">Sort</span>
                                     <select
                                         value={sort}
