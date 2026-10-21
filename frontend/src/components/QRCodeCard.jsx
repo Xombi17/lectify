@@ -46,7 +46,10 @@ export default function QRCodeCard({ classId, className }) {
         if (!classId || !qr) return;
         let cancelled = false;
         let blobUrl = null;
-        fetch(`${API}/qr/classes/${classId}/download?format=svg`, { headers: authHeaders() })
+        fetch(`${API}/qr/classes/${classId}/download?format=svg&v=${encodeURIComponent(qr.id || "")}&t=${Date.now()}`, {
+            headers: authHeaders(),
+            cache: "no-store",
+        })
             .then((r) => {
                 if (!r.ok) throw new Error(`QR image failed: ${r.status}`);
                 return r.blob();
@@ -93,9 +96,13 @@ export default function QRCodeCard({ classId, className }) {
     const handleDownload = async () => {
         setDownloading(true);
         try {
-            const r = await fetch(`${API}/qr/classes/${classId}/download?format=svg`, {
-                headers: authHeaders(),
-            });
+            const r = await fetch(
+                `${API}/qr/classes/${classId}/download?format=svg&v=${encodeURIComponent(qr?.id || "")}&t=${Date.now()}`,
+                {
+                    headers: authHeaders(),
+                    cache: "no-store",
+                }
+            );
             if (!r.ok) throw new Error(`Download failed: ${r.status}`);
             const blob = await r.blob();
             const url = URL.createObjectURL(blob);

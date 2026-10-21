@@ -188,6 +188,12 @@ async def generate_qr(
                 detail="Teacher not assigned to this class",
             )
 
+    # If an active QR already exists for this class, deactivate it before creating a new one
+    qr_repo = QRCodeRepository()
+    current = await qr_repo.get_active_for_class(class_id)
+    if current:
+        await qr_repo.deactivate(current.id)
+
     qr_result = await _create_qr_internal(class_id, user.id, _app_base_url(request))
 
     await log_audit(
@@ -297,6 +303,9 @@ async def download_qr(
         media_type=content_type,
         headers={
             "Content-Disposition": f'attachment; filename="qr-{class_id}.{fmt}"',
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Pragma": "no-cache",
+            "Expires": "0",
         },
     )
 
